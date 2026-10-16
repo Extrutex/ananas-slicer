@@ -34,7 +34,7 @@ if [ -n "${KLIPSLICE_BIN:-}" ]; then
     BIN="$KLIPSLICE_BIN"
 else
     case "$(uname -s)" in
-        Darwin) BIN="$REPO/build/arm64/OrcaSlicer/KLIPSLICE.app/Contents/MacOS/KLIPSLICE" ;;
+        Darwin) BIN="$REPO/build/arm64/src/Release/KLIPSLICE.app/Contents/MacOS/KLIPSLICE" ;;
         Linux) BIN="$REPO/build/package/bin/klipslice" ;;
         *) die "unsupported host $(uname -s); set KLIPSLICE_BIN" ;;
     esac
