@@ -7,7 +7,11 @@
 #include "OBJ.hpp"
 #include "objparser.hpp"
 
+#include <array>
+#include <cmath>
+#include <numeric>
 #include <string>
+#include <vector>
 
 #include <boost/log/trivial.hpp>
 #include <boost/nowide/fstream.hpp>
@@ -23,6 +27,87 @@
 #define _L(s) Slic3r::I18N::translate(s)
 
 namespace Slic3r {
+
+namespace {
+
+// Splits one OBJ face into triangles, each given as three positions into `corners` and wound like
+// the face. Ear clipping in the face's best-fit plane keeps the triangles of a concave face inside
+// its outline. The search starts at the second corner, so a convex face becomes a fan from its first
+// corner: for a quad that is the first-to-third corner diagonal the loader has always used.
+std::vector<std::array<int, 3>> triangulate_face(const std::vector<Vec3f> &corners)
+{
+    const int n = int(corners.size());
+    std::vector<std::array<int, 3>> triangles;
+    std::vector<int>                remaining(n);
+    std::iota(remaining.begin(), remaining.end(), 0);
+    auto fan_remaining = [&triangles, &remaining]() {
+        for (size_t k = 1; k + 1 < remaining.size(); ++k)
+            triangles.push_back({remaining.front(), remaining[k], remaining[k + 1]});
+    };
+    if (n == 3) {
+        fan_remaining();
+        return triangles;
+    }
+
+    // Newell's normal: the face winds counter-clockwise around it, also when it is not quite planar.
+    Vec3d normal = Vec3d::Zero();
+    for (int i = 0; i < n; ++i) {
+        const Vec3d a = corners[i].cast<double>();
+        const Vec3d b = corners[(i + 1) % n].cast<double>();
+        normal += Vec3d((a.y() - b.y()) * (a.z() + b.z()), (a.z() - b.z()) * (a.x() + b.x()), (a.x() - b.x()) * (a.y() + b.y()));
+    }
+    if (normal.squaredNorm() == 0.) {
+        // No area to orient by: keep the fan.
+        fan_remaining();
+        return triangles;
+    }
+    normal.normalize();
+    // u x v = normal, so the face is counter-clockwise in (u, v) as well.
+    const Vec3d u = (std::abs(normal.x()) < 0.9 ? Vec3d::UnitX() : Vec3d::UnitY()).cross(normal).normalized();
+    const Vec3d v = normal.cross(u);
+    std::vector<Vec2d> p(n);
+    for (int i = 0; i < n; ++i) {
+        const Vec3d d = (corners[i] - corners.front()).cast<double>();
+        p[i]          = Vec2d(d.dot(u), d.dot(v));
+    }
+    auto cross = [&p](int a, int b, int c) {
+        const Vec2d ab = p[b] - p[a];
+        const Vec2d ac = p[c] - p[a];
+        return ab.x() * ac.y() - ab.y() * ac.x();
+    };
+
+    while (remaining.size() > 3) {
+        const size_t m       = remaining.size();
+        bool         clipped = false;
+        for (size_t k = 1; k <= m && !clipped; ++k) {
+            const size_t ear = k % m;
+            const int    a   = remaining[(ear + m - 1) % m];
+            const int    b   = remaining[ear];
+            const int    c   = remaining[(ear + 1) % m];
+            // A reflex or straight corner is no ear.
+            if (cross(a, b, c) <= 0.)
+                continue;
+            bool empty = true;
+            for (int q : remaining)
+                if (q != a && q != b && q != c && cross(a, b, q) >= 0. && cross(b, c, q) >= 0. && cross(c, a, q) >= 0.) {
+                    empty = false;
+                    break;
+                }
+            if (!empty)
+                continue;
+            triangles.push_back({a, b, c});
+            remaining.erase(remaining.begin() + ear);
+            clipped = true;
+        }
+        // A self-intersecting outline can run out of ears: fan what is left rather than drop it.
+        if (!clipped)
+            break;
+    }
+    fan_remaining();
+    return triangles;
+}
+
+} // namespace
 
 bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::string &message, ObjParser::MtlData *out_mtl)
 {
@@ -69,28 +154,21 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
             }
         }
     }
-    // Count the faces and verify, that all faces are triangular.
-    size_t num_faces = 0;
-    size_t num_quads = 0;
+    // Count the triangles the faces split into, and verify that every face has at least three corners.
+    size_t num_triangles = 0;
     for (size_t i = 0; i < data.vertices.size(); ++ i) {
         // Find the end of face.
         size_t j = i;
         for (; j < data.vertices.size() && data.vertices[j].coordIdx != -1; ++ j) ;
         if (size_t num_face_vertices = j - i; num_face_vertices > 0) {
-            if (num_face_vertices > 4) {
-                // Non-triangular and non-quad faces are not supported as of now.
-                BOOST_LOG_TRIVIAL(error) << "load_obj: failed to parse " << path << ". The file contains polygons with more than 4 vertices.";
-                message = _L("The file contains polygons with more than 4 vertices.");
-                return false;
-            } else if (num_face_vertices < 3) {
-                // Non-triangular and non-quad faces are not supported as of now.
+            if (num_face_vertices < 3) {
                 BOOST_LOG_TRIVIAL(error) << "load_obj: failed to parse " << path << ". The file contains polygons with less than 2 vertices.";
                 message = _L("The file contains polygons with less than 2 vertices.");
                 return false;
             }
-            if (num_face_vertices == 4)
-                ++ num_quads;
-            ++ num_faces;
+            // A face with n corners splits into n - 2 triangles, which is also how the parser
+            // counts the faces of a material.
+            num_triangles += num_face_vertices - 2;
             i = j;
         }
     }
@@ -98,11 +176,11 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
     indexed_triangle_set its;
     size_t               num_vertices = data.coordinates.size() / OBJ_VERTEX_LENGTH;
     its.vertices.reserve(num_vertices);
-    its.indices.reserve(num_faces + num_quads);
+    its.indices.reserve(num_triangles);
     if (exist_mtl) {
         obj_info.is_single_mtl = data.usemtls.size() == 1 && mtl_data.new_mtl_unmap.size() == 1;
         obj_info.usemtls = data.usemtls;
-        obj_info.face_colors.reserve(num_faces + num_quads);
+        obj_info.face_colors.reserve(num_triangles);
     }
     bool has_color = data.has_vertex_color;
     for (size_t i = 0; i < num_vertices; ++ i) {
@@ -114,32 +192,29 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
             obj_info.vertex_colors.emplace_back(color);
         }
     }
-    int indices[ONE_FACE_SIZE];
-    int uvs[ONE_FACE_SIZE];
+    std::vector<int>   indices;
+    std::vector<int>   uvs;
+    std::vector<Vec3f> corners;
     for (size_t i = 0; i < data.vertices.size();)
         if (data.vertices[i].coordIdx == -1)
             ++ i;
         else {
-            int cnt = 0;
+            indices.clear();
+            uvs.clear();
             while (i < data.vertices.size())
                 if (const ObjParser::ObjVertex &vertex = data.vertices[i ++]; vertex.coordIdx == -1) {
                     break;
                 } else {
-                    assert(cnt < OBJ_VERTEX_LENGTH);
                     if (vertex.coordIdx < 0 || vertex.coordIdx >= int(its.vertices.size())) {
                         BOOST_LOG_TRIVIAL(error) << "load_obj: failed to parse " << path << ". The file contains invalid vertex index.";
                         message = _L("The file contains invalid vertex index.");
                         return false;
                     }
-                    indices[cnt] = vertex.coordIdx;
-                    uvs[cnt]     = vertex.textureCoordIdx;
-                    cnt++;
+                    indices.push_back(vertex.coordIdx);
+                    uvs.push_back(vertex.textureCoordIdx);
                 }
-            if (cnt) {
-                assert(cnt == 3 || cnt == 4);
-                // Insert one or two faces (triangulate a quad).
-                its.indices.emplace_back(indices[0], indices[1], indices[2]);
-                int  face_index =its.indices.size() - 1;
+            if (! indices.empty()) {
+                assert(indices.size() >= 3);
                 RGBA face_color;
                 auto set_face_color = [&uvs, &data, &mtl_data, &obj_info, &face_color](int face_index, const std::string mtl_name, const std::array<int, 3> &corners) {
                     if (mtl_data.new_mtl_unmap.find(mtl_name) != mtl_data.new_mtl_unmap.end()) {
@@ -198,15 +273,13 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
                         }
                     }
                 };
-                if (exist_mtl) {
-                    set_face_color_by_mtl(face_index, {0, 1, 2});
-                }
-                if (cnt == 4) {
-                    its.indices.emplace_back(indices[0], indices[2], indices[3]);
-                    int face_index = its.indices.size() - 1;
-                    if (exist_mtl) {
-                        set_face_color_by_mtl(face_index, {0, 2, 3});
-                    }
+                corners.clear();
+                for (int index : indices)
+                    corners.push_back(its.vertices[index]);
+                for (const std::array<int, 3> &triangle : triangulate_face(corners)) {
+                    its.indices.emplace_back(indices[triangle[0]], indices[triangle[1]], indices[triangle[2]]);
+                    if (exist_mtl)
+                        set_face_color_by_mtl(int(its.indices.size()) - 1, triangle);
                 }
             }
         }

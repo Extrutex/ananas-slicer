@@ -38,6 +38,47 @@ LoadedObj load_textured_obj(const std::string &body)
     return loaded;
 }
 
+// Loads an OBJ made of the given lines, without any material.
+LoadedObj load_plain_obj(const std::string &body)
+{
+    ScopedTemporaryFile obj(".obj");
+    {
+        boost::nowide::ofstream out(obj.string());
+        out << body;
+    }
+    LoadedObj   loaded;
+    std::string message;
+    loaded.ok = load_obj(obj.string().c_str(), &loaded.mesh, loaded.info, message);
+    return loaded;
+}
+
+// Loads a single face lying in the z = 0 plane, its corners given counter-clockwise from above.
+LoadedObj load_flat_face(const std::vector<Vec2f> &corners)
+{
+    std::string body;
+    for (const Vec2f &c : corners)
+        body += "v " + std::to_string(c.x()) + " " + std::to_string(c.y()) + " 0\n";
+    body += "f";
+    for (size_t i = 1; i <= corners.size(); ++i)
+        body += " " + std::to_string(i);
+    return load_plain_obj(body + "\n");
+}
+
+// A flat face is covered exactly when no triangle faces down and the triangle areas add up to the
+// face area: a triangle outside the outline is either flipped or makes the sum too large.
+void check_covers_flat_face(const indexed_triangle_set &its, double face_area)
+{
+    double area = 0.;
+    for (const stl_triangle_vertex_indices &face : its.indices) {
+        const Vec3f a = its.vertices[face[0]], b = its.vertices[face[1]], c = its.vertices[face[2]];
+        const Vec3f n = (b - a).cross(c - a);
+        CAPTURE(a, b, c);
+        CHECK(n.z() > 0.f);
+        area += 0.5 * n.norm();
+    }
+    CHECK_THAT(area, WithinAbs(face_area, 1e-3));
+}
+
 // A tetrahedron with a material and two texture coordinates, (0.25, 0.5) and (0.75, 1).
 // Only the first face and the vt lines are varied; the other three faces reference vt 1.
 LoadedObj load_textured_tetrahedron(const std::string &first_face, const std::string &vts = "vt 0.25 0.5\nvt 0.75 1\n")
@@ -164,4 +205,58 @@ TEST_CASE("Texture coordinates follow the corners of a mesh that is flipped on l
     for (size_t face = 0; face < its.indices.size(); ++face)
         for (int corner = 0; corner < 3; ++corner)
             check_uv_is_vt(loaded.info.uvs[face][corner], its.indices[face][corner] + 1);
+}
+
+TEST_CASE("A face with more than four corners is triangulated", "[OBJ][Regression]")
+{
+    // A hexagonal prism, radius 10 mm and 5 mm tall, with one six-cornered face at each end.
+    std::string body;
+    for (int z : {0, 5})
+        for (int i = 0; i < 6; ++i)
+            body += "v " + std::to_string(10. * std::cos(i * M_PI / 3.)) + " " + std::to_string(10. * std::sin(i * M_PI / 3.)) +
+                    " " + std::to_string(z) + "\n";
+    body += "f 6 5 4 3 2 1\nf 7 8 9 10 11 12\n";
+    for (int i = 1; i <= 6; ++i) {
+        const int j = i % 6 + 1;
+        body += "f " + std::to_string(i) + " " + std::to_string(j) + " " + std::to_string(j + 6) + " " + std::to_string(i + 6) + "\n";
+    }
+    const LoadedObj loaded = load_plain_obj(body);
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 2 * 4 + 6 * 2);
+    TriangleMesh mesh = loaded.mesh;
+    CHECK_THAT(mesh.volume(), WithinAbs(1.5 * std::sqrt(3.) * 100. * 5., 0.01));
+    CHECK(loaded.mesh.stats().open_edges == 0);
+}
+
+TEST_CASE("A concave face with more than four corners is triangulated inside its outline", "[OBJ][Regression]")
+{
+    // An L, starting at the top of its upright: a fan from there would cut across the notch.
+    const LoadedObj loaded = load_flat_face({{4, 10}, {0, 10}, {0, 0}, {10, 0}, {10, 4}, {4, 4}});
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 4);
+    check_covers_flat_face(loaded.mesh.its, 64.);
+}
+
+TEST_CASE("A concave quad is split along the diagonal that lies inside it", "[OBJ][Regression]")
+{
+    // An arrowhead whose second corner is the reflex one, so the diagonal from the first to the
+    // third corner runs outside it.
+    const LoadedObj loaded = load_flat_face({{0, 0}, {2, 1}, {4, 0}, {2, 4}});
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 2);
+    check_covers_flat_face(loaded.mesh.its, 6.);
+}
+
+TEST_CASE("A convex quad keeps its first-to-third corner diagonal", "[OBJ]")
+{
+    const LoadedObj loaded = load_flat_face({{0, 0}, {10, 0}, {10, 10}, {0, 10}});
+
+    REQUIRE(loaded.ok);
+    const indexed_triangle_set &its = loaded.mesh.its;
+    REQUIRE(its.indices.size() == 2);
+    CHECK(its.indices[0] == stl_triangle_vertex_indices(0, 1, 2));
+    CHECK(its.indices[1] == stl_triangle_vertex_indices(0, 2, 3));
 }
