@@ -8741,6 +8741,11 @@ std::string GCode::travel_to(const Point& point, ExtrusionRole role, std::string
             } else if (role == erExternalPerimeter && is_short_travel) {
                 if (NOZZLE_CONFIG(outer_wall_acceleration) > 0)
                     acceleration_to_set = (unsigned int) floor(NOZZLE_CONFIG(outer_wall_acceleration) + 0.5);
+            } else if ((is_top_surface(role) || role == erIroning) && is_short_travel) {
+                // The hops between the lines of a top surface or an ironing pass stay at its
+                // acceleration rather than switching to travel and back for every line.
+                if (NOZZLE_CONFIG(top_surface_acceleration) > 0)
+                    acceleration_to_set = (unsigned int) floor(NOZZLE_CONFIG(top_surface_acceleration) + 0.5);
             } else {
                 if (NOZZLE_CONFIG(travel_acceleration) > 0)
                     acceleration_to_set = (unsigned int) floor(NOZZLE_CONFIG(travel_acceleration) + 0.5);
@@ -8751,6 +8756,9 @@ std::string GCode::travel_to(const Point& point, ExtrusionRole role, std::string
             if ((role == erExternalPerimeter || role == erOverhangPerimeter) && is_short_travel) {
                 if (NOZZLE_CONFIG(outer_wall_jerk) > 0)
                     jerk_to_set = NOZZLE_CONFIG(outer_wall_jerk);
+            } else if ((is_top_surface(role) || role == erIroning) && is_short_travel) {
+                if (NOZZLE_CONFIG(top_surface_jerk) > 0)
+                    jerk_to_set = NOZZLE_CONFIG(top_surface_jerk);
             } else {
                 if (NOZZLE_CONFIG(travel_jerk) > 0)
                     jerk_to_set = NOZZLE_CONFIG(travel_jerk);
