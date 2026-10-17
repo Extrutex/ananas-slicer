@@ -153,6 +153,24 @@ Then build the dependencies and the slicer with the Ninja generator:
 
 Output: `build/<arch>/OrcaSlicer/KLIPSLICE.app` (`<arch>` is `arm64` or `x86_64`)
 
+Two environment variables adjust a single-arch build:
+
+- `KLIPSLICE_OSX_SYSROOT` sets the SDK for both the dependency and the slicer
+  configure. Without it, the slicer is configured with the `CMAKE_OSX_SYSROOT`
+  recorded in `deps/build/<arch>/CMakeCache.txt`, so it compiles against the
+  same SDK as its dependencies. A newer SDK declares APIs newer than the
+  deployment target, and `-Werror=unguarded-availability-new` then fails the
+  build. If neither is available, CMake picks its default SDK and the script
+  prints a warning.
+- `KLIPSLICE_BUILD_DIR` moves the slicer build tree, including the packaged
+  app, from `build/<arch>` to another directory (absolute or relative to the
+  repository). It cannot be combined with universal builds, which lipo the
+  fixed `build/arm64` and `build/x86_64` trees.
+
+```bash
+KLIPSLICE_BUILD_DIR=build/arm64-ws ./build_release_macos.sh -sx -a arm64
+```
+
 ### Linux
 
 Requires more than 10 GiB of available memory and free disk space.

@@ -60,6 +60,12 @@ while getopts ":dpa:snt:xbc:i:j:Tuh" opt; do
         echo "   -i: Add a prefix to ignore during CMake dependency discovery (repeatable), defaults to /opt/local:/usr/local:/opt/homebrew"
         echo "   -j: Set the number of parallel build jobs (CMAKE_BUILD_PARALLEL_LEVEL)"
         echo "   -T: Build and run tests (set ORCA_TESTS_BUILD_ONLY=1 to build without running)"
+        echo
+        echo "Environment:"
+        echo "   KLIPSLICE_OSX_SYSROOT: SDK path for deps and slicer configure; default for the slicer"
+        echo "                          is the CMAKE_OSX_SYSROOT of deps/build/<arch>/CMakeCache.txt"
+        echo "   KLIPSLICE_BUILD_DIR:   slicer build directory (absolute or relative to the repository),"
+        echo "                          default build/<arch>; not allowed with -a universal or -u"
         exit 0
         ;;
     * )
@@ -137,6 +143,55 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_BUILD_DIR="$PROJECT_DIR/build/$ARCH"
 DEPS_DIR="$PROJECT_DIR/deps"
 
+# KLIPSLICE_BUILD_DIR moves the slicer build tree (configure, build, packaged
+# app, tests) away from build/<arch>. The universal step lipos the fixed
+# build/arm64 and build/x86_64 trees, so the override is single-arch only.
+if [ -n "${KLIPSLICE_BUILD_DIR:-}" ]; then
+    if [ "$ARCH" = "universal" ] || [ "$BUILD_TARGET" = "universal" ]; then
+        echo "ERROR: KLIPSLICE_BUILD_DIR cannot be used for universal builds" >&2
+        exit 1
+    fi
+    case "$KLIPSLICE_BUILD_DIR" in
+        /*) ;;
+        *) KLIPSLICE_BUILD_DIR="$PROJECT_DIR/$KLIPSLICE_BUILD_DIR" ;;
+    esac
+    echo " - KLIPSLICE_BUILD_DIR: $KLIPSLICE_BUILD_DIR"
+fi
+
+if [ -n "${KLIPSLICE_OSX_SYSROOT:-}" ]; then
+    if [ ! -d "$KLIPSLICE_OSX_SYSROOT" ]; then
+        echo "ERROR: KLIPSLICE_OSX_SYSROOT does not exist: $KLIPSLICE_OSX_SYSROOT" >&2
+        exit 1
+    fi
+    echo " - KLIPSLICE_OSX_SYSROOT: $KLIPSLICE_OSX_SYSROOT"
+fi
+
+# Prints the SDK the slicer must be configured with: KLIPSLICE_OSX_SYSROOT if
+# set, else the CMAKE_OSX_SYSROOT the dependencies were configured with (when
+# that SDK still exists). Prints nothing when neither is available.
+# The slicer must compile against the same SDK as its dependencies: a newer SDK
+# declares APIs (e.g. CGToneMapping) newer than the deployment target, and
+# -Werror=unguarded-availability-new then fails the build.
+function resolve_slicer_sysroot() {
+    local deps_cache="$1/CMakeCache.txt"
+    local sysroot=""
+    if [ -n "${KLIPSLICE_OSX_SYSROOT:-}" ]; then
+        printf '%s\n' "$KLIPSLICE_OSX_SYSROOT"
+        return 0
+    fi
+    if [ -f "$deps_cache" ]; then
+        sysroot="$(awk '/^CMAKE_OSX_SYSROOT:/ { sub(/^[^=]*=/, ""); print; exit }' "$deps_cache")"
+    fi
+    if [ -z "$sysroot" ]; then
+        return 0
+    fi
+    if [ -d "$sysroot" ]; then
+        printf '%s\n' "$sysroot"
+    else
+        echo "WARNING: the deps were built with SDK $sysroot, which no longer exists" >&2
+    fi
+}
+
 # For Multi-config generators like Ninja and Xcode
 export BUILD_DIR_CONFIG_SUBDIR="/$BUILD_CONFIG"
 
@@ -162,6 +217,7 @@ function build_deps() {
                         -DCMAKE_OSX_ARCHITECTURES:STRING="${_ARCH}" \
                         -DCMAKE_OSX_DEPLOYMENT_TARGET="${OSX_DEPLOYMENT_TARGET}" \
                         -DCMAKE_IGNORE_PREFIX_PATH="${CMAKE_IGNORE_PREFIX_PATH}" \
+                        ${KLIPSLICE_OSX_SYSROOT:+"-DCMAKE_OSX_SYSROOT=$KLIPSLICE_OSX_SYSROOT"} \
                         ${CMAKE_POLICY_COMPAT}
                 fi
                 cmake --build . --config "$BUILD_CONFIG" --target deps
@@ -245,9 +301,29 @@ function build_slicer() {
         # if ARCH is universal or equal to _ARCH
         if [ "$ARCH" == "universal" ] || [ "$ARCH" == "$_ARCH" ]; then
 
-            PROJECT_BUILD_DIR="$PROJECT_DIR/build/$_ARCH"
+            PROJECT_BUILD_DIR="${KLIPSLICE_BUILD_DIR:-$PROJECT_DIR/build/$_ARCH}"
             DEPS_BUILD_DIR="$DEPS_DIR/build/$_ARCH"
             DEPS="$DEPS_BUILD_DIR/OrcaSlicer_dep"
+
+            # Only a build directory named after the arch lets CMakeLists.txt
+            # derive DEP_BUILD_DIR, so a relocated build tree passes it.
+            DEP_BUILD_DIR_ARG=()
+            if [ -n "${KLIPSLICE_BUILD_DIR:-}" ]; then
+                DEP_BUILD_DIR_ARG=("-DDEP_BUILD_DIR=$DEPS_BUILD_DIR")
+            fi
+
+            SYSROOT_ARG=()
+            if [ "1." != "$BUILD_ONLY". ]; then
+                SLICER_SYSROOT="$(resolve_slicer_sysroot "$DEPS_BUILD_DIR")"
+                if [ -n "$SLICER_SYSROOT" ]; then
+                    echo "Using SDK $SLICER_SYSROOT for the slicer (same as the deps)"
+                    SYSROOT_ARG=("-DCMAKE_OSX_SYSROOT=$SLICER_SYSROOT")
+                else
+                    echo "WARNING: no SDK recorded in $DEPS_BUILD_DIR/CMakeCache.txt and KLIPSLICE_OSX_SYSROOT unset;" >&2
+                    echo "         CMake uses the default SDK. If it is newer than the SDK the deps were built with," >&2
+                    echo "         -Werror=unguarded-availability-new can fail the build. Set KLIPSLICE_OSX_SYSROOT." >&2
+                fi
+            fi
 
             echo "Building slicer for $_ARCH..."
             (
@@ -264,6 +340,8 @@ function build_slicer() {
                     -DCMAKE_OSX_ARCHITECTURES="${_ARCH}" \
                     -DCMAKE_OSX_DEPLOYMENT_TARGET="${OSX_DEPLOYMENT_TARGET}" \
                     -DCMAKE_IGNORE_PREFIX_PATH="${CMAKE_IGNORE_PREFIX_PATH}" \
+                    ${SYSROOT_ARG[@]+"${SYSROOT_ARG[@]}"} \
+                    ${DEP_BUILD_DIR_ARG[@]+"${DEP_BUILD_DIR_ARG[@]}"} \
                     ${CMAKE_POLICY_COMPAT}
             fi
             cmake --build . --config "$BUILD_CONFIG" --target "$SLICER_BUILD_TARGET"
@@ -272,7 +350,7 @@ function build_slicer() {
         # -T also runs the tests; ORCA_TESTS_BUILD_ONLY=1 builds them without
         # running, so CI can build here and run them in a dedicated job.
         if [ "1." == "$BUILD_TESTS". ] && [ "1." != "$ORCA_TESTS_BUILD_ONLY". ]; then
-            "$PROJECT_DIR/scripts/run_unit_tests.sh" "build/$_ARCH/tests" "$BUILD_CONFIG"
+            "$PROJECT_DIR/scripts/run_unit_tests.sh" "$PROJECT_BUILD_DIR/tests" "$BUILD_CONFIG"
         fi
 
         echo "Verify localization with gettext..."

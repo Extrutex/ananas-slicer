@@ -15,7 +15,8 @@ results and all logs.
 
 | Variable | Meaning |
 |---|---|
-| `KLIPSLICE_BIN` | Slicer binary. Default: `build/arm64/src/Release/KLIPSLICE.app/Contents/MacOS/KLIPSLICE` on macOS, `build/package/bin/klipslice` on Linux. An extracted AppImage's `AppRun` works too. |
+| `KLIPSLICE_BIN` | Slicer binary. Default: `<build dir>/src/Release/KLIPSLICE.app/Contents/MacOS/KLIPSLICE` on macOS, `<build dir>/package/bin/klipslice` on Linux. An extracted AppImage's `AppRun` works too. |
+| `KLIPSLICE_BUILD_DIR` | Build tree the default binary is taken from, absolute or relative to the repository. Default: `build/arm64` on macOS, `build` on Linux. Ignored when `KLIPSLICE_BIN` is set. |
 | `VP_KEEP_RIG=1` | Leave the Klipper and Moonraker containers running for manual inspection (`docker compose -p klipslice-vp ...`). |
 
 Requirements: Docker with Compose v2, bash, and a KLIPSLICE build. The image

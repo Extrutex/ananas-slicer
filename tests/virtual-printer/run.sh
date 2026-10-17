@@ -6,8 +6,11 @@
 # printer is ever contacted.
 #
 # usage: tests/virtual-printer/run.sh
-#   KLIPSLICE_BIN   slicer binary; default: the macOS app bundle on Darwin,
-#                   build/package/bin/klipslice on Linux
+#   KLIPSLICE_BIN   slicer binary; default: the app bundle under
+#                   KLIPSLICE_BUILD_DIR on Darwin, its package/bin/klipslice on Linux
+#   KLIPSLICE_BUILD_DIR  build tree the default binary is taken from (absolute or
+#                   relative to the repository); default build/arm64 on Darwin,
+#                   build on Linux. Ignored when KLIPSLICE_BIN is set.
 #   VP_KEEP_RIG=1   leave the Klipper/Moonraker containers running afterwards
 #
 # Writes tests/virtual-printer/out/ (report.md, G-code, logs, JSON results).
@@ -34,9 +37,17 @@ if [ -n "${KLIPSLICE_BIN:-}" ]; then
     BIN="$KLIPSLICE_BIN"
 else
     case "$(uname -s)" in
-        Darwin) BIN="$REPO/build/arm64/src/Release/KLIPSLICE.app/Contents/MacOS/KLIPSLICE" ;;
-        Linux) BIN="$REPO/build/package/bin/klipslice" ;;
+        Darwin) BUILD_DIR="${KLIPSLICE_BUILD_DIR:-build/arm64}" ;;
+        Linux) BUILD_DIR="${KLIPSLICE_BUILD_DIR:-build}" ;;
         *) die "unsupported host $(uname -s); set KLIPSLICE_BIN" ;;
+    esac
+    case "$BUILD_DIR" in
+        /*) ;;
+        *) BUILD_DIR="$REPO/$BUILD_DIR" ;;
+    esac
+    case "$(uname -s)" in
+        Darwin) BIN="$BUILD_DIR/src/Release/KLIPSLICE.app/Contents/MacOS/KLIPSLICE" ;;
+        Linux) BIN="$BUILD_DIR/package/bin/klipslice" ;;
     esac
 fi
 [ -x "$BIN" ] || die "slicer binary not found or not executable: $BIN"
