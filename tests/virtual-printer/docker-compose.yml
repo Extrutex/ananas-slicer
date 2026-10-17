@@ -20,6 +20,8 @@ x-rig: &rig
     # Inside the data path's config folder, where Moonraker expects both.
     - ./printer.cfg:/printer_data/config/printer.cfg:ro
     - ./moonraker.conf:/printer_data/config/moonraker.conf:ro
+    # The Klipper macros KlipSlice ships, included by printer.cfg.
+    - ../../resources/klipper:/klipslice:ro
 
 services:
   # One-shot Klipper batch run (docker compose run --rm klipper-batch ...).

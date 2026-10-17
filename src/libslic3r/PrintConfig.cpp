@@ -6131,6 +6131,17 @@ void PrintConfigDef::init_fff_params()
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionBool(true));
 
+    def = this->add("klipper_restore_state", coBool);
+    def->label = L("Restore Klipper state after the print");
+    def->tooltip = L("Klipper keeps the acceleration, square corner velocity, minimum cruise ratio and pressure advance "
+                     "the G-code sets until it restarts, so the end G-code and the next print would run with them. "
+                     "Enable this to call _KLIPSLICE_SAVE before the start G-code and _KLIPSLICE_RESTORE before the end "
+                     "G-code. They return the motion limits to their values before the print and the pressure advance to printer.cfg. "
+                     "Both macros must be defined in printer.cfg; KlipSlice ships them in resources/klipper/klipslice_state.cfg. "
+                     "Call _KLIPSLICE_RESTORE from CANCEL_PRINT as well, a cancelled print never reaches the end G-code.");
+    def->mode = comAdvanced;
+    def->set_default_value(new ConfigOptionBool(false));
+
     def = this->add("disable_m73", coBool);
     def->label = L("Disable set remaining print time");
     def->tooltip = L("Disable generating of the M73: Set remaining print time in the final G-code.");
