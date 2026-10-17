@@ -62,8 +62,9 @@ while getopts ":dpa:snt:xbc:i:j:Tuh" opt; do
         echo "   -T: Build and run tests (set ORCA_TESTS_BUILD_ONLY=1 to build without running)"
         echo
         echo "Environment:"
-        echo "   KLIPSLICE_OSX_SYSROOT: SDK path for deps and slicer configure; default for the slicer"
-        echo "                          is the CMAKE_OSX_SYSROOT of deps/build/<arch>/CMakeCache.txt"
+        echo "   KLIPSLICE_OSX_SYSROOT: SDK path or name (e.g. macosx26.5) for deps and slicer configure;"
+        echo "                          default for the slicer is the SDK recorded by the deps build"
+        echo "                          (deps/build/<arch>/OrcaSlicer_dep/klipslice-sdk.txt, then CMakeCache.txt)"
         echo "   KLIPSLICE_BUILD_DIR:   slicer build directory (absolute or relative to the repository),"
         echo "                          default build/<arch>; not allowed with -a universal or -u"
         exit 0
@@ -158,39 +159,142 @@ if [ -n "${KLIPSLICE_BUILD_DIR:-}" ]; then
     echo " - KLIPSLICE_BUILD_DIR: $KLIPSLICE_BUILD_DIR"
 fi
 
-if [ -n "${KLIPSLICE_OSX_SYSROOT:-}" ]; then
-    if [ ! -d "$KLIPSLICE_OSX_SYSROOT" ]; then
-        echo "ERROR: KLIPSLICE_OSX_SYSROOT does not exist: $KLIPSLICE_OSX_SYSROOT" >&2
-        exit 1
-    fi
-    echo " - KLIPSLICE_OSX_SYSROOT: $KLIPSLICE_OSX_SYSROOT"
-fi
-
-# Prints the SDK the slicer must be configured with: KLIPSLICE_OSX_SYSROOT if
-# set, else the CMAKE_OSX_SYSROOT the dependencies were configured with (when
-# that SDK still exists). Prints nothing when neither is available.
+# --- SDK selection -----------------------------------------------------------
 # The slicer must compile against the same SDK as its dependencies: a newer SDK
 # declares APIs (e.g. CGToneMapping) newer than the deployment target, and
-# -Werror=unguarded-availability-new then fails the build.
+# -Werror=unguarded-availability-new then fails the build. The deps build
+# records its SDK in OrcaSlicer_dep/klipslice-sdk.txt, the directory CI keeps
+# as the deps artifact; the slicer configure reads it from there.
+SDK_RECORD_NAME="klipslice-sdk.txt"
+
+# Prints the absolute, symlink-free path of an SDK. A value containing "/" or
+# ending in ".sdk" is a path (a relative one resolves against the current
+# directory); any other value is an SDK name such as "macosx" or "macosx26.5",
+# resolved with xcrun. Returns 1 when the SDK cannot be located.
+function canonical_sdk_path() {
+    local value="$1"
+    local path
+    case "$value" in
+        */*|*.sdk) path="$value" ;;
+        *) path="$(xcrun --sdk "$value" --show-sdk-path 2>/dev/null)" || return 1 ;;
+    esac
+    if [ -z "$path" ] || [ ! -d "$path" ]; then
+        return 1
+    fi
+    (CDPATH='' cd -- "$path" && pwd -P)
+}
+
+# Prints the value of KEY from a KEY=VALUE file (first match, empty if absent).
+function read_key_value() {
+    awk -v key="$1" 'index($0, key "=") == 1 { print substr($0, length(key) + 2); exit }' "$2"
+}
+
+# Prints the CMAKE_OSX_SYSROOT of a CMake cache (empty if absent).
+function read_cache_sysroot() {
+    awk '/^CMAKE_OSX_SYSROOT:[A-Z]*=/ { sub(/^[^=]*=/, ""); print; exit }' "$1"
+}
+
+# Writes DEPS_BUILD_DIR/OrcaSlicer_dep/klipslice-sdk.txt with the absolute path
+# and version of the SDK the deps were configured with.
+function write_deps_sdk_record() {
+    local deps_build_dir="$1"
+    local record="$deps_build_dir/OrcaSlicer_dep/$SDK_RECORD_NAME"
+    local configured sdk version
+    configured="$(read_cache_sysroot "$deps_build_dir/CMakeCache.txt")"
+    if [ -z "$configured" ]; then
+        # CMake left the sysroot empty, so the compiler used the active SDK.
+        configured="$(xcrun --show-sdk-path)" || {
+            echo "ERROR: xcrun cannot report the active SDK" >&2
+            return 1
+        }
+    fi
+    sdk="$(canonical_sdk_path "$configured")" || {
+        echo "ERROR: cannot locate the SDK the deps were configured with: $configured" >&2
+        return 1
+    }
+    version="$(xcrun --sdk "$sdk" --show-sdk-version 2>/dev/null)" || {
+        echo "ERROR: xcrun cannot report the version of SDK $sdk" >&2
+        return 1
+    }
+    printf 'sdk_path=%s\nsdk_version=%s\n' "$sdk" "$version" > "$record.tmp" || return 1
+    mv -f "$record.tmp" "$record" || return 1
+    echo "Recorded deps SDK $sdk (version $version) in $record"
+}
+
+# Prints the SDK the slicer must be configured with, in this order:
+#   1. KLIPSLICE_OSX_SYSROOT (already canonical, see below);
+#   2. the deps SDK record: its path, or when that path does not exist on this
+#      machine, the SDK of the same version under the active developer dir;
+#   3. the CMAKE_OSX_SYSROOT of the deps CMakeCache.txt (path or SDK name).
+# Prints nothing, with a warning, when CMake has to fall back to its default
+# SDK. Returns 1 when the deps cache names an SDK that xcrun cannot resolve.
 function resolve_slicer_sysroot() {
-    local deps_cache="$1/CMakeCache.txt"
-    local sysroot=""
+    local deps_build_dir="$1"
+    local record="$deps_build_dir/OrcaSlicer_dep/$SDK_RECORD_NAME"
+    local cache="$deps_build_dir/CMakeCache.txt"
+    local value="" version="" sdk=""
     if [ -n "${KLIPSLICE_OSX_SYSROOT:-}" ]; then
         printf '%s\n' "$KLIPSLICE_OSX_SYSROOT"
         return 0
     fi
-    if [ -f "$deps_cache" ]; then
-        sysroot="$(awk '/^CMAKE_OSX_SYSROOT:/ { sub(/^[^=]*=/, ""); print; exit }' "$deps_cache")"
-    fi
-    if [ -z "$sysroot" ]; then
+    if [ -f "$record" ]; then
+        value="$(read_key_value sdk_path "$record")"
+        version="$(read_key_value sdk_version "$record")"
+        case "$value" in
+            /*) if sdk="$(canonical_sdk_path "$value")"; then
+                    printf '%s\n' "$sdk"
+                    return 0
+                fi ;;
+        esac
+        case "$version" in
+            ''|*[!0-9.]*) version="" ;;
+        esac
+        if [ -n "$version" ] && sdk="$(canonical_sdk_path "macosx$version")"; then
+            echo "NOTE: the deps SDK $value does not exist here; using $sdk (same SDK version $version)" >&2
+            printf '%s\n' "$sdk"
+            return 0
+        fi
+        echo "WARNING: the deps were built with SDK ${version:-of unknown version} ($value)," >&2
+        echo "         which is not installed here; CMake uses its default SDK, and" >&2
+        echo "         -Werror=unguarded-availability-new can fail the build if it is newer." >&2
+        echo "         Set KLIPSLICE_OSX_SYSROOT to the path of a MacOSX${version}.sdk to match the deps." >&2
         return 0
     fi
-    if [ -d "$sysroot" ]; then
-        printf '%s\n' "$sysroot"
-    else
-        echo "WARNING: the deps were built with SDK $sysroot, which no longer exists" >&2
+    if [ -f "$cache" ]; then
+        value="$(read_cache_sysroot "$cache")"
     fi
+    if [ -n "$value" ]; then
+        if sdk="$(canonical_sdk_path "$value")"; then
+            printf '%s\n' "$sdk"
+            return 0
+        fi
+        case "$value" in
+            */*|*.sdk)
+                echo "WARNING: the deps were built with SDK $value, which no longer exists;" >&2
+                echo "         CMake uses its default SDK. Set KLIPSLICE_OSX_SYSROOT to match the deps." >&2
+                return 0 ;;
+            *)
+                echo "ERROR: $cache names the SDK '$value', which xcrun cannot resolve." >&2
+                echo "       Set KLIPSLICE_OSX_SYSROOT to the SDK the deps were built with." >&2
+                return 1 ;;
+        esac
+    fi
+    echo "WARNING: no SDK recorded in $record or $cache and KLIPSLICE_OSX_SYSROOT unset;" >&2
+    echo "         CMake uses its default SDK. If it is newer than the SDK the deps were built with," >&2
+    echo "         -Werror=unguarded-availability-new can fail the build. Set KLIPSLICE_OSX_SYSROOT." >&2
 }
+
+# Relative override paths resolve against the directory the script is run
+# from; they are made absolute here because the configure steps run in the
+# deps and slicer build directories.
+if [ -n "${KLIPSLICE_OSX_SYSROOT:-}" ]; then
+    if ! KLIPSLICE_OSX_SYSROOT_ABS="$(canonical_sdk_path "$KLIPSLICE_OSX_SYSROOT")"; then
+        echo "ERROR: KLIPSLICE_OSX_SYSROOT is neither an existing SDK directory nor an SDK name xcrun can resolve: $KLIPSLICE_OSX_SYSROOT" >&2
+        exit 1
+    fi
+    export KLIPSLICE_OSX_SYSROOT="$KLIPSLICE_OSX_SYSROOT_ABS"
+    echo " - KLIPSLICE_OSX_SYSROOT: $KLIPSLICE_OSX_SYSROOT"
+fi
 
 # For Multi-config generators like Ninja and Xcode
 export BUILD_DIR_CONFIG_SUBDIR="/$BUILD_CONFIG"
@@ -222,6 +326,7 @@ function build_deps() {
                 fi
                 cmake --build . --config "$BUILD_CONFIG" --target deps
             )
+            write_deps_sdk_record "$DEPS_BUILD_DIR" || exit 1
         fi
     done
 }
@@ -314,14 +419,10 @@ function build_slicer() {
 
             SYSROOT_ARG=()
             if [ "1." != "$BUILD_ONLY". ]; then
-                SLICER_SYSROOT="$(resolve_slicer_sysroot "$DEPS_BUILD_DIR")"
+                SLICER_SYSROOT="$(resolve_slicer_sysroot "$DEPS_BUILD_DIR")" || exit 1
                 if [ -n "$SLICER_SYSROOT" ]; then
                     echo "Using SDK $SLICER_SYSROOT for the slicer (same as the deps)"
                     SYSROOT_ARG=("-DCMAKE_OSX_SYSROOT=$SLICER_SYSROOT")
-                else
-                    echo "WARNING: no SDK recorded in $DEPS_BUILD_DIR/CMakeCache.txt and KLIPSLICE_OSX_SYSROOT unset;" >&2
-                    echo "         CMake uses the default SDK. If it is newer than the SDK the deps were built with," >&2
-                    echo "         -Werror=unguarded-availability-new can fail the build. Set KLIPSLICE_OSX_SYSROOT." >&2
                 fi
             fi
 
