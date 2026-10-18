@@ -7,6 +7,7 @@
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/CustomGCode.hpp"
 #include "libslic3r/MultiNozzleUtils.hpp"
+#include "libslic3r/GCode/KlipperMotionModel.hpp"
 
 #include <cstdint>
 #include <array>
@@ -616,6 +617,10 @@ class Print;
             Flags flags;
             FeedrateProfile feedrate_profile;
             Trapezoid trapezoid;
+            // The move was queued in the time machine's KlipperMotionModel, which plans its speeds
+            // and time (klipper_time) instead of the trapezoid above.
+            bool klipper_move{ false };
+            float klipper_time{ 0.0f }; // s
 
             // Calculates this block's trapezoid
             void calculate_trapezoid();
@@ -722,6 +727,10 @@ class Print;
             using AdditionalBufferBlock = std::pair<EMoveType, float>;
             using AdditionalBuffer      = std::vector<AdditionalBufferBlock>;
             AdditionalBuffer m_additional_time_buffer;
+
+            // Set for the Klipper flavor with time_model = klipper_v013. Plans the speeds of the
+            // blocks marked klipper_move, in place of the legacy planner passes.
+            std::optional<KlipperMotionModel> klipper;
 
             void reset();
 
@@ -1525,8 +1534,18 @@ class Print;
 
         void calculate_time(GCodeProcessorResult& result, size_t keep_last_n_blocks = 0, float additional_time = 0.0f, EMoveType target_move_type = EMoveType::Noop, bool is_final = false);
 
+        // How the Klipper motion model takes a synchronization point: like toolhead.py wait_moves(),
+        // like dwell() (G4), or not at all where Klipper keeps planning across the command.
+        enum class KlipperSync { WaitMoves, Dwell, None };
+
         // Simulates firmware st_synchronize() call
-        void simulate_st_synchronize(float additional_time = 0.0f, EMoveType target_move_type = EMoveType::Noop);
+        void simulate_st_synchronize(float additional_time = 0.0f, EMoveType target_move_type = EMoveType::Noop,
+                                     KlipperSync klipper_sync = KlipperSync::WaitMoves);
+
+        // Creates the Klipper motion model on every enabled time machine, or removes it, from the
+        // flavor and time_model of a config.
+        void setup_klipper_motion_model(const ConfigBase& config);
+        bool uses_klipper_motion_model() const;
 
         void update_estimated_times_stats();
 

@@ -9,9 +9,13 @@ This wrapper only adds observation around it, in the same process:
 - every G-code command object records which parameters its handler read, so
   parameters Klipper silently ignores (e.g. M73 R, ACCEL_TO_DECEL once
   MINIMUM_CRUISE_RATIO is given) are reported instead of disappearing;
-- the toolhead print time is sampled at the first EXCLUDE_OBJECT_START and at
-  every full move flush (M400 and friends), giving Klipper's own motion time
-  for the printed part of the file.
+- every marker command (--markers, default EXCLUDE_OBJECT_START and
+  EXCLUDE_OBJECT_END) is timed exactly: a timing callback on the last queued
+  move records the print time at which the command takes effect in the motion
+  stream (the toolhead's print_time at dispatch lags behind the lookahead
+  queue), and the print time at every full
+  move flush (M400 and friends) is kept, giving Klipper's own motion time for
+  the printed part of the file.
 
 The verdict is written as JSON. Exit status: 0 accepted, 1 rejected, 2 usage.
 """
@@ -36,6 +40,8 @@ DEPRECATED_PARAMS = {
         "deprecated 2024-03-13 (Config_Changes.md); use MINIMUM_CRUISE_RATIO",
 }
 TRADITIONAL_RE = re.compile(r"^[A-Z]\d+(\.\d+)?$")
+# Commands whose position in the motion stream is recorded by default (see Observer.mark).
+DEFAULT_MARKERS = "EXCLUDE_OBJECT_START,EXCLUDE_OBJECT_END"
 
 
 class RecordCollector(logging.Handler):
@@ -63,14 +69,14 @@ class RecordCollector(logging.Handler):
 class Observer:
     """Instruments gcode.GCodeCommand and toolhead.ToolHead without changing results."""
 
-    def __init__(self):
+    def __init__(self, marker_commands):
+        self.marker_commands = frozenset(marker_commands)
         self.commands = []
         self.gcode_errors = []
         self.dispatch = None
-        # Toolhead print time at the first two EXCLUDE_OBJECT_START commands,
-        # i.e. the start of the first and of the second layer of a
-        # single-object print.
-        self.object_starts = []
+        # [command, print time] per marker command, in file order. The time
+        # is filled in when the move queued before the command is committed.
+        self.markers = []
         self.print_time_last_flush = None
 
     def install(self):
@@ -91,10 +97,10 @@ class Observer:
             orig_cmd_init(self, gcode_obj, command, commandline, params, need_ack)
             self._vp_read = set()
             observer.commands.append(self)
-            if command == "EXCLUDE_OBJECT_START" and len(observer.object_starts) < 2:
+            if command in observer.marker_commands:
                 th = observer.lookup_toolhead()
                 if th is not None:
-                    observer.object_starts.append(th.print_time)
+                    observer.mark(th, command)
 
         def get(self, name, *args, **kwargs):
             self._vp_read.add(name)
@@ -136,6 +142,23 @@ class Observer:
         gcode.GCodeDispatch._respond_error = respond_error
         toolhead.ToolHead.wait_moves = wait_moves
 
+    def mark(self, toolhead, command):
+        """Records the print time at which `command` takes effect.
+
+        That is the end of the move queued last before it. Klipper's own
+        register_lookahead_callback() would do the same, but flushes the queue
+        when it is empty, which would change the plan being measured; with an
+        empty queue the current print time is already exact.
+        """
+        entry = [command, None]
+        self.markers.append(entry)
+        last_move = toolhead.lookahead.get_last()
+        if last_move is None:
+            entry[1] = toolhead.print_time
+        else:
+            last_move.timing_callbacks.append(
+                lambda print_time: entry.__setitem__(1, print_time))
+
     def lookup_toolhead(self):
         if self.dispatch is None:
             return None
@@ -172,6 +195,8 @@ def main():
     parser.add_argument("--dict", required=True)
     parser.add_argument("--log", required=True)
     parser.add_argument("--summary", required=True)
+    parser.add_argument("--markers", default=DEFAULT_MARKERS,
+                        help="comma-separated commands to time exactly (default: %(default)s)")
     args = parser.parse_args()
     for path in (args.config, args.gcode, args.dict):
         if not os.path.isfile(path):
@@ -189,7 +214,8 @@ def main():
     collector = RecordCollector()
     root.addHandler(collector)
 
-    observer = Observer()
+    markers = [m.strip().upper() for m in args.markers.split(",") if m.strip()]
+    observer = Observer(markers)
     observer.install()
 
     sys.argv = ["klippy.py", args.config, "-i", args.gcode, "-o", "/dev/null",
@@ -203,11 +229,19 @@ def main():
 
     census = observer.command_census(collector.unknown)
     motion_time = first_layer_time = None
-    starts = observer.object_starts
+    starts = [t for cmd, t in observer.markers
+              if cmd == "EXCLUDE_OBJECT_START" and t is not None]
     if starts and observer.print_time_last_flush is not None:
         motion_time = round(observer.print_time_last_flush - starts[0], 1)
-    if len(starts) == 2:
+    if len(starts) >= 2:
         first_layer_time = round(starts[1] - starts[0], 1)
+    # Marker times relative to the first marker; the absolute print time
+    # starts at the host clock and is not reproducible.
+    markers = []
+    origin = observer.markers[0][1] if observer.markers else None
+    for cmd, t in observer.markers:
+        rel = None if (t is None or origin is None) else round(t - origin, 6)
+        markers.append({"command": cmd, "time_s": rel})
     gcode_errors = observer.gcode_errors
     # G-code errors are logged at WARNING level too; keep them out of warnings.
     warnings = [w for w in collector.warnings if w.strip() not in gcode_errors]
@@ -230,6 +264,7 @@ def main():
         "commands_processed": len(observer.commands),
         "klipper_motion_time_s": motion_time,
         "klipper_first_layer_time_s": first_layer_time,
+        "markers": markers,
     }
     with open(args.summary, "w") as f:
         json.dump(summary, f, indent=2)

@@ -247,6 +247,8 @@ set(lisbslic3r_sources
     GCode/FanMover.hpp
     GCode/GCodeProcessor.cpp
     GCode/GCodeProcessor.hpp
+    GCode/KlipperMotionModel.cpp
+    GCode/KlipperMotionModel.hpp
     GCode/ElegooGCodeProcessorHelper.cpp
     GCode.hpp
     GCode/PchipInterpolatorHelper.cpp
@@ -310,6 +312,8 @@ set(lisbslic3r_sources
     Geometry/VoronoiVisualUtils.hpp
     Int128.hpp
     KDTreeIndirect.hpp
+    KlipperLimits.cpp
+    KlipperLimits.hpp
     Layer.cpp
     Layer.hpp
     LayerRegion.cpp

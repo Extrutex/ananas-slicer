@@ -555,6 +555,19 @@ static t_config_enum_values s_keys_map_InputShaperType {
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(InputShaperType)
 
+static t_config_enum_values s_keys_map_TimeModel {
+    {"legacy",       int(TimeModel::Legacy)},
+    {"klipper_v013", int(TimeModel::KlipperV013)}
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(TimeModel)
+
+static t_config_enum_values s_keys_map_KlipperLimitsSource {
+    {"none",        int(KlipperLimitsSource::None)},
+    {"printer_cfg", int(KlipperLimitsSource::PrinterCfg)},
+    {"moonraker",   int(KlipperLimitsSource::Moonraker)}
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(KlipperLimitsSource)
+
 static t_config_enum_values s_keys_map_PerimeterGeneratorType{
     { "classic", int(PerimeterGeneratorType::Classic) },
     { "arachne", int(PerimeterGeneratorType::Arachne) }
@@ -5272,6 +5285,60 @@ void PrintConfigDef::init_fff_params()
     def->max     = 1;
     def->mode    = comExpert;
     def->set_default_value(new ConfigOptionFloat(0.1));
+
+    def                = this->add("time_model", coEnum);
+    def->label         = L("Time estimation model");
+    def->category      = L("Machine limits");
+    def->tooltip       = L("How the print time is estimated for the Klipper G-code flavor.\n"
+                           "Klipper v0.13 model: a model of Klipper v0.13 motion planning (lookahead, square corner velocity, "
+                           "minimum cruise ratio, extruder and Z limits), not firmware.\n"
+                           "Legacy: the planner shared with the other G-code flavors.");
+    def->enum_keys_map = &ConfigOptionEnum<TimeModel>::get_enum_values();
+    def->enum_values   = {"legacy", "klipper_v013"};
+    def->enum_labels   = {L("Legacy"), L("Klipper v0.13 model")};
+    def->mode          = comAdvanced;
+    def->set_default_value(new ConfigOptionEnum<TimeModel>(TimeModel::KlipperV013));
+
+    def                = this->add("klipper_limits_source", coEnum);
+    def->label         = L("Klipper limits source");
+    def->category      = L("Machine limits");
+    def->tooltip       = L("Where the Klipper limits used by the Klipper time model come from. None derives them from the "
+                           "machine limits and Klipper's defaults; the other values mean the klipper_* values were imported.");
+    def->enum_keys_map = &ConfigOptionEnum<KlipperLimitsSource>::get_enum_values();
+    def->enum_values   = {"none", "printer_cfg", "moonraker"};
+    def->enum_labels   = {L("None"), L("printer.cfg"), L("Moonraker")};
+    def->mode          = comDevelop;
+    def->set_default_value(new ConfigOptionEnum<KlipperLimitsSource>(KlipperLimitsSource::None));
+
+    def          = this->add("klipper_limits_imported_at", coString);
+    def->label   = L("Klipper limits imported at");
+    def->tooltip = L("Date the Klipper limits were imported.");
+    def->mode    = comDevelop;
+    def->set_default_value(new ConfigOptionString(""));
+
+    // The imported Klipper limits. Read only when klipper_limits_source is not "none".
+    struct KlipperLimitDef { const char *key; const char *label; const char *sidetext; };
+    for (const KlipperLimitDef &limit : std::initializer_list<KlipperLimitDef>{
+             {"klipper_max_velocity", L("Klipper max_velocity"), L("mm/s")},
+             {"klipper_max_accel", L("Klipper max_accel"), L(u8"mm/s²")},
+             {"klipper_minimum_cruise_ratio", L("Klipper minimum_cruise_ratio"), ""},
+             {"klipper_square_corner_velocity", L("Klipper square_corner_velocity"), L("mm/s")},
+             {"klipper_max_z_velocity", L("Klipper max_z_velocity"), L("mm/s")},
+             {"klipper_max_z_accel", L("Klipper max_z_accel"), L(u8"mm/s²")},
+             {"klipper_max_extrude_only_velocity", L("Klipper max_extrude_only_velocity"), L("mm/s")},
+             {"klipper_max_extrude_only_accel", L("Klipper max_extrude_only_accel"), L(u8"mm/s²")},
+             {"klipper_instantaneous_corner_velocity", L("Klipper instantaneous_corner_velocity"), L("mm/s")},
+             {"klipper_pressure_advance", L("Klipper pressure_advance"), L("s")},
+             {"klipper_pressure_advance_smooth_time", L("Klipper pressure_advance_smooth_time"), L("s")}}) {
+        def           = this->add(limit.key, coFloat);
+        def->label    = limit.label;
+        def->category = L("Machine limits");
+        def->tooltip  = L("Imported from Klipper. Used by the Klipper time model only.");
+        def->sidetext = limit.sidetext;
+        def->min      = 0;
+        def->mode     = comDevelop;
+        def->set_default_value(new ConfigOptionFloat(0.));
+    }
 
     def = this->add("fan_max_speed", coFloats);
     def->label = L("Fan speed");
