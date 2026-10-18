@@ -105,14 +105,15 @@ compose run --rm --no-deps klipper-batch \
 # resources/klipper/klipslice_state.cfg in Klipper batch mode: save, cancel and
 # restore with an extruder without a stepper and an [extruder_stepper], once
 # with the rig's own CANCEL_PRINT and once with Mainsail's and its cancel hook,
-# and with two extruder steppers whose names differ only in case; the check
-# G-code raises a G-code error wherever Klipper's state is not the expected
+# with two extruder steppers whose names differ only in case, and with
+# extruder steppers whose names hold a quote or a backslash; the check G-code
+# raises a G-code error wherever Klipper's state is not the expected
 # one.
 log "checking the print state macros in Klipper batch mode"
 macros_rc=0
 # config:G-code:result name, all in state-macros/ and out/.
 for route in printer:check:state-macros printer-mainsail:check-mainsail:state-macros-mainsail \
-             printer-case:check-case:state-macros-case; do
+             printer-case:check-case:state-macros-case printer-names:check-names:state-macros-names; do
     IFS=: read -r cfg check result <<< "$route"
     rc=0
     compose run --rm --no-deps klipper-batch \
@@ -126,6 +127,12 @@ for stepper in Belt belt; do
     grep -qF "_KLIPSLICE_RESTORE: [extruder_stepper $stepper] and another section differ only in case" \
         "$OUT/state-macros-case.log" \
         || { log "state macro check check-case.gcode: no console warning for [extruder_stepper $stepper]"; macros_rc=1; }
+done
+# It also says why it skips the steppers whose names it cannot pass unquoted.
+for stepper in "Belt'aux" 'Belt\aux'; do
+    grep -qF "_KLIPSLICE_RESTORE: the name of [extruder_stepper $stepper] holds characters other than" \
+        "$OUT/state-macros-names.log" \
+        || { log "state macro check check-names.gcode: no console warning for [extruder_stepper $stepper]"; macros_rc=1; }
 done
 
 # --- 4. Moonraker -----------------------------------------------------------
@@ -148,7 +155,7 @@ compose exec -T moonraker cat /printer_data/logs/moonraker.log > "$OUT/moonraker
 compose run --rm --no-deps --entrypoint /opt/klippy-env/bin/python klipper-batch /vp/report.py \
     --gcode "/out/slice/$GCODE_NAME" --binary "$BIN" --model "tests/data/$(basename "$MODEL")" \
     --presets "Voron 2.4 350 0.4 nozzle; 0.20mm Standard @Voron; Generic PLA @System" \
-    --klipper /out/klipper.json --state-macros /out/state-macros.json /out/state-macros-mainsail.json /out/state-macros-case.json \
+    --klipper /out/klipper.json --state-macros /out/state-macros.json /out/state-macros-mainsail.json /out/state-macros-case.json /out/state-macros-names.json \
     --moonraker /out/moonraker.json --out /out/report.md \
     || die "report generation failed"
 log "report: $OUT/report.md"
