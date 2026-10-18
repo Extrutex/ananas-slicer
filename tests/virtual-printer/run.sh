@@ -140,7 +140,8 @@ compose exec -T moonraker cat /printer_data/logs/moonraker.log > "$OUT/moonraker
 compose run --rm --no-deps --entrypoint /opt/klippy-env/bin/python klipper-batch /vp/report.py \
     --gcode "/out/slice/$GCODE_NAME" --binary "$BIN" --model "tests/data/$(basename "$MODEL")" \
     --presets "Voron 2.4 350 0.4 nozzle; 0.20mm Standard @Voron; Generic PLA @System" \
-    --klipper /out/klipper.json --moonraker /out/moonraker.json --out /out/report.md \
+    --klipper /out/klipper.json --state-macros /out/state-macros.json /out/state-macros-mainsail.json \
+    --moonraker /out/moonraker.json --out /out/report.md \
     || die "report generation failed"
 log "report: $OUT/report.md"
 

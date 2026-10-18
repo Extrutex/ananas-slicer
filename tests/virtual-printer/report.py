@@ -135,8 +135,31 @@ def section_klipper(lines, summary, facts):
     lines.append("")
 
 
+def section_state_macros(lines, paths, summaries):
+    lines.append("## 3. State macros (Klipper batch mode)")
+    lines.append("")
+    if not paths:
+        lines.append("**Not run.**")
+        lines.append("")
+        return
+    for path, summary in zip(paths, summaries):
+        name = os.path.basename(path)
+        if summary is None:
+            lines.append("- `%s`: **not run**" % name)
+            continue
+        lines.append("- `%s`: **%s** (klippy exit code %s, %d commands processed)" % (
+            name, "PASS" if summary["accepted"] else "FAIL",
+            summary["klippy_exit_code"], summary["commands_processed"]))
+        lines += ["  - G-code error: `%s`" % e for e in summary["gcode_errors"]]
+        # A G-code error is logged as an error too; list only the others.
+        lines += ["  - Error logged: `%s`" % e.strip() for e in summary["errors"]
+                  if e.strip() not in summary["gcode_errors"]]
+        lines += ["  - Unknown command: `%s` x%d" % kv for kv in summary["unknown_commands"].items()]
+    lines.append("")
+
+
 def section_moonraker(lines, result):
-    lines.append("## 3. Moonraker")
+    lines.append("## 4. Moonraker")
     lines.append("")
     if result is None:
         lines.append("**Not run.**")
@@ -199,14 +222,18 @@ def main():
     parser.add_argument("--model", required=True)
     parser.add_argument("--presets", required=True)
     parser.add_argument("--klipper", required=True)
+    parser.add_argument("--state-macros", nargs="*", default=[],
+                        help="results of the state macro checks, one per route")
     parser.add_argument("--moonraker", required=True)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
     facts = gcode_facts(args.gcode)
     klipper = load_json(args.klipper)
+    state_macros = [load_json(p) for p in args.state_macros]
     moonraker = load_json(args.moonraker)
     ok = (facts is not None and klipper is not None and klipper["accepted"]
+          and all(m is not None and m["accepted"] for m in state_macros)
           and moonraker is not None and moonraker["passed"])
     lines = [
         "# KLIPSLICE virtual printer report",
@@ -218,6 +245,7 @@ def main():
     ]
     section_slice(lines, facts, args)
     section_klipper(lines, klipper, facts)
+    section_state_macros(lines, args.state_macros, state_macros)
     section_moonraker(lines, moonraker)
     with open(args.out, "w") as f:
         f.write("\n".join(lines))
