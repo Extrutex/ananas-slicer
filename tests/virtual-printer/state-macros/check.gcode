@@ -2,6 +2,17 @@
 ; state-macros/printer.cfg. Every _VP_EXPECT_* raises a G-code error, and so
 ; fails the check, when Klipper's state is not the expected one.
 
+; Without _KLIPSLICE_SAVE (klipper_restore_state off) CANCEL_PRINT switches the
+; heaters off and leaves pressure advance and limits as they are.
+SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.11
+SET_VELOCITY_LIMIT ACCEL=6000
+M104 S200
+M104 T1 S200
+CANCEL_PRINT
+_VP_EXPECT_HEATERS_OFF
+_VP_EXPECT_PA EXTRUDER=extruder ADVANCE=0.11 SMOOTH_TIME=0.04
+_VP_EXPECT_LIMITS VELOCITY=300 ACCEL=6000 MINIMUM_CRUISE_RATIO=0.5 SQUARE_CORNER_VELOCITY=5
+
 ; A print with klipper_restore_state: _KLIPSLICE_SAVE, then per-feature values.
 SET_VELOCITY_LIMIT ACCEL=7000
 _KLIPSLICE_SAVE
@@ -17,6 +28,13 @@ _VP_EXPECT_HEATERS_OFF
 _VP_EXPECT_LIMITS VELOCITY=300 ACCEL=7000 MINIMUM_CRUISE_RATIO=0.5 SQUARE_CORNER_VELOCITY=5
 _VP_EXPECT_PA EXTRUDER=extruder ADVANCE=0.04 SMOOTH_TIME=0.04
 _VP_EXPECT_PA STEPPER=Belt ADVANCE=0.06 SMOOTH_TIME=0.03
+
+; The restore has run: a second one (end G-code after a cancel, a later
+; CANCEL_PRINT) changes nothing.
+SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.15
+_KLIPSLICE_RESTORE
+CANCEL_PRINT
+_VP_EXPECT_PA EXTRUDER=extruder ADVANCE=0.15 SMOOTH_TIME=0.04
 
 ; The end G-code path of a finished print restores the same way.
 _KLIPSLICE_SAVE

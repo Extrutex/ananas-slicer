@@ -37,7 +37,8 @@ pressure advance and smooth time of every extruder stepper (the stepper of an
 `[extruder]`/`[extruderN]` that has one, and every `[extruder_stepper]`) to its
 printer.cfg value. The pressure advance comes from printer.cfg rather than from
 the save, so a print that was cancelled before its restore does not carry its
-value into the next one. A cancelled print never reaches the end G-code;
+value into the next one. The restore does nothing unless `_KLIPSLICE_SAVE` ran
+since the last restore. A cancelled print never reaches the end G-code;
 `CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself, after the original
 `CANCEL_PRINT`, as the file describes.
 

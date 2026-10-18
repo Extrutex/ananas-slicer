@@ -39,9 +39,10 @@ take about 30 seconds.
    `state-macros/check.gcode` against `state-macros/printer.cfg`, the virtual
    printer plus an `[extruder1]` without a stepper and an
    `[extruder_stepper Belt]` with its own pressure advance. It sets per-feature
-   values, cancels and restores, and checks after each step that the heaters
-   are off, the velocity limits are back and every extruder stepper has its
-   printer.cfg pressure advance.
+   values, cancels with and without `_KLIPSLICE_SAVE`, restores twice, and
+   checks after each step that the heaters are off, the velocity limits are
+   back and every extruder stepper has its printer.cfg pressure advance, or
+   that nothing changed when nothing was saved.
 4. **Moonraker.** A long-running Klippy with the same file-output MCU and its
    API socket open, and Moonraker connected to it. The check uploads the file
    (`/server/files/upload`), reads `/server/files/metadata`, starts the print
