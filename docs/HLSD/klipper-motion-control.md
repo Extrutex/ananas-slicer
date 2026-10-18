@@ -69,6 +69,40 @@ Klipper rejects a negative length, speeds below 1 mm/s and a negative extra
 length; print validation reports those values instead of letting the command
 abort the print.
 
+## Time Estimate
+
+For the Klipper flavor the print time comes from `KlipperMotionModel`
+(`time_model = klipper_v013`, the default), a model of Klipper v0.13 motion
+planning, not firmware. It is a port of what decides a move's duration in
+Klipper: `toolhead.py` (`Move.calc_junction` with junction deviation from the
+square corner velocity and the centripetal cap, the smoothed
+`minimum_cruise_ratio` pass and lazy flushing of `LookAheadQueue`,
+`SET_VELOCITY_LIMIT` and `M204` state), the extruder junction and extrude-only
+limits of `kinematics/extruder.py`, and the Z limit of the cartesian and corexy
+kinematics. `GCodeProcessor` keeps its own bookkeeping (moves, roles, layers,
+`M73`) and hands every Klipper-flavor move to the model, which commits planned
+moves in order; Klipper's synchronization points drive it: `M400` and the end of
+the file drain the queue, `G4` dwells with `P` only, a change of the pressure
+advance smoothing window stops the toolhead, and `G92` does not. Input shaping
+and pressure advance do not change move durations in Klipper and are not
+modelled. `time_model = legacy` keeps the planner shared with the other flavors,
+which ignore the key.
+
+The model needs Klipper's limits, which belong to printer.cfg. The
+`klipper_*` keys hold an imported snapshot with its source
+(`klipper_limits_source`: `printer_cfg` or `moonraker`) and date.
+`parse_klipper_printer_cfg` reads printer.cfg the way Klipper does (SAVE_CONFIG
+block included, `[include]` not followed and reported) and applies Klipper's
+defaults, such as the extrude-only limits derived from the nozzle and filament
+diameter; `parse_moonraker_toolhead_query` reads
+`/printer/objects/query?toolhead&configfile=settings` and takes the limits from
+`configfile.settings`, because the live `toolhead` values may still carry an
+earlier job's `SET_VELOCITY_LIMIT` (a difference is reported). Without a snapshot
+the limits come from the machine limits of the profile and Klipper's defaults.
+What the slicer cannot see stays outside the model: the moves of macros such as
+`PRINT_START`, heating and probing, and `[firmware_retraction]` values (`G10`/`G11`
+are timed with the slicer's retraction settings).
+
 ## Verification
 
 `tests/fff_print/test_gcodewriter.cpp` checks enabled/disabled output, percentage

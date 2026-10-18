@@ -8,6 +8,7 @@
 #include "libslic3r/LocalesUtils.hpp"
 #include "libslic3r/format.hpp"
 #include "GCodeProcessor.hpp"
+#include "libslic3r/KlipperLimits.hpp"
 
 #include <boost/log/trivial.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -337,6 +338,7 @@ void GCodeProcessor::TimeMachine::reset()
     first_layer_time = 0.0f;
     prepare_time = 0.0f;
     m_additional_time_buffer.clear();
+    klipper.reset();
 }
 
 static void planner_forward_pass_kernel(const GCodeProcessor::TimeBlock& prev, GCodeProcessor::TimeBlock& curr)
@@ -451,7 +453,9 @@ void GCodeProcessor::TimeMachine::calculate_time(GCodeProcessorResult& result, P
     // exists to attribute it on. Every other pass keeps the original >= 2 requirement,
     // and an empty buffer keeps today's early-return unchanged (no behavior change).
     const bool drain_final = is_final && !m_additional_time_buffer.empty();
-    if (blocks.size() < 2 && !drain_final) {
+    // The Klipper model commits moves itself, so a single planned block is ready to be timed.
+    const size_t min_blocks = klipper ? 1 : 2;
+    if (blocks.size() < min_blocks && !drain_final) {
         // Not enough blocks to attribute the extra time to yet; buffer it so it is
         // applied on a later pass instead of being dropped.
         if (additional_time > 0.0f)
@@ -469,23 +473,50 @@ void GCodeProcessor::TimeMachine::calculate_time(GCodeProcessorResult& result, P
         additional_buffer.emplace_back(target_move_type, additional_time);
     additional_buffer = merge_adjacent_additional_time_blocks(additional_buffer);
 
-    // reverse_pass
-    for (int i = static_cast<int>(blocks.size()) - 1; i > 0; --i) {
-        planner_reverse_pass_kernel(blocks[i - 1], blocks[i]);
+    size_t n_blocks_process = 0;
+    if (klipper) {
+        // Klipper mode: the model has already planned the moves it committed. Time the leading blocks
+        // up to the first move it has not planned yet; blocks it never sees (a tool change, a ;V
+        // comment move Klipper ignores) keep their place in the sequence.
+        size_t n_planned = 0;
+        for (; n_blocks_process < blocks.size(); ++n_blocks_process) {
+            TimeBlock& block = blocks[n_blocks_process];
+            if (!block.klipper_move)
+                continue;
+            if (n_planned == klipper->planned_count())
+                break;
+            const KlipperMotionModel::PlannedMove& planned = klipper->planned(n_planned++);
+            block.acceleration                  = float(planned.accel);
+            block.feedrate_profile.entry        = float(planned.start_v);
+            block.feedrate_profile.cruise       = float(planned.cruise_v);
+            block.feedrate_profile.exit         = float(planned.end_v);
+            block.trapezoid.cruise_feedrate     = float(planned.cruise_v);
+            block.trapezoid.accelerate_until    = float(planned.accel_distance() / planned.distance) * block.distance;
+            block.trapezoid.decelerate_after    = block.distance - float(planned.decel_distance() / planned.distance) * block.distance;
+            block.klipper_time                  = float(planned.time());
+        }
+        klipper->pop_planned(n_planned);
+    } else {
+        // reverse_pass
+        for (int i = static_cast<int>(blocks.size()) - 1; i > 0; --i) {
+            planner_reverse_pass_kernel(blocks[i - 1], blocks[i]);
+        }
+
+        // forward_pass
+        for (size_t i = 0; i + 1 < blocks.size(); ++i) {
+            planner_forward_pass_kernel(blocks[i], blocks[i + 1]);
+        }
+
+        recalculate_trapezoids(blocks);
+
+        n_blocks_process = blocks.size() - keep_last_n_blocks;
     }
 
-    // forward_pass
-    for (size_t i = 0; i + 1 < blocks.size(); ++i) {
-        planner_forward_pass_kernel(blocks[i], blocks[i + 1]);
-    }
-
-    recalculate_trapezoids(blocks);
-
-    const size_t n_blocks_process = blocks.size() - keep_last_n_blocks;
     size_t additional_buffer_idx = 0;
     for (size_t i = 0; i < n_blocks_process; ++i) {
         const TimeBlock& block = blocks[i];
-        float block_time = block.time();
+        const float motion_time = block.klipper_move ? block.klipper_time : block.time();
+        float block_time = motion_time;
         if (additional_buffer_idx < additional_buffer.size()) {
             const EMoveType buf_move_type = additional_buffer[additional_buffer_idx].first;
             if (buf_move_type == EMoveType::Noop || buf_move_type == block.move_type) {
@@ -500,7 +531,7 @@ void GCodeProcessor::TimeMachine::calculate_time(GCodeProcessorResult& result, P
         // blocks stTimelapse), but writes only skippable_part_time, which has no g-code-emitting
         // reader until the pre-heat injector consumes it, so output is byte-identical.
         if (block.skippable_type != SkipType::stNone)
-            result.skippable_part_time[block.skippable_type] += block.time();
+            result.skippable_part_time[block.skippable_type] += motion_time;
         result.moves[block.move_id].time[static_cast<size_t>(mode)] = block_time;
         gcode_time.cache += block_time;
         //BBS
@@ -635,7 +666,9 @@ void GCodeProcessor::TimeMachine::calculate_time(GCodeProcessorResult& result, P
         }
     }
 
-    if (keep_last_n_blocks) {
+    if (klipper) {
+        blocks.erase(blocks.begin(), blocks.begin() + n_blocks_process);
+    } else if (keep_last_n_blocks) {
         blocks.erase(blocks.begin(), blocks.begin() + n_blocks_process);
 
         // Ensure that the new first block's entry speed will be preserved to prevent discontinuity
@@ -3130,6 +3163,7 @@ void GCodeProcessor::apply_config(const PrintConfig& config)
     if (z_offset != nullptr)
         m_z_offset = z_offset->value;
 
+    setup_klipper_motion_model(config);
 }
 
 void GCodeProcessor::apply_config(const DynamicPrintConfig& config)
@@ -3531,6 +3565,35 @@ void GCodeProcessor::apply_config(const DynamicPrintConfig& config)
     // streaming export uses the PrintConfig overload and hands the live grouping over separately, so
     // it is intentionally not touched here.
     ensure_nozzle_group_result(static_cast<int>(m_result.filaments_count));
+
+    setup_klipper_motion_model(config);
+}
+
+void GCodeProcessor::setup_klipper_motion_model(const ConfigBase& config)
+{
+    // A DynamicPrintConfig holds enums as ConfigOptionEnumGeneric, a PrintConfig as ConfigOptionEnum<T>;
+    // both answer getInt(). A config without the key predates the Klipper model and keeps the legacy one.
+    const ConfigOption* time_model = config.option("time_model");
+    std::optional<KlipperLimits> limits;
+    if (m_flavor == gcfKlipper && time_model != nullptr && static_cast<TimeModel>(time_model->getInt()) == TimeModel::KlipperV013) {
+        try {
+            limits = klipper_limits_from_config(config);
+        } catch (const RuntimeError& err) {
+            // The estimate is not worth failing a slice or a G-code preview over; say why it is legacy.
+            BOOST_LOG_TRIVIAL(error) << "Klipper time model disabled, using the legacy estimate: " << err.what();
+        }
+    }
+    for (TimeMachine& machine : m_time_processor.machines) {
+        if (limits)
+            machine.klipper.emplace(*limits);
+        else
+            machine.klipper.reset();
+    }
+}
+
+bool GCodeProcessor::uses_klipper_motion_model() const
+{
+    return m_time_processor.machines[static_cast<size_t>(PrintEstimatedStatistics::ETimeMode::Normal)].klipper.has_value();
 }
 
 void GCodeProcessor::enable_stealth_time_estimator(bool enabled)
@@ -3766,6 +3829,11 @@ void GCodeProcessor::finalize(bool post_process)
             move.height = Wipe_Height;
         }
     }
+
+    // The end of the file plans the Klipper lookahead queue to a stop.
+    for (TimeMachine& machine : m_time_processor.machines)
+        if (machine.klipper)
+            machine.klipper->wait_moves();
 
     // Orca: final pass -- also drains any filament-change delay still buffered because
     // calculate_time early-returns with fewer than two queued blocks (see calculate_time).
@@ -5309,6 +5377,14 @@ void GCodeProcessor::process_G1(const std::array<std::optional<double>, 4>& axes
         // updates previous
         prev = curr;
 
+        if (machine.klipper) {
+            // Klipper applies M221 to the E coordinate itself and plans with the commanded speed.
+            const double klipper_speed = (m_feedrate > 0.0f) ? double(m_feedrate) : KlipperMotionModel::default_speed;
+            block.klipper_move = machine.klipper->add_move({ double(delta_pos[X]), double(delta_pos[Y]), double(delta_pos[Z]),
+                                                             double(delta_pos[E]) * machine.extrude_factor_override_percentage },
+                                                           klipper_speed);
+        }
+
         blocks.push_back(block);
     }
 
@@ -5993,6 +6069,13 @@ void GCodeProcessor::process_G2_G3(const GCodeReader::GCodeLine& line, bool cloc
 //BBS
 void GCodeProcessor::process_G4(const GCodeReader::GCodeLine& line)
 {
+    if (uses_klipper_motion_model()) {
+        // toolhead.py cmd_G4: Klipper reads only P (ms), and a G4 without it still drains the queue.
+        float value_p = 0.0f;
+        line.has_value('P', value_p);
+        simulate_st_synchronize(std::max(0.0f, value_p) * 0.001f, EMoveType::Noop, KlipperSync::Dwell);
+        return;
+    }
     float value_s = 0.0;
     float value_p = 0.0;
     if (line.has_value('S', value_s) || line.has_value('P', value_p)) {
@@ -6127,7 +6210,8 @@ void GCodeProcessor::process_G92(const GCodeReader::GCodeLine& line)
         any_found = true;
     }
     else
-        simulate_st_synchronize();
+        // Klipper's G92 only shifts the G-code origin and keeps planning across it.
+        simulate_st_synchronize(0.0f, EMoveType::Noop, KlipperSync::None);
 
     if (!any_found && !line.has_unknown_axis()) {
         // The G92 may be called for axes that PrusaSlicer does not recognize, for example see GH issue #3510,
@@ -6209,6 +6293,12 @@ void GCodeProcessor::process_SET_PRESSURE_ADVANCE(const GCodeReader::GCodeLine& 
         } catch (...) {}
         m_pressure_advance = std::max(0.0f, pa_value);
     }
+
+    const std::optional<double> advance     = KlipperMotionModel::extended_param(line.raw(), "ADVANCE");
+    const std::optional<double> smooth_time = KlipperMotionModel::extended_param(line.raw(), "SMOOTH_TIME");
+    for (TimeMachine& machine : m_time_processor.machines)
+        if (machine.klipper)
+            machine.klipper->set_pressure_advance(advance, smooth_time);
 }
 
 void GCodeProcessor::process_M107(const GCodeReader::GCodeLine& line)
@@ -6370,6 +6460,16 @@ void GCodeProcessor::process_M203(const GCodeReader::GCodeLine& line)
 
 void GCodeProcessor::process_M204(const GCodeReader::GCodeLine& line)
 {
+    if (uses_klipper_motion_model()) {
+        auto param = [&line](char axis) -> std::optional<double> {
+            float v;
+            return line.has_value(axis, v) ? std::optional<double>(v) : std::nullopt;
+        };
+        const std::optional<double> s = param('S'), p = param('P'), t = param('T');
+        for (TimeMachine& machine : m_time_processor.machines)
+            if (machine.klipper)
+                machine.klipper->set_m204(s, p, t);
+    }
     float value;
     for (size_t i = 0; i < static_cast<size_t>(PrintEstimatedStatistics::ETimeMode::Count); ++i) {
         if (static_cast<PrintEstimatedStatistics::ETimeMode>(i) == PrintEstimatedStatistics::ETimeMode::Normal ||
@@ -6476,6 +6576,10 @@ void GCodeProcessor::process_SET_VELOCITY_LIMIT(const GCodeReader::GCodeLine& li
         }
     }
 
+    const KlipperMotionModel::VelocityLimit klipper_limit = KlipperMotionModel::parse_set_velocity_limit(line.raw());
+    for (TimeMachine& machine : m_time_processor.machines)
+        if (machine.klipper)
+            machine.klipper->set_velocity_limit(klipper_limit);
 }
 
 void GCodeProcessor::process_M221(const GCodeReader::GCodeLine& line)
@@ -6510,6 +6614,11 @@ void GCodeProcessor::process_M623(const GCodeReader::GCodeLine& line)
 
 void GCodeProcessor::process_M400(const GCodeReader::GCodeLine& line)
 {
+    if (uses_klipper_motion_model()) {
+        // toolhead.py cmd_M400: waits for the queue to drain and takes no parameters.
+        simulate_st_synchronize();
+        return;
+    }
     float value_s = 0.0;
     float value_p = 0.0;
     if (line.has_value('S', value_s) || line.has_value('P', value_p)) {
@@ -7562,8 +7671,16 @@ void GCodeProcessor::calculate_time(GCodeProcessorResult& result, size_t keep_la
     }
 }
 
-void GCodeProcessor::simulate_st_synchronize(float additional_time, EMoveType target_move_type)
+void GCodeProcessor::simulate_st_synchronize(float additional_time, EMoveType target_move_type, KlipperSync klipper_sync)
 {
+    for (TimeMachine& machine : m_time_processor.machines) {
+        if (!machine.klipper)
+            continue;
+        if (klipper_sync == KlipperSync::WaitMoves)
+            machine.klipper->wait_moves();
+        else if (klipper_sync == KlipperSync::Dwell)
+            machine.klipper->dwell();
+    }
     calculate_time(m_result, 0, additional_time, target_move_type);
 }
 
