@@ -310,6 +310,8 @@ set(lisbslic3r_sources
     Geometry/VoronoiVisualUtils.hpp
     Int128.hpp
     KDTreeIndirect.hpp
+    KlipperLimits.cpp
+    KlipperLimits.hpp
     Layer.cpp
     Layer.hpp
     LayerRegion.cpp

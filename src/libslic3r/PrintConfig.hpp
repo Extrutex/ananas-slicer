@@ -489,6 +489,25 @@ enum class InputShaperType : unsigned char {
     Disable
 };
 
+// Model the G-code time estimate is computed with. Only read for the Klipper G-code flavor; every
+// other flavor always uses the legacy planner. Serialized; keys must stay stable.
+enum class TimeModel : unsigned char {
+    // The Marlin-derived planner shared by all flavors.
+    Legacy = 0,
+    // KlipperMotionModel: a model of Klipper v0.13 motion planning, not firmware.
+    KlipperV013,
+};
+
+// Where the Klipper limits the estimate uses come from. Serialized; keys must stay stable.
+enum class KlipperLimitsSource : unsigned char {
+    // Not imported: derived from the profile's machine limits and Klipper's defaults.
+    None = 0,
+    // Imported from a printer.cfg file.
+    PrinterCfg,
+    // Imported from a running Klipper through Moonraker.
+    Moonraker,
+};
+
 // BBS
 enum ZHopType {
     zhtAuto = 0,
@@ -716,6 +735,8 @@ CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(TimelapseType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(BedType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(SkirtType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(InputShaperType)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(TimeModel)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(KlipperLimitsSource)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(DraftShield)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(ForwardCompatibilitySubstitutionRule)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(GCodeThumbnailsFormat)
@@ -1546,6 +1567,22 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionFloat,                input_shaping_freq_y))
     ((ConfigOptionFloat,                input_shaping_damp_x))
     ((ConfigOptionFloat,                input_shaping_damp_y))
+
+    // Time estimate model for the Klipper flavor, and the Klipper limits snapshot it reads.
+    ((ConfigOptionEnum<TimeModel>,      time_model))
+    ((ConfigOptionEnum<KlipperLimitsSource>, klipper_limits_source))
+    ((ConfigOptionString,               klipper_limits_imported_at))
+    ((ConfigOptionFloat,                klipper_max_velocity))
+    ((ConfigOptionFloat,                klipper_max_accel))
+    ((ConfigOptionFloat,                klipper_minimum_cruise_ratio))
+    ((ConfigOptionFloat,                klipper_square_corner_velocity))
+    ((ConfigOptionFloat,                klipper_max_z_velocity))
+    ((ConfigOptionFloat,                klipper_max_z_accel))
+    ((ConfigOptionFloat,                klipper_max_extrude_only_velocity))
+    ((ConfigOptionFloat,                klipper_max_extrude_only_accel))
+    ((ConfigOptionFloat,                klipper_instantaneous_corner_velocity))
+    ((ConfigOptionFloat,                klipper_pressure_advance))
+    ((ConfigOptionFloat,                klipper_pressure_advance_smooth_time))
 )
 
 // This object is mapped to Perl as Slic3r::Config::GCode.

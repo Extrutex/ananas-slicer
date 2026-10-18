@@ -1437,6 +1437,11 @@ static std::vector<std::string> s_Preset_machine_limits_options {
     "resonance_avoidance", "min_resonance_avoidance_speed", "max_resonance_avoidance_speed",
     // Orca: input shaping
     "input_shaping_emit", "input_shaping_type", "input_shaping_freq_x", "input_shaping_freq_y", "input_shaping_damp_x", "input_shaping_damp_y",
+    // Klipper time model and the imported Klipper limits it reads
+    "time_model", "klipper_limits_source", "klipper_limits_imported_at",
+    "klipper_max_velocity", "klipper_max_accel", "klipper_minimum_cruise_ratio", "klipper_square_corner_velocity",
+    "klipper_max_z_velocity", "klipper_max_z_accel", "klipper_max_extrude_only_velocity", "klipper_max_extrude_only_accel",
+    "klipper_instantaneous_corner_velocity", "klipper_pressure_advance", "klipper_pressure_advance_smooth_time",
 };
 
 static std::vector<std::string> s_Preset_printer_options {
