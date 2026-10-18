@@ -44,14 +44,19 @@ std::string to_lower(std::string s)
     return s;
 }
 
-// Python configparser with inline_comment_prefixes=('#', ';'), as Klipper uses it: a comment
-// prefix starts an inline comment only after whitespace.
-std::string strip_inline_comment(const std::string& value)
+// Klipper's reading of a config line (configfile.py PrinterConfig._parse_config and
+// append_fileconfig): everything from the first '#' on is cut off, wherever it stands.
+std::string strip_hash_comment(const std::string& raw) { return raw.substr(0, raw.find('#')); }
+
+// Python configparser with inline_comment_prefixes=(';', '#'), as Klipper creates it. Only ';' is
+// left once '#' comments are cut off; it starts a comment at the start of the line or after
+// whitespace, so "4000;x" is a value.
+std::string strip_semicolon_comment(const std::string& line)
 {
-    for (size_t i = 1; i < value.size(); ++i)
-        if ((value[i] == '#' || value[i] == ';') && std::isspace(static_cast<unsigned char>(value[i - 1])))
-            return value.substr(0, i);
-    return value;
+    for (size_t i = 0; i < line.size(); ++i)
+        if (line[i] == ';' && (i == 0 || std::isspace(static_cast<unsigned char>(line[i - 1]))))
+            return line.substr(0, i);
+    return line;
 }
 
 Sections parse_sections(const std::string& text, std::vector<std::string>& warnings)
@@ -71,10 +76,10 @@ Sections parse_sections(const std::string& text, std::vector<std::string>& warni
             if (!raw.empty() && raw.front() == ' ')
                 raw.erase(0, 1);
         }
+        raw                    = strip_semicolon_comment(strip_hash_comment(raw));
         const std::string line = trim(raw);
-        if (line.empty() || line.front() == '#' || line.front() == ';') {
+        if (line.empty())
             continue;
-        }
         if (std::isspace(static_cast<unsigned char>(raw.front()))) {
             // Continuation of a multi-line value (gcode, gantry corners); none of the limits is one.
             if (in_option)
@@ -97,7 +102,7 @@ Sections parse_sections(const std::string& text, std::vector<std::string>& warni
             continue;
         }
         const std::string key = to_lower(trim(line.substr(0, delim)));
-        (*current)[key]       = trim(strip_inline_comment(line.substr(delim + 1)));
+        (*current)[key]       = trim(line.substr(delim + 1));
         in_option             = true;
     }
     return sections;

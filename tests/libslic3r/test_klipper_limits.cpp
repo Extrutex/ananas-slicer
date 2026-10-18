@@ -139,6 +139,35 @@ instantaneous_corner_velocity: 2
     CHECK_THAT(l.instantaneous_corner_velocity, WithinRel(2.0, 1e-12));
 }
 
+TEST_CASE("printer.cfg comments end where Klipper ends them", "[KlipperLimits]")
+{
+    // configfile.py cuts every line at its first '#', whitespace before it or not. ';' is left to
+    // configparser, where it starts a comment only at the start of a line or after whitespace.
+    const std::string cfg = R"([printer]#comment right after the header
+kinematics: corexy#comment
+max_velocity: 300#comment
+max_accel: 7000#comment;more
+square_corner_velocity: 6 ;comment
+   ; indented comment line
+
+[extruder]
+nozzle_diameter: 0.4#comment
+filament_diameter: 1.75
+pressure_advance: 0.05#comment
+)";
+    const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
+    const KlipperLimits& l = result.limits;
+    CHECK(result.warnings.empty());
+    CHECK_THAT(l.max_velocity, WithinRel(300.0, 1e-12));
+    CHECK_THAT(l.max_accel, WithinRel(7000.0, 1e-12));
+    CHECK_THAT(l.square_corner_velocity, WithinRel(6.0, 1e-12));
+    CHECK_THAT(l.pressure_advance, WithinRel(0.05, 1e-12));
+
+    // A ';' right after the value is part of it, and Klipper refuses the number.
+    REQUIRE_THROWS_WITH(parse_klipper_printer_cfg(std::string(minimal_cfg) + "[printer]\nmax_accel: 7000;comment\n"),
+                        ContainsSubstring("max_accel"));
+}
+
 TEST_CASE("printer.cfg import refuses what Klipper refuses", "[KlipperLimits]")
 {
     SECTION("no [printer] section") {
