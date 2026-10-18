@@ -26,6 +26,9 @@
 //   (e) holes: the clear diameter of every hole is the model diameter within the slice resolution.
 //   (f) runs: n beads across a feature need at most ceil(n/2) wall runs (loops pair the beads, an odd
 //       middle bead is one open line), so more runs means wall pieces that are not chained.
+//   (g) method parity, outline_shrink vs toolpath_shift: on the block every bead and the infill region sit
+//       where the other method puts them, and no wall on the plate is narrower than the narrowest wall of
+//       outline_shrink (criterion Q7).
 //
 // Matrix: {arachne, classic, classic + detect_thin_wall} x precise_outer_wall {0, 1}, plus Arachne with
 // precise_outer_wall_method = toolpath_shift.
@@ -298,7 +301,8 @@ void collect(const ExtrusionEntity *entity, bool wall, size_t &run, std::vector<
 
 struct ProbeLayer {
     std::vector<Bead> beads;
-    Vec2d             offset; // model frame + offset = layer frame
+    ExPolygons        fill_area; // the region left for infill inside the walls
+    Vec2d             offset;    // model frame + offset = layer frame
 };
 
 ProbeLayer slice_probe_layer(const Cell &cell)
@@ -324,6 +328,7 @@ ProbeLayer slice_probe_layer(const Cell &cell)
     for (const LayerRegion *region : probe->regions()) {
         collect(&region->perimeters, true, run, out.beads);
         collect(&region->fills, false, run, out.beads);
+        append(out.fill_area, region->fill_expolygons);
     }
     return out;
 }
@@ -571,9 +576,10 @@ std::vector<Check> evaluate(const Cell &cell)
 // counts as an unbounded difference.
 const char *const precise_parity       = "arachne/precise=1 vs 0";
 const char *const precise_shift_parity = "arachne/precise=1/shift vs 0";
-// The pseudo cell comparing the two precise methods on the block: a wall with room behind its beads
-// must come out the same either way, bead for bead.
-const char *const precise_method_block = "arachne/precise=1/shift vs precise=1";
+// The pseudo cell comparing the two precise methods: a wall with room behind its beads must come out the
+// same either way, bead for bead and with the same infill region, and toolpath_shift may not print a wall
+// narrower than outline_shrink does anywhere on the plate.
+const char *const precise_methods = "arachne/precise=1/shift vs precise=1";
 
 std::vector<Crossing> fin_crossings(const ProbeLayer &layer, size_t i)
 {
@@ -608,11 +614,45 @@ std::vector<Crossing> block_crossings(const ProbeLayer &layer)
     return cross_section(beads_in(layer, around(r), true), 1, 0.5 * (r.y0 + r.y1));
 }
 
-std::vector<Check> evaluate_precise_method_block()
+// Extents of the block's infill region, model frame.
+BoundingBoxf block_fill_extents(const ProbeLayer &layer)
 {
-    const std::vector<Crossing> shrink = block_crossings(slice_probe_layer(cell_named("arachne/precise=1")));
-    const std::vector<Crossing> shift  = block_crossings(slice_probe_layer(cell_named("arachne/precise=1/shift")));
+    const Vec2d o = layer.offset;
+    const Polygon block = rect_polygon({ block_x0 + o.x(), block_y0 + o.y(), block_x0 + block_size + o.x(), block_y0 + block_size + o.y() });
+    const BoundingBox box = get_extents(intersection_ex(layer.fill_area, ExPolygons{ ExPolygon(block) }));
+    return box.defined ? BoundingBoxf(unscaled(box.min) - o, unscaled(box.max) - o) : BoundingBoxf();
+}
+
+double narrowest_wall(const ProbeLayer &layer)
+{
+    double out = unbounded;
+    for (const Bead &b : layer.beads)
+        if (b.wall && b.polyline.length() > 0)
+            out = std::min(out, b.width);
+    return out;
+}
+
+std::vector<Check> evaluate_precise_methods()
+{
+    const ProbeLayer shrink_layer = slice_probe_layer(cell_named("arachne/precise=1"));
+    const ProbeLayer shift_layer  = slice_probe_layer(cell_named("arachne/precise=1/shift"));
+    const std::vector<Crossing> shrink = block_crossings(shrink_layer);
+    const std::vector<Crossing> shift  = block_crossings(shift_layer);
     std::vector<Check> out;
+    // The infill region follows the walls: it may not move with the method either (wall analysis 3.3).
+    const BoundingBoxf fill_shrink = block_fill_extents(shrink_layer);
+    const BoundingBoxf fill_shift  = block_fill_extents(shift_layer);
+    if (fill_shrink.defined && fill_shift.defined) {
+        const double moved = std::max((fill_shift.min - fill_shrink.min).cwiseAbs().maxCoeff(), (fill_shift.max - fill_shrink.max).cwiseAbs().maxCoeff());
+        out.push_back({ "block", "fill_extents", moved, 0., bead_tolerance,
+                        format("shrink x0 %.4f", fill_shrink.min.x()) + format(" shift x0 %.4f", fill_shift.min.x()) });
+    } else
+        out.push_back({ "block", "fill_extents", unbounded, 0., bead_tolerance, "no infill region in the block" });
+    // Criterion Q7: no wall anywhere on the plate comes out narrower than the narrowest wall of the
+    // outline-shrink method.
+    const double narrowest_shrink = narrowest_wall(shrink_layer);
+    out.push_back({ "plate", "narrowest_wall", narrowest_wall(shift_layer), narrowest_shrink - bead_tolerance, unbounded,
+                    format("shrink %.4f", narrowest_shrink) });
     out.push_back({ "block", "wall_beads", double(shift.size()), double(shrink.size()), double(shrink.size()), {} });
     for (size_t i = 0; i < std::min(shrink.size(), shift.size()); ++ i) {
         out.push_back({ format("bead %.0f", double(i)), "position", std::abs(shift[i].pos - shrink[i].pos), 0., bead_tolerance,
@@ -629,8 +669,8 @@ std::vector<Check> evaluate_named(const std::string &name)
         return evaluate_precise_parity("arachne/precise=1");
     if (name == precise_shift_parity)
         return evaluate_precise_parity("arachne/precise=1/shift");
-    if (name == precise_method_block)
-        return evaluate_precise_method_block();
+    if (name == precise_methods)
+        return evaluate_precise_methods();
     return evaluate(cell_named(name));
 }
 
@@ -787,9 +827,9 @@ TEST_CASE("Arachne single beads are as wide with precise outer wall by toolpath 
     require_bead_model(precise_shift_parity);
 }
 
-TEST_CASE("Both precise outer wall methods place the walls of a thick wall alike", "[WallGeometry]")
+TEST_CASE("Both precise outer wall methods place the walls and the infill of a thick wall alike", "[WallGeometry]")
 {
-    require_bead_model(precise_method_block);
+    require_bead_model(precise_methods);
 }
 
 // ---- A covered rib next to a top surface (only_one_wall_top) ----
@@ -975,7 +1015,7 @@ TEST_CASE("Wall geometry report", "[.][WallGeometryReport]")
         names.emplace_back(cell.name);
     names.emplace_back(precise_parity);
     names.emplace_back(precise_shift_parity);
-    names.emplace_back(precise_method_block);
+    names.emplace_back(precise_methods);
     for (const std::string &name : names) {
         std::string s = "== " + name + "\n";
         for (const Check &c : evaluate_named(name)) {
