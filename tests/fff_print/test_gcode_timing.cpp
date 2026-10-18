@@ -8,7 +8,10 @@
 
 #include "test_utils.hpp"
 
+#include "nlohmann/json.hpp"
+
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <map>
@@ -752,4 +755,137 @@ TEST_CASE("The Klipper model gives finite times on G-code it cannot fully model"
     const double t = estimated_time(config, gcode);
     REQUIRE(std::isfinite(t));
     REQUIRE(t >= 0.0);
+}
+
+// Regression gate against upstream Klipper. tests/data/klipper_timing holds real KLIPSLICE slices,
+// reduced to the commands Klipper executes, and reference.json the print time Klipper v0.13 batch
+// mode reached at every marker command of each file, measured on tests/virtual-printer/printer.cfg
+// by tests/virtual-printer/timing-gate.sh. The estimate has to match Klipper over the whole print
+// (first layer start to PRINT_END) and over the first layer.
+namespace {
+
+constexpr double PRINT_TOLERANCE       = 0.015;
+constexpr double FIRST_LAYER_TOLERANCE = 0.02;
+
+std::string klipper_timing_dir()
+{
+    // timing-gate.sh points this at a corpus it has just regenerated; the committed one otherwise.
+    if (const char* dir = std::getenv("KLIPPER_TIMING_DIR"); dir != nullptr && *dir != '\0')
+        return dir;
+    return std::string(TEST_DATA_DIR) + "/klipper_timing";
+}
+
+std::string read_text(const std::string& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    REQUIRE(in.good());
+    std::stringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+// The rig's printer.cfg, imported the way a user imports theirs.
+FullPrintConfig make_virtual_printer_config()
+{
+    FullPrintConfig config;
+    config.gcode_flavor.value       = gcfKlipper;
+    config.time_model.value         = TimeModel::KlipperV013;
+    config.filament_diameter.values = {1.75};
+    config.filament_map.values      = {1};
+    config.nozzle_diameter.values   = {0.4};
+    set_klipper_snapshot(config,
+                         parse_klipper_printer_cfg(read_text(std::string(TEST_DATA_DIR) + "/../virtual-printer/printer.cfg")).limits);
+    return config;
+}
+
+struct TimedMarker
+{
+    unsigned int line;
+    std::string  command;
+    double       klipper_s;
+    double       estimate_s;
+};
+
+// Estimated time at each marker line: everything the processor timed on earlier lines.
+std::vector<TimedMarker> time_markers(const nlohmann::json& model, const std::string& dir)
+{
+    const std::string path = dir + "/" + model["gcode"].get<std::string>();
+    const std::string text = read_text(path);
+    std::vector<std::string> lines;
+    {
+        std::istringstream in(text);
+        for (std::string line; std::getline(in, line);)
+            lines.push_back(line);
+    }
+
+    std::vector<TimedMarker> markers;
+    for (const auto& m : model["markers"]) {
+        const unsigned int line = m["line"].get<unsigned int>();
+        REQUIRE(line >= 1);
+        REQUIRE(line <= lines.size());
+        // The reference was built against this very file.
+        REQUIRE(lines[line - 1] == m["command"].get<std::string>());
+        markers.push_back({line, m["command"].get<std::string>(), m["time_s"].get<double>(), 0.0});
+    }
+
+    GCodeProcessor proc;
+    GCodeProcessor::s_IsBBLPrinter = true;
+    proc.apply_config(make_virtual_printer_config());
+    proc.process_file(path);
+    const GCodeProcessorResult& result = proc.get_result();
+    // One processed line per file line, so a move's gcode_id is its line number.
+    REQUIRE(result.lines_ends.size() == lines.size());
+
+    double elapsed = 0.0;
+    size_t move    = 0;
+    for (TimedMarker& marker : markers) {
+        for (; move < result.moves.size() && result.moves[move].gcode_id < marker.line; ++move)
+            elapsed += result.moves[move].time[NORMAL];
+        marker.estimate_s = elapsed;
+    }
+    return markers;
+}
+
+const TimedMarker& find_marker(const std::vector<TimedMarker>& markers, const std::string& prefix)
+{
+    for (const TimedMarker& m : markers)
+        if (m.command.rfind(prefix, 0) == 0)
+            return m;
+    FAIL("no marker starting with " << prefix);
+    return markers.front();
+}
+
+double relative_error(double estimate, double klipper) { return estimate / klipper - 1.0; }
+
+} // namespace
+
+TEST_CASE("The Klipper time model matches Klipper batch mode on the timing corpus",
+          "[GCodeTiming][KlipperModel][KlipperTimingGate]")
+{
+    const std::string dir = klipper_timing_dir();
+    const nlohmann::json reference = nlohmann::json::parse(read_text(dir + "/reference.json"));
+    REQUIRE_FALSE(reference["models"].empty());
+
+    for (const auto& model : reference["models"]) {
+        const std::string name = model["name"].get<std::string>();
+        DYNAMIC_SECTION(name)
+        {
+            const std::vector<TimedMarker> markers = time_markers(model, dir);
+            const TimedMarker& layer1 = find_marker(markers, "SET_PRINT_STATS_INFO CURRENT_LAYER=1");
+            const TimedMarker& layer2 = find_marker(markers, "SET_PRINT_STATS_INFO CURRENT_LAYER=2");
+            const TimedMarker& end    = find_marker(markers, "PRINT_END");
+
+            const double klipper_print  = end.klipper_s - layer1.klipper_s;
+            const double estimate_print = end.estimate_s - layer1.estimate_s;
+            const double klipper_first  = layer2.klipper_s - layer1.klipper_s;
+            const double estimate_first = layer2.estimate_s - layer1.estimate_s;
+            const double print_error    = relative_error(estimate_print, klipper_print);
+            const double first_error    = relative_error(estimate_first, klipper_first);
+            INFO(name << ": print " << estimate_print << " s vs Klipper " << klipper_print << " s (" << 100.0 * print_error
+                      << " %), first layer " << estimate_first << " s vs " << klipper_first << " s (" << 100.0 * first_error
+                      << " %)");
+            CHECK(std::abs(print_error) <= PRINT_TOLERANCE);
+            CHECK(std::abs(first_error) <= FIRST_LAYER_TOLERANCE);
+        }
+    }
 }

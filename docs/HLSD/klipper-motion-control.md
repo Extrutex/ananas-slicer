@@ -115,3 +115,13 @@ rejects mismatched source hashes. FLUXRAKER's companion integration runner selec
 pinned legacy/current targets and audits removed parameters before printing.
 A successful slice or configuration check does not establish successful Klippy
 execution; both integration targets must report an actual pass.
+
+`tests/libslic3r/test_klipper_motion_model.cpp` checks the model against closed
+forms of Klipper's planner equations (single moves, cruise ratio, corners over
+angles, lengths and accelerations, extruder and Z limits), and
+`test_klipper_limits.cpp` the printer.cfg and Moonraker import. The
+`[KlipperTimingGate]` test in `tests/fff_print/test_gcode_timing.cpp` compares the
+estimate with the print times pinned Klipper batch mode reached on a committed
+corpus (`tests/data/klipper_timing`), within 1.5 % per print and 2 % on the first
+layer; `tests/virtual-printer/timing-gate.sh` regenerates that corpus and its
+reference.

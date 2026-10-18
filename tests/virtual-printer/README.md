@@ -72,10 +72,11 @@ take about 30 seconds.
 | `docker-compose.yml` | `klipper-batch` (one-shot), `klipper` and `moonraker` (long-running). Internal network, no ports, containers run as the invoking user. |
 | `printer.cfg` | Virtual Voron 2.4 350: CoreXY, four Z motors with quad gantry level, probe, input shaper (MZV 58.0/42.4 Hz), firmware retraction, arcs, exclude_object, virtual_sdcard, pause_resume, display_status. `PRINT_START`/`PRINT_END`/`CANCEL_PRINT` stub macros. |
 | `moonraker.conf` | Loopback only, loopback is the only trusted client, no CORS, no system service provider. |
-| `klippy_batch.py` | Runs `klippy.main()` in-process and observes it: log records with levels, which parameters each command handler read, toolhead print time. Klipper's code is not changed. |
+| `klippy_batch.py` | Runs `klippy.main()` in-process and observes it: log records with levels, which parameters each command handler read, toolhead print time, and the exact print time of marker commands (`--markers`). Klipper's code is not changed. |
 | `check_moonraker.py` | The Moonraker API steps, run inside the moonraker container against `127.0.0.1:7125`. |
 | `report.py` | Writes `out/report.md`. |
 | `run.sh` | Drives everything. |
+| `timing-gate.sh`, `timing_corpus.py` | The Klipper timing gate, below. |
 
 ### Why file output instead of a simulated MCU
 
@@ -106,6 +107,47 @@ heaters and fans, the host-MCU process needs real GPIO character devices, and
 both run in real time. For a check of the G-code, the file-output MCU is the
 right level.
 
+## Klipper timing gate
+
+```sh
+tests/virtual-printer/timing-gate.sh [--update]
+```
+
+Checks the slicer's Klipper time model (`time_model = klipper_v013`,
+`KlipperMotionModel`) against Klipper itself. The slicer's estimate is a model
+of Klipper's motion planning, not firmware, so it is measured against the
+pinned upstream Klipper on every change:
+
+1. Slices a small corpus (cube at 0.20 and 0.12 mm, the cube with the legacy
+   `ACCEL_TO_DECEL`/`SQUARE_CORNER_VELOCITY` lines, `extruder_idler`,
+   `frog_legs`) with the Voron 2.4 350 presets and reduces each slice to the
+   commands Klipper executes (`timing_corpus.py normalize`): comments and blank
+   lines go, some files are cut after their first layers, and a move to where
+   `PRINT_START` leaves the toolhead is inserted after it, because the slicer
+   cannot see into the macro.
+2. Runs each file through Klipper batch mode and records the exact print time
+   at every `SET_PRINT_STATS_INFO`, `EXCLUDE_OBJECT_START`/`_END` and
+   `PRINT_END`: a timing callback on the last queued move fires when Klipper
+   commits it, so the time is not the lagging `print_time` at dispatch. The
+   first file runs twice and both runs must agree to 0.1 s.
+3. Writes `reference.json` and runs the `[KlipperTimingGate]` test of
+   `fff_print_tests` on the fresh corpus (`KLIPPER_TIMING_DIR`). It fails when
+   the estimate differs from Klipper by more than 1.5 % over the print (layer 1
+   to `PRINT_END`) or 2 % over the first layer.
+
+`--update` copies the corpus and `reference.json` to
+`tests/data/klipper_timing`, where the same test runs without Docker as part
+of the normal unit tests. Run it after a Klipper bump, a change of
+`printer.cfg`, or a slicer change that should show up in the corpus. The
+estimate is imported from `printer.cfg` with the slicer's own printer.cfg
+import (`parse_klipper_printer_cfg`), so the gate also covers that import.
+
+Not covered: anything that needs a real printer (`PRINT_START` duration,
+heating, probing), firmware retraction (`G10`/`G11` are timed with the
+slicer's retraction values), arcs (Klipper splits them at `[gcode_arcs]
+resolution`, the slicer at its own), and kinematics other than cartesian and
+corexy.
+
 ## Updating the pinned versions
 
 1. Set `KLIPPER_TAG`/`KLIPPER_COMMIT` or `MOONRAKER_TAG`/`MOONRAKER_COMMIT` in
@@ -117,6 +159,9 @@ right level.
    back into the file.
 3. Review `DEPRECATED_PARAMS` in `klippy_batch.py` against the new Klipper's
    `docs/Config_Changes.md`.
+4. Compare the new `klippy/toolhead.py` and `klippy/kinematics/extruder.py`
+   with `src/libslic3r/GCode/KlipperMotionModel.cpp`, then run
+   `timing-gate.sh --update`.
 
 ## CI
 
