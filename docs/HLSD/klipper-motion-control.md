@@ -37,7 +37,10 @@ pressure advance and smooth time of every extruder stepper (the stepper of an
 `[extruder]`/`[extruderN]` that has one, and every `[extruder_stepper]`) to its
 printer.cfg value. The pressure advance comes from printer.cfg rather than from
 the save, so a print that was cancelled before its restore does not carry its
-value into the next one. The restore does nothing unless `_KLIPSLICE_SAVE` ran
+value into the next one. It is read from `configfile.settings`, which
+lower-cases section names: two extruder steppers whose names differ only in case
+(`[extruder_stepper Belt]`, `[extruder_stepper belt]`) share one entry there, so
+the restore leaves their pressure advance alone and says so in the console. The restore does nothing unless `_KLIPSLICE_SAVE` ran
 since the last restore. `_KLIPSLICE_SAVE` in turn records nothing while a
 snapshot is still unrestored: that snapshot predates a print that ended without
 the restore, and the toolhead still carries that print's feature values. It
@@ -59,7 +62,8 @@ the end G-code, so `CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself:
   uses exactly this macro.
 
 `tests/virtual-printer/run.sh` checks both routes in Klipper batch mode, the
-first one with Mainsail's `client.cfg` as published.
+first one with Mainsail's `client.cfg` as published, and the case collision of
+extruder stepper names.
 
 The slicer cannot see printer.cfg, so it cannot tell whether the macros exist.
 The option is therefore off by default and is enabled together with the

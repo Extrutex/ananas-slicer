@@ -49,6 +49,12 @@ take about 30 seconds.
    `state-macros/printer-mainsail.cfg`, which adds Mainsail's `client.cfg`,
    copied unchanged as `state-macros/mainsail.cfg`, and the
    `variable_user_cancel_macro` hook `klipslice_state.cfg` documents for it).
+   A third route (`state-macros/check-case.gcode` against
+   `state-macros/printer-case.cfg`) adds an `[extruder_stepper belt]` next to
+   `[extruder_stepper Belt]`: Klipper keeps the two steppers apart, but
+   `configfile.settings` lower-cases section names and reports one pressure
+   advance for both, so the restore must leave both alone and say so in the
+   console (run.sh looks for that message in the route's log).
 4. **Moonraker.** A long-running Klippy with the same file-output MCU and its
    API socket open, and Moonraker connected to it. The check uploads the file
    (`/server/files/upload`), reads `/server/files/metadata`, starts the print
@@ -88,7 +94,7 @@ take about 30 seconds.
 | `klippy-constraints.txt`, `moonraker-constraints.txt` | Exact versions of every Python package, transitive ones included. |
 | `docker-compose.yml` | `klipper-batch` (one-shot), `klipper` and `moonraker` (long-running). Internal network, no ports, containers run as the invoking user. |
 | `printer.cfg` | Virtual Voron 2.4 350: CoreXY, four Z motors with quad gantry level, probe, input shaper (MZV 58.0/42.4 Hz), firmware retraction, arcs, exclude_object, virtual_sdcard, pause_resume, display_status. `PRINT_START`/`PRINT_END`/`CANCEL_PRINT` stub macros. |
-| `state-macros/` | Configs and G-code of the state macro check (step 3), with the rig's own and with Mainsail's `CANCEL_PRINT`. |
+| `state-macros/` | Configs and G-code of the state macro check (step 3), with the rig's own and with Mainsail's `CANCEL_PRINT`, and with extruder steppers whose names differ only in case. |
 | `moonraker.conf` | Loopback only, loopback is the only trusted client, no CORS, no system service provider. |
 | `klippy_batch.py` | Runs `klippy.main()` in-process and observes it: log records with levels, which parameters each command handler read, toolhead print time, and the exact print time of marker commands (`--markers`). Klipper's code is not changed. |
 | `check_moonraker.py` | The Moonraker API steps, run inside the moonraker container against `127.0.0.1:7125`. |
