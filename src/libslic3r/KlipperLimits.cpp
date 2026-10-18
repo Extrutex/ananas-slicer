@@ -166,9 +166,56 @@ std::pair<std::string, std::string> split_autosave(const std::string& data, std:
     return { regular, out };
 }
 
-// configfile.py ConfigAutoSave.load_main_config: an option of the SAVE_CONFIG block that the
-// regular part also sets is commented out (_strip_duplicates), so the regular value applies;
-// the block only adds options. Klipper does this silently; the import reports it.
+// configfile.py ConfigAutoSave._strip_duplicates: comments out the options of the SAVE_CONFIG block
+// that the regular part also sets, line by line. Every indented line counts as a continuation and is
+// commented out only when the option before it was; an indented option line that follows a section
+// header is therefore kept, and configparser then reads it as an option.
+std::string strip_duplicates(const std::string& data, const Sections& regular, std::vector<std::string>& warnings)
+{
+    std::string        out;
+    std::istringstream in(data);
+    std::string        line;
+    std::string        section;
+    bool               has_section  = false;
+    bool               is_dup_field = false;
+    while (std::getline(in, line)) {
+        // comment_r '[#;].*$', then rstrip().
+        const std::string pruned = rtrim(line.substr(0, line.find_first_of("#;")));
+        std::string       result = line;
+        if (!pruned.empty() && std::isspace(static_cast<unsigned char>(pruned.front()))) {
+            if (is_dup_field)
+                result = '#' + line;
+        } else if (!pruned.empty()) {
+            is_dup_field = false;
+            if (pruned.front() == '[') {
+                section     = trim(pruned.substr(1, pruned.size() - 2));
+                has_section = true;
+            } else {
+                // value_r '[^A-Za-z0-9_].*$': the field is the leading name characters.
+                const auto name_end = std::find_if(pruned.begin(), pruned.end(),
+                                                   [](unsigned char c) { return !(std::isalnum(c) || c == '_'); });
+                const std::string field = to_lower(std::string(pruned.begin(), name_end));
+                const auto regular_section = has_section ? regular.find(section) : regular.end();
+                if (regular_section != regular.end() && regular_section->second.count(field) > 0) {
+                    is_dup_field          = true;
+                    result                = '#' + line;
+                    const size_t delim    = pruned.find_first_of(":=");
+                    const std::string val = delim == std::string::npos ? std::string() : trim(pruned.substr(delim + 1));
+                    warnings.emplace_back("printer.cfg: [" + section + "] " + field + " = " + val +
+                                          " in the SAVE_CONFIG block is ignored; Klipper uses the value above it (" +
+                                          regular_section->second.at(field) + ")");
+                }
+            }
+        }
+        out += result;
+        out += '\n';
+    }
+    return out;
+}
+
+// configfile.py ConfigAutoSave.load_main_config: the SAVE_CONFIG block, with the options the regular
+// part also sets commented out (strip_duplicates), is read after the regular part, so whatever of it
+// is left adds to or replaces the regular values. Klipper does this silently; the import reports it.
 Sections read_printer_cfg(const std::string& text, std::vector<std::string>& warnings)
 {
     std::string data = text;
@@ -176,26 +223,21 @@ Sections read_printer_cfg(const std::string& text, std::vector<std::string>& war
         data.erase(pos, 1);
     const auto [regular_text, autosave_text] = split_autosave(data, warnings);
     Sections       sections = parse_sections(regular_text, warnings);
-    const Sections autosave = parse_sections(autosave_text, warnings);
+    const Sections autosave = parse_sections(strip_duplicates(autosave_text, sections, warnings), warnings);
     for (const auto& [name, options] : autosave) {
-        const auto regular_section = sections.find(name);
+        Section& section = sections[name];
         for (const auto& [key, value] : options) {
-            if (regular_section != sections.end()) {
-                const auto it = regular_section->second.find(key);
-                if (it != regular_section->second.end()) {
-                    warnings.emplace_back("printer.cfg: [" + name + "] " + key + " = " + value +
-                                          " in the SAVE_CONFIG block is ignored; Klipper uses the value above it (" +
-                                          it->second + ")");
-                    continue;
-                }
-            }
-            sections[name][key] = value;
+            const auto it = section.find(key);
+            if (it != section.end())
+                warnings.emplace_back("printer.cfg: [" + name + "] " + key + " = " + value +
+                                      " in the SAVE_CONFIG block overrides the value above it (" + it->second +
+                                      "), as in Klipper: its duplicate check passes over indented lines");
+            section[key] = value;
         }
     }
     return sections;
 }
 
-// Python's float(): surrounding whitespace, newlines of a continued value included, is allowed.
 std::optional<double> parse_number(const std::string& raw)
 {
     const std::string text = trim(raw);

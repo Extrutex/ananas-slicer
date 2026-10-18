@@ -205,6 +205,28 @@ TEST_CASE("The SAVE_CONFIG block is read only where Klipper reads it", "[Klipper
         CHECK_THAT(result.limits.max_velocity, WithinRel(280.0, 1e-12));
         CHECK_THAT(result.limits.max_accel, WithinRel(3000.0, 1e-12));
     }
+    SECTION("an indented option in the block is not commented out and overrides the file")
+    {
+        // _strip_duplicates treats every indented line as a continuation: it comments it out only
+        // after a duplicate option. Klipper then reads the indented max_velocity as an option and
+        // applies it over the regular one.
+        const std::string cfg = base + header + "#*# [printer]\n#*#  max_velocity = 280\n";
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
+        CHECK_THAT(result.limits.max_velocity, WithinRel(280.0, 1e-12));
+        CHECK(has_warning_containing(result, "overrides"));
+    }
+    SECTION("an indented line after a duplicate option is commented out with it")
+    {
+        const std::string cfg = base + header + "#*# [printer]\n#*# max_accel = 5000\n#*#  max_velocity = 280\n";
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
+        CHECK_THAT(result.limits.max_velocity, WithinRel(300.0, 1e-12));
+        CHECK_THAT(result.limits.max_accel, WithinRel(3000.0, 1e-12));
+    }
+    SECTION("an indented line after an added option continues that option")
+    {
+        const std::string cfg = base + header + "#*# [printer]\n#*# square_corner_velocity = 7\n#*#  max_velocity = 280\n";
+        REQUIRE_THROWS_WITH(parse_klipper_printer_cfg(cfg), ContainsSubstring("square_corner_velocity"));
+    }
 }
 
 TEST_CASE("printer.cfg comments end where Klipper ends them", "[KlipperLimits]")
