@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <iterator>
 #include <map>
@@ -985,4 +986,69 @@ TEST_CASE("Ironing moves with the top surface acceleration and jerk", "[GCodeWri
         }
     }
     REQUIRE(ironing_moves > 0);
+}
+
+TEST_CASE("Short hops between top surface lines keep the top surface acceleration and jerk", "[GCodeWriter][Klipper]")
+{
+    // Monotonic lines are joined by travels. Each of those used to switch to the travel
+    // acceleration and back, two SET_VELOCITY_LIMIT commands for every line of a top surface.
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({
+        {"gcode_flavor", "klipper"},
+        {"top_surface_pattern", "monotonicline"},
+        {"machine_max_acceleration_extruding", "20000,20000"},
+        {"machine_max_acceleration_x", "20000,20000"},
+        {"machine_max_acceleration_y", "20000,20000"},
+        {"machine_max_acceleration_travel", "20000,20000"},
+        {"machine_max_jerk_x", "20,20"},
+        {"machine_max_jerk_y", "20,20"},
+        {"default_acceleration", "3000"},
+        {"top_surface_acceleration", "1234"},
+        {"travel_acceleration", "8000"},
+        {"default_jerk", "9"},
+        {"top_surface_jerk", "6"},
+        {"travel_jerk", "15"},
+        {"retraction_minimum_travel", "2"},
+    });
+    const std::string gcode = Slic3r::Test::slice({Slic3r::Test::cube(20)}, config);
+
+    std::string type, accel, scv;
+    double x = 0., y = 0.;
+    int short_hops = 0, limit_commands = 0;
+    std::istringstream stream(gcode);
+    std::string line;
+    auto number = [&line](char axis, double &out) {
+        const auto pos = line.find(std::string(" ") + axis);
+        if (pos != std::string::npos)
+            out = std::atof(line.c_str() + pos + 2);
+    };
+    while (std::getline(stream, line)) {
+        if (line.rfind(";TYPE:", 0) == 0) {
+            type = line.substr(6);
+        } else if (line.rfind("SET_VELOCITY_LIMIT", 0) == 0) {
+            auto value = [&line](const std::string &name, std::string &out) {
+                const auto pos = line.find(" " + name + "=");
+                if (pos != std::string::npos)
+                    out = line.substr(pos + name.size() + 2, line.find_first_of(" ;", pos + 1) - pos - name.size() - 2);
+            };
+            value("ACCEL", accel);
+            value("SQUARE_CORNER_VELOCITY", scv);
+            limit_commands += type == "Top surface";
+        } else if (line.rfind("G1 ", 0) == 0 || line.rfind("G0 ", 0) == 0) {
+            const double from_x = x, from_y = y;
+            number('X', x);
+            number('Y', y);
+            const bool travel = line.find(" E") == std::string::npos;
+            const double length = std::hypot(x - from_x, y - from_y);
+            if (type == "Top surface" && travel && length > 0. && length < 2.) {
+                ++short_hops;
+                CAPTURE(line, length);
+                CHECK(accel == "1234");
+                CHECK(scv == "6");
+            }
+        }
+    }
+    REQUIRE(short_hops > 20);
+    // One command entering the top surface, not two per line.
+    CHECK(limit_commands < 5);
 }

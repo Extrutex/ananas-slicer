@@ -2,6 +2,9 @@
 
 #include <algorithm>
 
+#include "libslic3r/ClipperUtils.hpp"
+#include "libslic3r/ExtrusionEntity.hpp"
+#include "libslic3r/ExtrusionEntityCollection.hpp"
 #include "libslic3r/Layer.hpp"
 #include "libslic3r/TriangleMesh.hpp"
 
@@ -294,4 +297,91 @@ TEST_CASE("Tree support under sharp tails does not depend on thread scheduling",
     // parallel loop, one of them gated on wall-clock time.
     sliced_twice_matches(block_with_leaning_floating_tail(), 0, "tree_slim", {{ "line_width", tree_line_width }});
     sliced_twice_matches(block_with_leaning_floating_tail(), 0, "tree_hybrid", {{ "line_width", tree_line_width }});
+}
+
+namespace {
+
+// An 8 x 8 mm column carrying a 30 x 30 mm plate at z = 12. The support under the plate stands
+// around the column, so its clearance to the column is the XY distance the generator applied.
+TriangleMesh column_under_plate()
+{
+    TriangleMesh column = make_cube(8., 8., 13.);
+    TriangleMesh plate  = make_cube(30., 30., 3.);
+    column.translate(11.f, 11.f, 0.f);
+    plate.translate(0.f, 0.f, 12.f);
+    column.merge(plate);
+    return column;
+}
+
+void collect_paths(const ExtrusionEntity &entity, std::vector<const ExtrusionPath *> &out)
+{
+    if (const auto *collection = dynamic_cast<const ExtrusionEntityCollection *>(&entity)) {
+        for (const ExtrusionEntity *child : collection->entities)
+            collect_paths(*child, out);
+    } else if (const auto *path = dynamic_cast<const ExtrusionPath *>(&entity)) {
+        out.push_back(path);
+    } else if (const auto *multi = dynamic_cast<const ExtrusionMultiPath *>(&entity)) {
+        for (const ExtrusionPath &p : multi->paths)
+            out.push_back(&p);
+    } else if (const auto *loop = dynamic_cast<const ExtrusionLoop *>(&entity)) {
+        for (const ExtrusionPath &p : loop->paths)
+            out.push_back(&p);
+    }
+}
+
+// Smallest gap, in mm, between the edge of any support bead and the model slice printed at the
+// same height. Layer 0 is skipped: it takes support_object_first_layer_gap instead.
+double smallest_support_clearance(const Slic3r::Print &print)
+{
+    const PrintObject *object = print.objects().front();
+    double smallest = std::numeric_limits<double>::max();
+    for (const SupportLayer *support_layer : object->support_layers()) {
+        const Layer *model_layer = nullptr;
+        for (const Layer *layer : object->layers())
+            if (std::abs(layer->print_z - support_layer->print_z) < EPSILON)
+                model_layer = layer;
+        if (model_layer == nullptr || model_layer->id() == 0 || model_layer->lslices.empty())
+            continue;
+        std::vector<const ExtrusionPath *> paths;
+        collect_paths(support_layer->support_fills, paths);
+        const Polygons model = to_polygons(model_layer->lslices);
+        for (const ExtrusionPath *path : paths) {
+            const Polyline line = path->polyline.to_polyline();
+            if (line.size() < 2)
+                continue;
+            // Sample the bead centre line finely enough that a segment passing a corner is seen.
+            Points samples = line.equally_spaced_points(Slic3r::scaled<double>(0.02));
+            samples.push_back(line.last_point());
+            for (const Point &pt : samples) {
+                double centre = std::numeric_limits<double>::max();
+                for (const Polygon &polygon : model) {
+                    if (polygon.is_counter_clockwise() && polygon.contains(pt))
+                        centre = 0.;
+                    for (const Line &edge : polygon.lines())
+                        centre = std::min(centre, unscaled<double>(edge.distance_to(pt)));
+                }
+                smallest = std::min(smallest, centre - 0.5 * path->width);
+            }
+        }
+    }
+    return smallest;
+}
+
+} // namespace
+
+TEST_CASE("Organic tree support keeps the configured XY distance from the model", "[TreeSupport][Regression]")
+{
+    // The organic generator kept every branch near an overhang half the outer wall width (0.21 mm here)
+    // from the model, whatever support_object_xy_distance said: 0.8 mm configured gave the same
+    // 0.43 mm bead clearance as 0.35 mm. 0.35 mm guards the small end, which was already met.
+    const double xy_distance = GENERATE(0.35, 0.8);
+    INFO("support_object_xy_distance = " << xy_distance);
+    Slic3r::Print print;
+    slice_with_tree_support(column_under_plate(), print, "organic", 30, 0, 0, {
+        { "line_width",                 tree_line_width },
+        { "support_object_xy_distance", xy_distance },
+    });
+    REQUIRE(support_points(print).size() > 1000);
+    // The polygons are simplified to the slicing resolution on both sides of the gap.
+    CHECK(smallest_support_clearance(print) > xy_distance - 0.05);
 }
