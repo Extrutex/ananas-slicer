@@ -57,10 +57,13 @@ TEST_CASE("The virtual printer's printer.cfg imports as Klipper resolves it", "[
     // tests/virtual-printer/printer.cfg: max_velocity 300, max_accel 7000, minimum_cruise_ratio 0.5,
     // square_corner_velocity 5, Z 15 / 350, 0.4 nozzle on 1.75 filament, pressure_advance 0.04 with a
     // 0.040 s smooth time; no extrude-only limits and no instantaneous_corner_velocity, so Klipper's defaults.
+    // Its only [include] is klipslice_state.cfg, which holds macros and no limits; the import reports it
+    // as not followed and nothing else.
     const std::string cfg = read_file(std::string(TEST_DATA_DIR) + "/../virtual-printer/printer.cfg");
     const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
     const KlipperLimits& l = result.limits;
-    CHECK(result.warnings.empty());
+    REQUIRE(result.warnings.size() == 1);
+    CHECK(result.warnings.front().find("[include /klipslice/klipslice_state.cfg]") != std::string::npos);
     CHECK_THAT(l.max_velocity, WithinRel(300.0, 1e-12));
     CHECK_THAT(l.max_accel, WithinRel(7000.0, 1e-12));
     CHECK_THAT(l.minimum_cruise_ratio, WithinRel(0.5, 1e-12));
