@@ -27,8 +27,8 @@
 //   (f) runs: n beads across a feature need at most ceil(n/2) wall runs (loops pair the beads, an odd
 //       middle bead is one open line), so more runs means wall pieces that are not chained.
 //   (g) method parity, outline_shrink vs toolpath_shift: on the block every bead and the infill region sit
-//       where the other method puts them, and no wall on the plate is narrower than the narrowest wall of
-//       outline_shrink (criterion Q7).
+//       where the other method puts them.
+//   (h) narrowest wall: no Arachne wall on the plate is narrower than min_bead_width (criterion Q7).
 //
 // Matrix: {arachne, classic, classic + detect_thin_wall} x precise_outer_wall {0, 1}, plus Arachne with
 // precise_outer_wall_method = toolpath_shift.
@@ -560,6 +560,16 @@ void check_holes(const ProbeLayer &layer, std::vector<Check> &out)
     out.push_back({ "holes", "worst_diameter", worst, 0., 2. * (resolution + bead_tolerance), detail });
 }
 
+// (h) Criterion Q7: no Arachne wall anywhere on the plate is narrower than min_bead_width.
+double narrowest_wall(const ProbeLayer &layer)
+{
+    double out = unbounded;
+    for (const Bead &b : layer.beads)
+        if (b.wall && b.polyline.length() > 0)
+            out = std::min(out, b.width);
+    return out;
+}
+
 std::vector<Check> evaluate(const Cell &cell)
 {
     const ProbeLayer layer = slice_probe_layer(cell);
@@ -568,6 +578,8 @@ std::vector<Check> evaluate(const Cell &cell)
     check_block(layer, out);
     check_wedge(cell, layer, out);
     check_holes(layer, out);
+    if (is_arachne(cell))
+        out.push_back({ "plate", "narrowest_wall", narrowest_wall(layer), min_bead_width - bead_tolerance, unbounded, {} });
     return out;
 }
 
@@ -577,8 +589,7 @@ std::vector<Check> evaluate(const Cell &cell)
 const char *const precise_parity       = "arachne/precise=1 vs 0";
 const char *const precise_shift_parity = "arachne/precise=1/shift vs 0";
 // The pseudo cell comparing the two precise methods: a wall with room behind its beads must come out the
-// same either way, bead for bead and with the same infill region, and toolpath_shift may not print a wall
-// narrower than outline_shrink does anywhere on the plate.
+// same either way, bead for bead and with the same infill region.
 const char *const precise_methods = "arachne/precise=1/shift vs precise=1";
 
 std::vector<Crossing> fin_crossings(const ProbeLayer &layer, size_t i)
@@ -623,15 +634,6 @@ BoundingBoxf block_fill_extents(const ProbeLayer &layer)
     return box.defined ? BoundingBoxf(unscaled(box.min) - o, unscaled(box.max) - o) : BoundingBoxf();
 }
 
-double narrowest_wall(const ProbeLayer &layer)
-{
-    double out = unbounded;
-    for (const Bead &b : layer.beads)
-        if (b.wall && b.polyline.length() > 0)
-            out = std::min(out, b.width);
-    return out;
-}
-
 std::vector<Check> evaluate_precise_methods()
 {
     const ProbeLayer shrink_layer = slice_probe_layer(cell_named("arachne/precise=1"));
@@ -648,11 +650,6 @@ std::vector<Check> evaluate_precise_methods()
                         format("shrink x0 %.4f", fill_shrink.min.x()) + format(" shift x0 %.4f", fill_shift.min.x()) });
     } else
         out.push_back({ "block", "fill_extents", unbounded, 0., bead_tolerance, "no infill region in the block" });
-    // Criterion Q7: no wall anywhere on the plate comes out narrower than the narrowest wall of the
-    // outline-shrink method.
-    const double narrowest_shrink = narrowest_wall(shrink_layer);
-    out.push_back({ "plate", "narrowest_wall", narrowest_wall(shift_layer), narrowest_shrink - bead_tolerance, unbounded,
-                    format("shrink %.4f", narrowest_shrink) });
     out.push_back({ "block", "wall_beads", double(shift.size()), double(shrink.size()), double(shrink.size()), {} });
     for (size_t i = 0; i < std::min(shrink.size(), shift.size()); ++ i) {
         out.push_back({ format("bead %.0f", double(i)), "position", std::abs(shift[i].pos - shrink[i].pos), 0., bead_tolerance,
