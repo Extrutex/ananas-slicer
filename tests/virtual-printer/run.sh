@@ -18,6 +18,8 @@
 # Writes tests/virtual-printer/out/ (report.md, G-code, logs, JSON results).
 # Exit status: 0 all steps passed, 1 a step failed.
 set -euo pipefail
+# Only step 5 picks its own printer.cfg; a value exported by the caller must not leak into the default rig.
+unset VP_PRINTER_CFG
 
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd -- "$HERE/../.." && pwd)"
