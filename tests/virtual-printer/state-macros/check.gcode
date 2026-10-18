@@ -1,0 +1,28 @@
+; State macro check (run.sh step 3), run in Klipper batch mode against
+; state-macros/printer.cfg. Every _VP_EXPECT_* raises a G-code error, and so
+; fails the check, when Klipper's state is not the expected one.
+
+; A print with klipper_restore_state: _KLIPSLICE_SAVE, then per-feature values.
+SET_VELOCITY_LIMIT ACCEL=7000
+_KLIPSLICE_SAVE
+SET_VELOCITY_LIMIT VELOCITY=120 ACCEL=1500 MINIMUM_CRUISE_RATIO=0.2 SQUARE_CORNER_VELOCITY=9
+SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.2 SMOOTH_TIME=0.02
+SET_PRESSURE_ADVANCE EXTRUDER=Belt ADVANCE=0.3 SMOOTH_TIME=0.01
+M104 S200
+M104 T1 S200
+; A cancelled print: heaters off, limits and printer.cfg pressure advance back
+; on every extruder stepper, the stepper-less extruder1 skipped.
+CANCEL_PRINT
+_VP_EXPECT_HEATERS_OFF
+_VP_EXPECT_LIMITS VELOCITY=300 ACCEL=7000 MINIMUM_CRUISE_RATIO=0.5 SQUARE_CORNER_VELOCITY=5
+_VP_EXPECT_PA EXTRUDER=extruder ADVANCE=0.04 SMOOTH_TIME=0.04
+_VP_EXPECT_PA STEPPER=Belt ADVANCE=0.06 SMOOTH_TIME=0.03
+
+; The end G-code path of a finished print restores the same way.
+_KLIPSLICE_SAVE
+SET_PRESSURE_ADVANCE EXTRUDER=Belt ADVANCE=0.25
+SET_VELOCITY_LIMIT ACCEL=2500
+_KLIPSLICE_RESTORE
+_VP_EXPECT_PA EXTRUDER=extruder ADVANCE=0.04 SMOOTH_TIME=0.04
+_VP_EXPECT_PA STEPPER=Belt ADVANCE=0.06 SMOOTH_TIME=0.03
+_VP_EXPECT_LIMITS VELOCITY=300 ACCEL=7000 MINIMUM_CRUISE_RATIO=0.5 SQUARE_CORNER_VELOCITY=5

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # KLIPSLICE virtual printer check: slice a calibration cube with the shipped
 # Voron 2.4 350 presets, run the G-code through upstream Klipper in batch mode,
-# then upload and print it through upstream Moonraker on a virtual Klippy.
+# check the shipped print state macros in batch mode, then upload and print the
+# G-code through upstream Moonraker on a virtual Klippy.
 # Everything runs in local Docker containers on an internal network; no real
 # printer is ever contacted.
 #
@@ -100,7 +101,18 @@ compose run --rm --no-deps klipper-batch \
     --log /out/klippy-batch.log --summary /out/klipper.json || klipper_rc=$?
 [ -f "$OUT/klipper.json" ] || die "Klipper batch run produced no result (exit $klipper_rc)"
 
-# --- 3. Moonraker -----------------------------------------------------------
+# --- 3. State macros -------------------------------------------------------
+# resources/klipper/klipslice_state.cfg in Klipper batch mode: save, cancel and
+# restore with an extruder without a stepper and an [extruder_stepper]; the
+# check G-code raises a G-code error wherever Klipper's state is not the expected one.
+log "checking the print state macros in Klipper batch mode"
+macros_rc=0
+compose run --rm --no-deps klipper-batch \
+    --config /vp/state-macros/printer.cfg --gcode /vp/state-macros/check.gcode --dict "$DICT" \
+    --log /out/state-macros.log --summary /out/state-macros.json > /dev/null || macros_rc=$?
+[ -f "$OUT/state-macros.json" ] || die "state macro check produced no result (exit $macros_rc)"
+
+# --- 4. Moonraker -----------------------------------------------------------
 log "starting virtual Klippy and Moonraker"
 moonraker_rc=0
 if compose up -d --wait --wait-timeout 180 klipper moonraker; then
@@ -126,6 +138,7 @@ log "report: $OUT/report.md"
 
 status=0
 [ "$klipper_rc" -eq 0 ] || { log "FAIL: Klipper rejected the G-code (exit $klipper_rc)"; status=1; }
+[ "$macros_rc" -eq 0 ] || { log "FAIL: the state macros left Klipper in the wrong state (exit $macros_rc, see out/state-macros.json)"; status=1; }
 [ "$moonraker_rc" -eq 0 ] || { log "FAIL: Moonraker step failed (exit $moonraker_rc)"; status=1; }
 [ "$status" -eq 0 ] && log "PASS"
 exit "$status"

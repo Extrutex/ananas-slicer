@@ -32,12 +32,14 @@ start G-code and `_KLIPSLICE_RESTORE` right before the end G-code, after the
 filament end G-code. The macros ship in `resources/klipper/klipslice_state.cfg`
 and are included from printer.cfg. `_KLIPSLICE_SAVE` records the toolhead's
 `max_velocity`, `max_accel`, `minimum_cruise_ratio` and
-`square_corner_velocity`; `_KLIPSLICE_RESTORE` sets them back and sets every
-`[extruder]`/`[extruderN]` pressure advance and smooth time to its printer.cfg
-value. The pressure advance comes from printer.cfg rather than from the save, so
-a print that was cancelled before its restore does not carry its value into the
-next one. A cancelled print never reaches the end G-code; `CANCEL_PRINT` has to
-call `_KLIPSLICE_RESTORE` itself, as the file describes.
+`square_corner_velocity`; `_KLIPSLICE_RESTORE` sets them back and sets the
+pressure advance and smooth time of every extruder stepper (the stepper of an
+`[extruder]`/`[extruderN]` that has one, and every `[extruder_stepper]`) to its
+printer.cfg value. The pressure advance comes from printer.cfg rather than from
+the save, so a print that was cancelled before its restore does not carry its
+value into the next one. A cancelled print never reaches the end G-code;
+`CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself, after the original
+`CANCEL_PRINT`, as the file describes.
 
 The slicer cannot see printer.cfg, so it cannot tell whether the macros exist.
 The option is therefore off by default and is enabled together with the

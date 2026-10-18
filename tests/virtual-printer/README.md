@@ -9,7 +9,7 @@ contacted, and nothing on the LAN can reach the rig.
 tests/virtual-printer/run.sh
 ```
 
-One command runs all three steps and exits non-zero if any fails. Results go
+One command runs all four steps and exits non-zero if any fails. Results go
 to `tests/virtual-printer/out/` (gitignored): `report.md`, the G-code, JSON
 results and all logs.
 
@@ -34,7 +34,15 @@ take about 30 seconds.
    `printer.cfg`: kinematics, travel limits, macros, extrusion limits,
    exclude_object. The data dictionary comes from building Klipper for its
    Linux host-MCU target inside the image.
-3. **Moonraker.** A long-running Klippy with the same file-output MCU and its
+3. **State macros.** The print state macros KLIPSLICE ships
+   (`resources/klipper/klipslice_state.cfg`) in the same batch mode:
+   `state-macros/check.gcode` against `state-macros/printer.cfg`, the virtual
+   printer plus an `[extruder1]` without a stepper and an
+   `[extruder_stepper Belt]` with its own pressure advance. It sets per-feature
+   values, cancels and restores, and checks after each step that the heaters
+   are off, the velocity limits are back and every extruder stepper has its
+   printer.cfg pressure advance.
+4. **Moonraker.** A long-running Klippy with the same file-output MCU and its
    API socket open, and Moonraker connected to it. The check uploads the file
    (`/server/files/upload`), reads `/server/files/metadata`, starts the print
    (`/printer/print/start`) and follows it to the end. Because the MCU is a
@@ -44,6 +52,8 @@ take about 30 seconds.
 
 - Klipper: klippy exits 0, no G-code error, no ERROR log record, no
   `Unknown command`.
+- State macros: as for Klipper; every expectation in `check.gcode` is a macro
+  that raises a G-code error when it does not hold.
 - Moonraker: Klippy ready; upload accepted; metadata has a slicer and a non-zero
   `estimated_time`; `exclude_object.objects` during the print equals the
   file's `EXCLUDE_OBJECT_DEFINE` names; `print_stats` ends `complete`; no
@@ -71,6 +81,7 @@ take about 30 seconds.
 | `klippy-constraints.txt`, `moonraker-constraints.txt` | Exact versions of every Python package, transitive ones included. |
 | `docker-compose.yml` | `klipper-batch` (one-shot), `klipper` and `moonraker` (long-running). Internal network, no ports, containers run as the invoking user. |
 | `printer.cfg` | Virtual Voron 2.4 350: CoreXY, four Z motors with quad gantry level, probe, input shaper (MZV 58.0/42.4 Hz), firmware retraction, arcs, exclude_object, virtual_sdcard, pause_resume, display_status. `PRINT_START`/`PRINT_END`/`CANCEL_PRINT` stub macros. |
+| `state-macros/` | Config and G-code of the state macro check (step 3). |
 | `moonraker.conf` | Loopback only, loopback is the only trusted client, no CORS, no system service provider. |
 | `klippy_batch.py` | Runs `klippy.main()` in-process and observes it: log records with levels, which parameters each command handler read, toolhead print time, and the exact print time of marker commands (`--markers`). Klipper's code is not changed. |
 | `check_moonraker.py` | The Moonraker API steps, run inside the moonraker container against `127.0.0.1:7125`. |
