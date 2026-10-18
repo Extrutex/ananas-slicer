@@ -42,7 +42,9 @@ take about 30 seconds.
    values, cancels with and without `_KLIPSLICE_SAVE`, restores twice, and
    checks after each step that the heaters and the part cooling fan are off,
    the velocity limits are back and every extruder stepper has its printer.cfg
-   pressure advance, or that nothing changed when nothing was saved. The same check runs a second time with Mainsail's
+   pressure advance, or that nothing changed when nothing was saved. A
+   `_KLIPSLICE_SAVE` after a cancel that skipped the restore must keep the
+   earlier snapshot. The same check runs a second time with Mainsail's
    `CANCEL_PRINT` (`state-macros/check-mainsail.gcode` against
    `state-macros/printer-mainsail.cfg`, which adds Mainsail's `client.cfg`,
    copied unchanged as `state-macros/mainsail.cfg`, and the

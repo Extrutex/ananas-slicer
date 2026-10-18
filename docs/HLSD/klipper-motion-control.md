@@ -38,8 +38,11 @@ pressure advance and smooth time of every extruder stepper (the stepper of an
 printer.cfg value. The pressure advance comes from printer.cfg rather than from
 the save, so a print that was cancelled before its restore does not carry its
 value into the next one. The restore does nothing unless `_KLIPSLICE_SAVE` ran
-since the last restore. A cancelled print never reaches the end G-code, so
-`CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself:
+since the last restore. `_KLIPSLICE_SAVE` in turn records nothing while a
+snapshot is still unrestored: that snapshot predates a print that ended without
+the restore, and the toolhead still carries that print's feature values. It
+keeps the snapshot and says so in the console. A cancelled print never reaches
+the end G-code, so `CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself:
 
 - With Mainsail's or Fluidd's macro file (`mainsail.cfg`, `fluidd.cfg`), set
   `variable_user_cancel_macro: "_KLIPSLICE_RESTORE"` in
