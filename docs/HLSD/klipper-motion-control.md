@@ -54,7 +54,13 @@ the end G-code, so `CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself:
   a second `CANCEL_PRINT` replaces the client's, which also drops its
   `TURN_OFF_HEATERS`; `CANCEL_PRINT_BASE` (Klipper's own `CANCEL_PRINT`) leaves
   the heaters on. The client's macro runs the hook after `TURN_OFF_HEATERS` and
-  `M106 S0`, right before `CANCEL_PRINT_BASE`.
+  `M106 S0`, right before `CANCEL_PRINT_BASE`. Before `TURN_OFF_HEATERS` it
+  parks (`park_at_cancel`) and retracts (`cancel_retract`); a G-code error
+  there ends the client's macro with the heaters on, before the hook runs. A
+  park position outside the axis limits (`park_at_cancel_x`/`_y`,
+  `custom_park_x`/`_y`) does that, as does a `cancel_retract` longer than the
+  extruder's `max_extrude_only_distance`. This is the client's behaviour and
+  stays unpatched; the `_CLIENT_VARIABLE` values have to fit printer.cfg.
 - Without such a file, `CANCEL_PRINT` renames the original and runs
   `TURN_OFF_HEATERS`, `M107`, `CANCEL_PRINT_BASE` and then `_KLIPSLICE_RESTORE`
   as the last command, so a G-code error in the restore cannot keep the heaters
