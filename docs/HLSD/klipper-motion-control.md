@@ -73,7 +73,10 @@ the end G-code, so `CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself:
 
 `tests/virtual-printer/run.sh` checks both routes in Klipper batch mode, the
 first one with Mainsail's `client.cfg` as published, the case collision of
-extruder stepper names and stepper names with a quote or a backslash.
+extruder stepper names and stepper names with a quote or a backslash. It
+also cancels a running print through Moonraker with Mainsail's `CANCEL_PRINT`
+and the hook, and checks that the print stops, the heaters and the fan are
+off and the restore has run.
 
 The slicer cannot see printer.cfg, so it cannot tell whether the macros exist.
 The option is therefore off by default and is enabled together with the

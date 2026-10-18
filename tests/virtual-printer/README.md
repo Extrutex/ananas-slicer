@@ -9,7 +9,7 @@ contacted, and nothing on the LAN can reach the rig.
 tests/virtual-printer/run.sh
 ```
 
-One command runs all four steps and exits non-zero if any fails. Results go
+One command runs all five steps and exits non-zero if any fails. Results go
 to `tests/virtual-printer/out/` (gitignored): `report.md`, the G-code, JSON
 results and all logs.
 
@@ -66,6 +66,16 @@ take about 30 seconds.
    (`/server/files/upload`), reads `/server/files/metadata`, starts the print
    (`/printer/print/start`) and follows it to the end. Because the MCU is a
    file, the print runs at CPU speed: a 9-minute cube finishes in a few seconds.
+5. **Cancel a running print.** The batch routes of step 3 call `CANCEL_PRINT`
+   with no print running, so they cannot tell whether it stops one. The rig
+   restarts with `state-macros/printer-cancel.cfg` as the long-running
+   Klippy's printer.cfg (`VP_PRINTER_CFG` in `docker-compose.yml`): the
+   Mainsail route of step 3 plus `[sdcard_loop]`. `check_cancel.py` uploads
+   and starts `state-macros/cancel.gcode`, which saves the motion limits, sets
+   per-feature values, switches the heaters and the part cooling fan on and
+   then loops (`SDCARD_LOOP_BEGIN COUNT=0` around `G4 P1`) until it is
+   cancelled. While it loops, the check cancels it with
+   `/printer/print/cancel`, as a client's cancel button does.
 
 ### Pass criteria
 
@@ -77,6 +87,13 @@ take about 30 seconds.
   `estimated_time`; `exclude_object.objects` during the print equals the
   file's `EXCLUDE_OBJECT_DEFINE` names; `print_stats` ends `complete`; no
   error or unknown-command response in the G-code store during the print.
+- Cancel: the print is `printing` and its loop advances the toolhead's print
+  time before the cancel; afterwards `print_stats` is `cancelled`,
+  `virtual_sdcard` idle, every heater target 0, the part cooling fan off, the
+  motion limits and printer.cfg pressure advance back and the
+  `_KLIPSLICE_SAVE` snapshot gone; the print time then stands still and the
+  line after the loop has not run; no error response in the G-code store; the
+  history records the job as `cancelled`.
 
 ### Reported, not failed
 
@@ -98,12 +115,13 @@ take about 30 seconds.
 |---|---|
 | `Dockerfile` | One image for all three containers: pinned Klipper (host-MCU dictionary, Klippy venv, prebuilt C helper) and pinned Moonraker. Tags are checked against their commit hashes. |
 | `klippy-constraints.txt`, `moonraker-constraints.txt` | Exact versions of every Python package, transitive ones included. |
-| `docker-compose.yml` | `klipper-batch` (one-shot), `klipper` and `moonraker` (long-running). Internal network, no ports, containers run as the invoking user. |
+| `docker-compose.yml` | `klipper-batch` (one-shot), `klipper` and `moonraker` (long-running). Internal network, no ports, containers run as the invoking user. `VP_PRINTER_CFG` picks the long-running Klippy's printer.cfg (default `printer.cfg`). |
 | `printer.cfg` | Virtual Voron 2.4 350: CoreXY, four Z motors with quad gantry level, probe, input shaper (MZV 58.0/42.4 Hz), firmware retraction, arcs, exclude_object, virtual_sdcard, pause_resume, display_status. `PRINT_START`/`PRINT_END`/`CANCEL_PRINT` stub macros. |
-| `state-macros/` | Configs and G-code of the state macro check (step 3), with the rig's own and with Mainsail's `CANCEL_PRINT`, with extruder steppers whose names differ only in case, and with stepper names that need quoting. |
+| `state-macros/` | Configs and G-code of the state macro check (step 3), with the rig's own and with Mainsail's `CANCEL_PRINT`, with extruder steppers whose names differ only in case, and with stepper names that need quoting; config and print of the live cancel check (step 5). |
 | `moonraker.conf` | Loopback only, loopback is the only trusted client, no CORS, no system service provider. |
 | `klippy_batch.py` | Runs `klippy.main()` in-process and observes it: log records with levels, which parameters each command handler read, toolhead print time, and the exact print time of marker commands (`--markers`). Klipper's code is not changed. |
 | `check_moonraker.py` | The Moonraker API steps, run inside the moonraker container against `127.0.0.1:7125`. |
+| `check_cancel.py` | The live cancel check (step 5), run the same way. |
 | `report.py` | Writes `out/report.md`. |
 | `run.sh` | Drives everything. |
 | `timing-gate.sh`, `timing_corpus.py` | The Klipper timing gate, below. |

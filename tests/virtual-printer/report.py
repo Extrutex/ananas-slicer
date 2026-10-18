@@ -215,6 +215,29 @@ def section_moonraker(lines, result):
     lines.append("")
 
 
+def section_cancel(lines, result):
+    lines.append("## 5. Cancel a running print (Moonraker, Mainsail's CANCEL_PRINT)")
+    lines.append("")
+    if result is None:
+        lines.append("**Not run.**")
+        lines.append("")
+        return
+    lines.append("**Verdict: %s**" % ("PASS" if result["passed"] else "FAIL"))
+    lines += ["- FAIL: %s" % f for f in result["failures"]]
+    lines.append("")
+    r = result["responses"]
+    before = r.get("before_cancel")
+    settled = r.get("settled")
+    if before and settled:
+        lines.append("- `print_stats`: `%s` before, `%s` after the cancel" % (
+            before["print_stats"]["state"], settled["print_stats"]["state"]))
+        lines.append("- Toolhead print time: %.3f s before the cancel, %.3f s once it settled" % (
+            before["toolhead"]["print_time"], settled["toolhead"]["print_time"]))
+    lines.append("")
+    lines.append("Full API responses: `cancel.json`.")
+    lines.append("")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--gcode", required=True)
@@ -225,6 +248,7 @@ def main():
     parser.add_argument("--state-macros", nargs="*", default=[],
                         help="results of the state macro checks, one per route")
     parser.add_argument("--moonraker", required=True)
+    parser.add_argument("--cancel", required=True)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
@@ -232,9 +256,11 @@ def main():
     klipper = load_json(args.klipper)
     state_macros = [load_json(p) for p in args.state_macros]
     moonraker = load_json(args.moonraker)
+    cancel = load_json(args.cancel)
     ok = (facts is not None and klipper is not None and klipper["accepted"]
           and all(m is not None and m["accepted"] for m in state_macros)
-          and moonraker is not None and moonraker["passed"])
+          and moonraker is not None and moonraker["passed"]
+          and cancel is not None and cancel["passed"])
     lines = [
         "# KLIPSLICE virtual printer report",
         "",
@@ -247,6 +273,7 @@ def main():
     section_klipper(lines, klipper, facts)
     section_state_macros(lines, args.state_macros, state_macros)
     section_moonraker(lines, moonraker)
+    section_cancel(lines, cancel)
     with open(args.out, "w") as f:
         f.write("\n".join(lines))
     return 0

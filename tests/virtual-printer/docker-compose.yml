@@ -18,7 +18,9 @@ x-rig: &rig
     - ./out:/out
     - printer_data:/printer_data
     # Inside the data path's config folder, where Moonraker expects both.
-    - ./printer.cfg:/printer_data/config/printer.cfg:ro
+    # VP_PRINTER_CFG (relative to this folder) swaps in another config for the
+    # long-running Klippy; run.sh uses it for the live cancel check.
+    - ./${VP_PRINTER_CFG:-printer.cfg}:/printer_data/config/printer.cfg:ro
     - ./moonraker.conf:/printer_data/config/moonraker.conf:ro
     # The Klipper macros KlipSlice ships, included by printer.cfg.
     - ../../resources/klipper:/klipslice:ro

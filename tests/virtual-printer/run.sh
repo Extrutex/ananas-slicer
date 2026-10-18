@@ -2,7 +2,8 @@
 # KLIPSLICE virtual printer check: slice a calibration cube with the shipped
 # Voron 2.4 350 presets, run the G-code through upstream Klipper in batch mode,
 # check the shipped print state macros in batch mode, then upload and print the
-# G-code through upstream Moonraker on a virtual Klippy.
+# G-code through upstream Moonraker on a virtual Klippy, and cancel a running
+# print through Moonraker with Mainsail's CANCEL_PRINT.
 # Everything runs in local Docker containers on an internal network; no real
 # printer is ever contacted.
 #
@@ -151,12 +152,33 @@ compose logs --no-color klipper moonraker > "$OUT/rig-containers.log" 2>&1 || tr
 compose exec -T klipper cat /printer_data/logs/klippy.log > "$OUT/klippy-live.log" 2>/dev/null || true
 compose exec -T moonraker cat /printer_data/logs/moonraker.log > "$OUT/moonraker.log" 2>/dev/null || true
 
+# --- 5. Cancel a running print ----------------------------------------------
+# The batch routes of step 3 call CANCEL_PRINT without a print running, so they
+# would not notice a cancel that leaves the print running. Here the
+# long-running Klippy gets state-macros/printer-cancel.cfg (Mainsail's
+# CANCEL_PRINT with the _KLIPSLICE_RESTORE hook), prints
+# state-macros/cancel.gcode through Moonraker and cancels it mid-print.
+log "cancelling a running print through Moonraker (Mainsail's CANCEL_PRINT)"
+cancel_rc=0
+compose down -v --remove-orphans > /dev/null 2>&1 || die "could not reset the rig"
+if VP_PRINTER_CFG=state-macros/printer-cancel.cfg compose up -d --wait --wait-timeout 180 klipper moonraker; then
+    compose exec -T moonraker /opt/moonraker-env/bin/python /vp/check_cancel.py \
+        --gcode /vp/state-macros/cancel.gcode --remote-name klipslice_vp_cancel.gcode \
+        --result /out/cancel.json || cancel_rc=$?
+else
+    cancel_rc=1
+    log "rig with printer-cancel.cfg did not become healthy"
+fi
+compose logs --no-color klipper moonraker > "$OUT/cancel-containers.log" 2>&1 || true
+compose exec -T klipper cat /printer_data/logs/klippy.log > "$OUT/klippy-cancel.log" 2>/dev/null || true
+compose exec -T moonraker cat /printer_data/logs/moonraker.log > "$OUT/moonraker-cancel.log" 2>/dev/null || true
+
 # --- Report -----------------------------------------------------------------
 compose run --rm --no-deps --entrypoint /opt/klippy-env/bin/python klipper-batch /vp/report.py \
     --gcode "/out/slice/$GCODE_NAME" --binary "$BIN" --model "tests/data/$(basename "$MODEL")" \
     --presets "Voron 2.4 350 0.4 nozzle; 0.20mm Standard @Voron; Generic PLA @System" \
     --klipper /out/klipper.json --state-macros /out/state-macros.json /out/state-macros-mainsail.json /out/state-macros-case.json /out/state-macros-names.json \
-    --moonraker /out/moonraker.json --out /out/report.md \
+    --moonraker /out/moonraker.json --cancel /out/cancel.json --out /out/report.md \
     || die "report generation failed"
 log "report: $OUT/report.md"
 
@@ -164,5 +186,6 @@ status=0
 [ "$klipper_rc" -eq 0 ] || { log "FAIL: Klipper rejected the G-code (exit $klipper_rc)"; status=1; }
 [ "$macros_rc" -eq 0 ] || { log "FAIL: the state macros left Klipper in the wrong state (exit $macros_rc, see out/state-macros*.json)"; status=1; }
 [ "$moonraker_rc" -eq 0 ] || { log "FAIL: Moonraker step failed (exit $moonraker_rc)"; status=1; }
+[ "$cancel_rc" -eq 0 ] || { log "FAIL: cancelling a running print failed (exit $cancel_rc, see out/cancel.json)"; status=1; }
 [ "$status" -eq 0 ] && log "PASS"
 exit "$status"
