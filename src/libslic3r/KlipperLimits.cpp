@@ -59,11 +59,24 @@ std::string strip_semicolon_comment(const std::string& line)
     return line;
 }
 
+size_t indentation(const std::string& line)
+{
+    size_t i = 0;
+    while (i < line.size() && std::isspace(static_cast<unsigned char>(line[i])))
+        ++i;
+    return i;
+}
+
+// configparser.RawConfigParser._read with Klipper's settings. A line indented deeper than the line
+// that started the current option continues that option's value (gcode, gantry corners); a line at
+// the same or a lower indentation starts a new option or section. Blank and comment-only lines
+// neither end a value nor change the indentation it is measured against.
 Sections parse_sections(const std::string& text, std::vector<std::string>& warnings)
 {
     Sections    sections;
-    Section*    current = nullptr;
-    bool        in_option = false;
+    Section*    current      = nullptr;
+    bool        in_option    = false;
+    size_t      indent_level = 0;
     std::istringstream in(text);
     std::string raw;
     while (std::getline(in, raw)) {
@@ -80,11 +93,10 @@ Sections parse_sections(const std::string& text, std::vector<std::string>& warni
         const std::string line = trim(raw);
         if (line.empty())
             continue;
-        if (std::isspace(static_cast<unsigned char>(raw.front()))) {
-            // Continuation of a multi-line value (gcode, gantry corners); none of the limits is one.
-            if (in_option)
-                continue;
-        }
+        const size_t indent = indentation(raw);
+        if (in_option && indent > indent_level)
+            continue; // Continuation of a multi-line value; none of the limits is one.
+        indent_level = indent;
         if (line.front() == '[') {
             const size_t close = line.find(']');
             if (close == std::string::npos)

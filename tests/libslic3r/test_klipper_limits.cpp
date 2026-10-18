@@ -168,6 +168,46 @@ pressure_advance: 0.05#comment
                         ContainsSubstring("max_accel"));
 }
 
+TEST_CASE("printer.cfg indentation continues a value only where configparser continues it", "[KlipperLimits]")
+{
+    // configparser continues an option's value with lines indented deeper than the option's own
+    // line. Options indented alike are siblings, and blank or comment lines inside a value do not
+    // end it.
+    const std::string cfg = R"([printer]
+  kinematics: corexy
+  max_velocity: 300
+  max_accel: 7000
+  square_corner_velocity: 6
+
+[gcode_macro PRINT_START]
+gcode:
+    G28
+
+    # A comment line inside the macro body.
+    max_accel: 1
+  ; and another, indented less
+    max_velocity: 1
+
+[quad_gantry_level]
+gantry_corners:
+    -60,-10
+    410,420
+max_adjust: 10
+
+[extruder]
+	nozzle_diameter: 0.4
+	filament_diameter: 1.75
+	pressure_advance: 0.05
+)";
+    const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
+    const KlipperLimits& l = result.limits;
+    CHECK(result.warnings.empty());
+    CHECK_THAT(l.max_velocity, WithinRel(300.0, 1e-12));
+    CHECK_THAT(l.max_accel, WithinRel(7000.0, 1e-12));
+    CHECK_THAT(l.square_corner_velocity, WithinRel(6.0, 1e-12));
+    CHECK_THAT(l.pressure_advance, WithinRel(0.05, 1e-12));
+}
+
 TEST_CASE("printer.cfg import refuses what Klipper refuses", "[KlipperLimits]")
 {
     SECTION("no [printer] section") {
