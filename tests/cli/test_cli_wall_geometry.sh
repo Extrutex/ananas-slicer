@@ -2,14 +2,15 @@
 # End-to-end wall-geometry check on the real binary and the shipped Voron presets.
 #
 # Generates a fin row (0.15 to 1.2 mm) and a wedge (0.05 to 2.0 mm) as STL, slices them with
-# Voron 2.4 350 0.4 nozzle / 0.20mm Standard @Voron / Generic PLA, once with precise_outer_wall on (the
-# shipped default) and once off, and reads the G-code of the layer at Z=1.0 (WIDTH and E per move).
+# Voron 2.4 350 0.4 nozzle / 0.20mm Standard @Voron / Generic PLA with precise_outer_wall off, on with the
+# shipped method (outline_shrink) and on with precise_outer_wall_method = toolpath_shift, and reads the G-code
+# of the layer at Z=1.0 (WIDTH and E per move).
 # The bands come from the rounded-rectangle bead model, not from earlier output:
 #   - every fin at least min_feature_size thick is extruded;
 #   - a single-bead fin is max(t, min_bead_width + c) wide, +-0.005 mm, where c = layer_height * (1 - pi/4)
 #     (criterion Q1 of the wall analysis; the shipped process uses Arachne);
 #   - a fin printed as one bead with precise_outer_wall off is one bead of the same width, +-0.005 mm, with
-#     it on (the second half of Q1);
+#     it on, by either method (the second half of Q1);
 #   - the wedge is extruded down to min_feature_size + 0.05 mm.
 # Checks that fail on the current code for a known defect are listed in KNOWN below. They are expected to
 # fail; if one passes, the script fails too, so the fixing commit has to remove it from the list.
@@ -27,9 +28,9 @@ PROFILES="${3:-}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/orca-cli-wall-geometry.XXXXXX")" || exit 1
 trap 'rm -rf "$WORK"' EXIT
 
-# Known defects: "<variant>:<check>" (WALL-1: precise outer wall shrinks the outline before beading).
+# Known defects: "<variant>:<check>" (WALL-1: the outline_shrink method shrinks the outline before beading).
 KNOWN="precise1:presence:0.15 precise1:width:0.40 precise1:width:0.45 precise1:width:0.50 precise1:width:0.60 precise1:wedge
-parity:0.15 parity:0.40 parity:0.45 parity:0.50 parity:0.60"
+parity_precise1:0.15 parity_precise1:0.40 parity_precise1:0.45 parity_precise1:0.50 parity_precise1:0.60"
 
 # Fins along X at Y 0..12, the wedge along X at Y 20..22 (thin end at X=0).
 "$PY" - "$WORK/walls.stl" <<'EOF' || exit 1
@@ -65,12 +66,12 @@ with open(sys.argv[1], "w") as f:
     f.write("endsolid walls\n")
 EOF
 
-# The shipped process, flattened into a standalone preset with precise_outer_wall set.
+# The shipped process, flattened into a standalone preset with precise_outer_wall and its method set.
 flatten() {
-    "$PY" - "$PROFILES/Voron/process" "0.20mm Standard @Voron" "$1" "$2" <<'EOF' || exit 1
+    "$PY" - "$PROFILES/Voron/process" "0.20mm Standard @Voron" "$1" "$2" "$3" <<'EOF' || exit 1
 import json, os, sys
 
-folder, name, precise, out = sys.argv[1:5]
+folder, name, precise, method, out = sys.argv[1:6]
 
 def load(n):
     with open(os.path.join(folder, n + ".json")) as f:
@@ -82,8 +83,8 @@ def load(n):
     return d
 
 d = load(name)
-d.update({"type": "process", "from": "User", "instantiation": "true", "name": "wall geometry precise=" + precise,
-          "precise_outer_wall": precise})
+d.update({"type": "process", "from": "User", "instantiation": "true", "name": "wall geometry precise=%s %s" % (precise, method),
+          "precise_outer_wall": precise, "precise_outer_wall_method": method})
 with open(out, "w") as f:
     json.dump(d, f)
 EOF
@@ -94,19 +95,24 @@ TIMEOUT=()
 command -v timeout > /dev/null && TIMEOUT=(timeout 300)
 
 fails=0
-for precise in 0 1; do
-    out="$WORK/precise$precise"
+# variant:precise_outer_wall:precise_outer_wall_method
+for spec in precise0:0:outline_shrink precise1:1:outline_shrink shift:1:toolpath_shift; do
+    IFS=: read -r variant precise method <<< "$spec"
+    out="$WORK/$variant"
     mkdir -p "$out"
-    flatten "$precise" "$WORK/process$precise.json"
+    flatten "$precise" "$method" "$WORK/process_$variant.json"
     ${TIMEOUT[@]+"${TIMEOUT[@]}"} "$BIN" --datadir "$out/datadir" \
-        --load-settings "$PROFILES/Voron/machine/Voron 2.4 350 0.4 nozzle.json;$WORK/process$precise.json" \
+        --load-settings "$PROFILES/Voron/machine/Voron 2.4 350 0.4 nozzle.json;$WORK/process_$variant.json" \
         --load-filaments "$PROFILES/OrcaFilamentLibrary/filament/Generic PLA @System.json" \
         --arrange 1 --slice 0 --outputdir "$out" "$WORK/walls.stl" > "$out/log" 2>&1 \
-        || { echo "FAIL: precise=$precise: slicer exited $?"; tail -n 40 "$out/log"; exit 1; }
+        || { echo "FAIL: $variant: slicer exited $?"; tail -n 40 "$out/log"; exit 1; }
     gcode="$(ls "$out"/*.gcode 2>/dev/null | head -n 1)"
-    [ -n "$gcode" ] || { echo "FAIL: precise=$precise: no G-code"; exit 1; }
+    [ -n "$gcode" ] || { echo "FAIL: $variant: no G-code"; exit 1; }
+    # The G-code records the method it was sliced with.
+    grep -q "^; precise_outer_wall_method = $method\$" "$gcode" \
+        || { echo "FAIL: $variant: the G-code does not record precise_outer_wall_method = $method"; fails=$((fails + 1)); }
 
-    "$PY" - "$gcode" "precise$precise" "$WORK/process$precise.json" "$KNOWN" "$WORK/widths$precise.json" <<'EOF'
+    "$PY" - "$gcode" "$variant" "$WORK/process_$variant.json" "$KNOWN" "$WORK/widths_$variant.json" <<'EOF'
 import json, math, sys
 
 gcode, variant, process, known, widths_out = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4].split(), sys.argv[5]
@@ -207,8 +213,9 @@ EOF
     [ $? -eq 0 ] || fails=$((fails + 1))
 done
 
-# Parity: precise_outer_wall must not change a single bead.
-"$PY" - "$WORK/widths0.json" "$WORK/widths1.json" "$KNOWN" <<'EOF' || fails=$((fails + 1))
+# Parity: precise_outer_wall must not change a single bead, by either method.
+for variant in precise1 shift; do
+    "$PY" - "$WORK/widths_precise0.json" "$WORK/widths_$variant.json" "$KNOWN" "parity_$variant" <<'EOF' || fails=$((fails + 1))
 import json, sys
 
 TOL = 0.005
@@ -216,34 +223,35 @@ with open(sys.argv[1]) as f:
     off = json.load(f)
 with open(sys.argv[2]) as f:
     on = json.load(f)
-known = sys.argv[3].split()
+known, name = sys.argv[3].split(), sys.argv[4]
 
 failed, checked = 0, []
 for fin, a in off.items():
     if len(a) != 1:
         continue
     b = on.get(fin, [])
-    cid = "parity:" + fin
+    cid = name + ":" + fin
     checked.append(cid)
     ok = len(b) == 1 and abs(b[0] - a[0]) <= TOL
     msg = "fin %s single bead %.3f off, %s on" % (fin, a[0], "%.3f" % b[0] if len(b) == 1 else "%d beads" % len(b))
     if cid in known:
         if ok:
-            print("FAIL: parity: %s, but it is listed as a known failure; remove it from KNOWN" % msg)
+            print("FAIL: %s: %s, but it is listed as a known failure; remove it from KNOWN" % (name, msg))
             failed += 1
         else:
-            print("XFAIL: parity: %s" % msg)
+            print("XFAIL: %s: %s" % (name, msg))
     elif ok:
-        print("ok: parity: %s" % msg)
+        print("ok: %s: %s" % (name, msg))
     else:
-        print("FAIL: parity: %s" % msg)
+        print("FAIL: %s: %s" % (name, msg))
         failed += 1
 for k in known:
-    if k.startswith("parity:") and k not in checked:
+    if k.startswith(name + ":") and k not in checked:
         print("FAIL: known failure %s matches no check" % k)
         failed += 1
 sys.exit(1 if failed else 0)
 EOF
+done
 
 [ "$fails" -eq 0 ] || exit 1
 echo "PASS"
