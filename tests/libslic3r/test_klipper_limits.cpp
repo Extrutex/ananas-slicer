@@ -119,6 +119,7 @@ instantaneous_corner_velocity: 2
 #*#
 #*# [printer]
 #*# max_velocity = 280
+#*# max_z_velocity = 12
 )";
     REQUIRE_THROWS_AS(parse_klipper_printer_cfg(cfg), RuntimeError);
 
@@ -127,16 +128,83 @@ instantaneous_corner_velocity: 2
     fixed.replace(fixed.find("4000;not"), std::string("4000;not a comment without whitespace before it").size(), "4000");
     const KlipperLimitsImport result = parse_klipper_printer_cfg(fixed);
     const KlipperLimits& l = result.limits;
-    // SAVE_CONFIG overrides the file, the macro body is not configuration, option names are case-insensitive.
-    CHECK_THAT(l.max_velocity, WithinRel(280.0, 1e-12));
+    // The macro body is not configuration, option names are case-insensitive. An option set both above
+    // and in the SAVE_CONFIG block takes the value above it (configfile.py _strip_duplicates; Klipper
+    // v0.13.0 reads max_velocity 250 and max_z_velocity 12 from this file), the block adds the rest.
+    CHECK_THAT(l.max_velocity, WithinRel(250.0, 1e-12));
+    CHECK_THAT(l.max_z_velocity, WithinRel(12.0, 1e-12));
+    CHECK(has_warning_containing(result, "[printer] max_velocity = 280 in the SAVE_CONFIG block is ignored"));
     CHECK_THAT(l.max_accel, WithinRel(4000.0, 1e-12));
     CHECK_THAT(l.square_corner_velocity, WithinRel(8.0, 1e-12));
     // Deprecated max_accel_to_decel: 1 - 1000 / 4000.
     CHECK_THAT(l.minimum_cruise_ratio, WithinRel(0.75, 1e-12));
     CHECK(has_warning_containing(result, "max_accel_to_decel"));
     CHECK_THAT(l.max_extrude_only_accel, WithinRel(1500.0, 1e-12));
-    CHECK_THAT(l.max_extrude_only_velocity, WithinRel(280.0 * extrude_ratio(0.6, 1.75), 1e-12));
+    CHECK_THAT(l.max_extrude_only_velocity, WithinRel(250.0 * extrude_ratio(0.6, 1.75), 1e-12));
     CHECK_THAT(l.instantaneous_corner_velocity, WithinRel(2.0, 1e-12));
+}
+
+TEST_CASE("The SAVE_CONFIG block is read only where Klipper reads it", "[KlipperLimits]")
+{
+    // Expected values from Klipper v0.13.0's ConfigAutoSave.load_main_config on the same text.
+    const std::string header = "#*# <---------------------- SAVE_CONFIG ---------------------->\n"
+                               "#*# DO NOT EDIT THIS BLOCK OR BELOW. The contents are auto-generated.\n"
+                               "#*#\n";
+    const std::string block  = "#*# [printer]\n#*# max_velocity = 280\n#*# max_accel = 9000\n";
+    const std::string base   = std::string(minimal_cfg);
+
+    SECTION("well-formed, CRLF line endings")
+    {
+        std::string cfg = base + "\n" + header + block;
+        for (size_t pos = 0; (pos = cfg.find('\n', pos)) != std::string::npos; pos += 2)
+            cfg.insert(pos, "\r");
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
+        CHECK_THAT(result.limits.max_velocity, WithinRel(300.0, 1e-12));
+        CHECK_THAT(result.limits.max_accel, WithinRel(3000.0, 1e-12));
+        CHECK(has_warning_containing(result, "max_accel = 9000 in the SAVE_CONFIG block is ignored"));
+    }
+    SECTION("the block adds options the file does not set")
+    {
+        const std::string cfg = "[printer]\nkinematics: corexy\nmax_accel: 3000\n[extruder]\nnozzle_diameter: 0.4\n"
+                                "filament_diameter: 1.75\n" + header + "#*# [printer]\n#*# max_velocity = 280\n";
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
+        CHECK_THAT(result.limits.max_velocity, WithinRel(280.0, 1e-12));
+        CHECK(result.warnings.empty());
+    }
+    SECTION("a \"#*# \" line above the header makes Klipper ignore the block")
+    {
+        const std::string cfg = "[printer]\nkinematics: corexy\nmax_velocity: 300\n#*# stray\nmax_accel: 3000\n"
+                                "[extruder]\nnozzle_diameter: 0.4\nfilament_diameter: 1.75\n" + header +
+                                "#*# [printer]\n#*# max_z_velocity = 12\n";
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
+        CHECK_THAT(result.limits.max_z_velocity, WithinRel(300.0, 1e-12));
+        CHECK(has_warning_containing(result, "SAVE_CONFIG block is not read"));
+    }
+    SECTION("an edited line below the header makes Klipper ignore the block, the line counts")
+    {
+        const std::string cfg = "[extruder]\nnozzle_diameter: 0.4\nfilament_diameter: 1.75\n[printer]\nkinematics: corexy\n"
+                                "max_velocity: 300\nmax_accel: 3000\n" + header +
+                                "#*# [printer]\n#*# max_z_velocity = 12\nmax_accel: 5000\n";
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
+        CHECK_THAT(result.limits.max_z_velocity, WithinRel(300.0, 1e-12));
+        CHECK_THAT(result.limits.max_accel, WithinRel(5000.0, 1e-12));
+        CHECK(has_warning_containing(result, "edited below its header"));
+    }
+    SECTION("\"#*#\" lines without the header are comments")
+    {
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(base + block);
+        CHECK_THAT(result.limits.max_velocity, WithinRel(300.0, 1e-12));
+        CHECK_THAT(result.limits.max_accel, WithinRel(3000.0, 1e-12));
+    }
+    SECTION("a multi-line value in the block does not leak options")
+    {
+        const std::string cfg = "[printer]\nkinematics: corexy\nmax_accel: 3000\n[extruder]\nnozzle_diameter: 0.4\n"
+                                "filament_diameter: 1.75\n" + header +
+                                "#*# [gcode_macro X]\n#*# gcode =\n#*# \tmax_accel: 1\n#*# [printer]\n#*# max_velocity = 280\n";
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(cfg);
+        CHECK_THAT(result.limits.max_velocity, WithinRel(280.0, 1e-12));
+        CHECK_THAT(result.limits.max_accel, WithinRel(3000.0, 1e-12));
+    }
 }
 
 TEST_CASE("printer.cfg comments end where Klipper ends them", "[KlipperLimits]")

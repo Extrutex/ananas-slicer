@@ -36,8 +36,8 @@ struct KlipperLimitsImport
 };
 
 // Parses printer.cfg text the way Klipper reads it (sections, ':' or '=' delimiters, '#'/';'
-// comments, the SAVE_CONFIG block overriding the file) and resolves the limits with Klipper's
-// defaults. [include] files are not followed; the caller passes the concatenated text if the
+// comments, the SAVE_CONFIG block adding the options the file above it does not set) and
+// resolves the limits with Klipper's defaults. [include] files are not followed; the caller passes the concatenated text if the
 // limits live in an included file. Throws Slic3r::RuntimeError when a required value is missing
 // or a value is out of the range Klipper accepts.
 KlipperLimitsImport parse_klipper_printer_cfg(const std::string& text);

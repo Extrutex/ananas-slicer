@@ -120,8 +120,10 @@ which ignore the key.
 The model needs Klipper's limits, which belong to printer.cfg. The
 `klipper_*` keys hold an imported snapshot with its source
 (`klipper_limits_source`: `printer_cfg` or `moonraker`) and date.
-`parse_klipper_printer_cfg` reads printer.cfg the way Klipper does (SAVE_CONFIG
-block included, `[include]` not followed and reported) and applies Klipper's
+`parse_klipper_printer_cfg` reads printer.cfg the way Klipper does (the SAVE_CONFIG
+block only adds options the file above it does not set, and is ignored as a whole
+where Klipper finds it corrupted; `[include]` is not followed and reported) and
+applies Klipper's
 defaults, such as the extrude-only limits derived from the nozzle and filament
 diameter; `parse_moonraker_toolhead_query` reads
 `/printer/objects/query?toolhead&configfile=settings` and takes the limits from

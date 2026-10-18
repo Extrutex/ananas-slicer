@@ -11,6 +11,7 @@
 #include <map>
 #include <optional>
 #include <sstream>
+#include <utility>
 
 namespace Slic3r {
 
@@ -82,13 +83,6 @@ Sections parse_sections(const std::string& text, std::vector<std::string>& warni
     while (std::getline(in, raw)) {
         if (!raw.empty() && raw.back() == '\r')
             raw.pop_back();
-        // The SAVE_CONFIG block: Klipper reads the "#*# " lines as configuration overriding the
-        // file above them, which is where it writes them.
-        if (raw.rfind("#*#", 0) == 0) {
-            raw = raw.substr(3);
-            if (!raw.empty() && raw.front() == ' ')
-                raw.erase(0, 1);
-        }
         raw                    = strip_semicolon_comment(strip_hash_comment(raw));
         const std::string line = trim(raw);
         if (line.empty())
@@ -116,6 +110,71 @@ Sections parse_sections(const std::string& text, std::vector<std::string>& warni
         const std::string key = to_lower(trim(line.substr(0, delim)));
         (*current)[key]       = trim(line.substr(delim + 1));
         in_option             = true;
+    }
+    return sections;
+}
+
+// configfile.py AUTOSAVE_HEADER: the line before it ends with the leading newline.
+const std::string AUTOSAVE_HEADER = "\n#*# <---------------------- SAVE_CONFIG ---------------------->\n"
+                                    "#*# DO NOT EDIT THIS BLOCK OR BELOW. The contents are auto-generated.\n"
+                                    "#*#\n";
+
+// configfile.py ConfigAutoSave._find_autosave_data: splits printer.cfg into the regular part and
+// the SAVE_CONFIG block with its "#*# " prefixes removed. A block Klipper cannot read (a "#*# "
+// line above the header, a second header, a line without the prefix below it) is ignored as a
+// whole; its lines are then comments of the regular part.
+std::pair<std::string, std::string> split_autosave(const std::string& data, std::vector<std::string>& warnings)
+{
+    std::string regular = data;
+    std::string block;
+    const size_t pos = data.find(AUTOSAVE_HEADER);
+    if (pos != std::string::npos) {
+        regular = data.substr(0, pos);
+        block   = trim(data.substr(pos + AUTOSAVE_HEADER.size()));
+    }
+    if (regular.find("\n#*# ") != std::string::npos || block.find(AUTOSAVE_HEADER) != std::string::npos) {
+        warnings.emplace_back("printer.cfg: the SAVE_CONFIG block is not read: \"#*# \" lines outside it (Klipper ignores the block as corrupted)");
+        return { data, std::string() };
+    }
+    std::string        out = "\n";
+    std::istringstream in(block);
+    std::string        line;
+    while (std::getline(in, line)) {
+        if (!block.empty() && (line.rfind("#*#", 0) != 0 || (line.size() >= 4 && line.rfind("#*# ", 0) != 0))) {
+            warnings.emplace_back("printer.cfg: the SAVE_CONFIG block is not read: it was edited below its header (Klipper ignores the block)");
+            return { data, std::string() };
+        }
+        out += line.size() > 4 ? line.substr(4) : std::string();
+        out += '\n';
+    }
+    return { regular, out };
+}
+
+// configfile.py ConfigAutoSave.load_main_config: an option of the SAVE_CONFIG block that the
+// regular part also sets is commented out (_strip_duplicates), so the regular value applies;
+// the block only adds options. Klipper does this silently; the import reports it.
+Sections read_printer_cfg(const std::string& text, std::vector<std::string>& warnings)
+{
+    std::string data = text;
+    for (size_t pos = 0; (pos = data.find("\r\n", pos)) != std::string::npos;)
+        data.erase(pos, 1);
+    const auto [regular_text, autosave_text] = split_autosave(data, warnings);
+    Sections       sections = parse_sections(regular_text, warnings);
+    const Sections autosave = parse_sections(autosave_text, warnings);
+    for (const auto& [name, options] : autosave) {
+        const auto regular_section = sections.find(name);
+        for (const auto& [key, value] : options) {
+            if (regular_section != sections.end()) {
+                const auto it = regular_section->second.find(key);
+                if (it != regular_section->second.end()) {
+                    warnings.emplace_back("printer.cfg: [" + name + "] " + key + " = " + value +
+                                          " in the SAVE_CONFIG block is ignored; Klipper uses the value above it (" +
+                                          it->second + ")");
+                    continue;
+                }
+            }
+            sections[name][key] = value;
+        }
     }
     return sections;
 }
@@ -275,7 +334,7 @@ double float_value(const ConfigBase& config, const char* key)
 KlipperLimitsImport parse_klipper_printer_cfg(const std::string& text)
 {
     std::vector<std::string> warnings;
-    const Sections sections = parse_sections(text, warnings);
+    const Sections sections = read_printer_cfg(text, warnings);
     return resolve_limits(sections, std::move(warnings));
 }
 
