@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -35,7 +36,7 @@ namespace {
 // this many corners such a face is left out rather than stalling the import.
 constexpr size_t MAX_EAR_CLIPPED_FACE_CORNERS = 20000;
 
-enum class FaceSplit { Ok, Degenerate, SelfIntersecting, TooManyCorners };
+enum class FaceSplit { Ok, KeptWithoutArea, Degenerate, SelfIntersecting, TooManyCorners };
 
 double cross2(const Vec2d &a, const Vec2d &b) { return a.x() * b.y() - a.y() * b.x(); }
 
@@ -93,47 +94,57 @@ bool outline_self_intersects(const std::vector<Vec2d> &p)
     return false;
 }
 
-// Splits one OBJ face into triangles, given as positions into `corners` and wound like the face.
-// A triangle is kept as it is. A larger face is split in its best-fit plane, after dropping corners that
-// repeat the one before them: a strictly convex face becomes a fan from its first corner, which for a
-// quad is the first-to-third corner diagonal the loader has always used, and any other face with a
-// simple outline is ear clipped, so its triangles stay inside the outline. A face without area or with
-// an outline that crosses or touches itself has no such split and is rejected, as is a non-convex face
-// with more than MAX_EAR_CLIPPED_FACE_CORNERS corners; `triangles` is then empty.
-FaceSplit triangulate_face(const std::vector<Vec3f> &corners, std::vector<std::array<int, 3>> &triangles)
+// Splits one OBJ face, given by its vertex indices, into triangles, given as positions into `indices`
+// and wound like the face. Corners repeating the one before them, by index or by place, are dropped
+// first.
+// - A triangle naming a vertex twice has no edge to share with its neighbours and is left out. Any
+//   other triangle is kept as it is, as the loader always has, even without area: it may close a
+//   T-junction between its neighbours, and the mesh statistics report it as degenerate.
+//   KeptWithoutArea says that it has none.
+// - A larger face is split in its best-fit plane: a strictly convex face becomes a fan from its first
+//   corner, which for a quad is the first-to-third corner diagonal the loader has always used, and any
+//   other face with a simple outline is ear clipped, so its triangles stay inside the outline. A face
+//   without area or with an outline that crosses or touches itself has no such split and is left out,
+//   as is a non-convex face with more than MAX_EAR_CLIPPED_FACE_CORNERS corners; `triangles` is then
+//   empty.
+FaceSplit triangulate_face(const std::vector<int> &indices, const std::vector<Vec3f> &vertices, std::vector<std::array<int, 3>> &triangles)
 {
     triangles.clear();
-    if (corners.size() == 3) {
-        triangles.push_back({0, 1, 2});
-        return FaceSplit::Ok;
-    }
-
+    auto position = [&indices, &vertices](int i) -> const Vec3f & { return vertices[indices[i]]; };
+    auto same     = [&indices, &position](int i, int j) { return indices[i] == indices[j] || position(i) == position(j); };
     std::vector<int> ids;
-    ids.reserve(corners.size());
-    for (int i = 0; i < int(corners.size()); ++i)
-        if (ids.empty() || corners[i] != corners[ids.back()])
+    ids.reserve(indices.size());
+    for (int i = 0; i < int(indices.size()); ++i)
+        if (ids.empty() || !same(i, ids.back()))
             ids.push_back(i);
-    while (ids.size() > 1 && corners[ids.back()] == corners[ids.front()])
+    while (ids.size() > 1 && same(ids.back(), ids.front()))
         ids.pop_back();
     const int n = int(ids.size());
-    if (n < 3)
-        return FaceSplit::Degenerate;
 
     // Newell's normal: the face winds counter-clockwise around it, also when it is not quite planar.
-    // Its length is twice the area of the face.
-    Vec3d normal = Vec3d::Zero();
-    Vec3d lo     = corners[ids.front()].cast<double>();
-    Vec3d hi     = lo;
+    // Its length is twice the area of the face. Taken relative to the first corner, its rounding error
+    // is a few units in the last place of the squared size of the face, wherever the face is.
+    const Vec3d origin = position(ids.front()).cast<double>();
+    Vec3d       normal = Vec3d::Zero();
+    double      extent = 0.;
     for (int i = 0; i < n; ++i) {
-        const Vec3d a = corners[ids[i]].cast<double>();
-        const Vec3d b = corners[ids[(i + 1) % n]].cast<double>();
+        const Vec3d a = position(ids[i]).cast<double>() - origin;
+        const Vec3d b = position(ids[(i + 1) % n]).cast<double>() - origin;
         normal += Vec3d((a.y() - b.y()) * (a.z() + b.z()), (a.z() - b.z()) * (a.x() + b.x()), (a.x() - b.x()) * (a.y() + b.y()));
-        lo = lo.cwiseMin(a);
-        hi = hi.cwiseMax(a);
+        extent = std::max(extent, a.cwiseAbs().maxCoeff());
     }
-    // A face whose corners lie on a line, or whose outline encloses as much area clockwise as
-    // counter-clockwise like a bow-tie, has no side to cover.
-    if (!(normal.norm() > 1e-12 * (hi - lo).squaredNorm()))
+    // Anything above the rounding error is real area, however thin the face. Below it are faces whose
+    // corners lie on a line, and outlines like a bow-tie that wind both ways around the same area.
+    const bool has_area = n >= 3 && normal.norm() > 16. * n * std::numeric_limits<double>::epsilon() * extent * extent;
+
+    if (indices.size() == 3) {
+        for (int i = 0; i < 3; ++i)
+            if (indices[i] == indices[(i + 1) % 3])
+                return FaceSplit::Degenerate;
+        triangles.push_back({0, 1, 2});
+        return has_area ? FaceSplit::Ok : FaceSplit::KeptWithoutArea;
+    }
+    if (!has_area)
         return FaceSplit::Degenerate;
     if (n == 3) {
         triangles.push_back({ids[0], ids[1], ids[2]});
@@ -145,7 +156,7 @@ FaceSplit triangulate_face(const std::vector<Vec3f> &corners, std::vector<std::a
     const Vec3d v = normal.cross(u);
     std::vector<Vec2d> p(n);
     for (int i = 0; i < n; ++i) {
-        const Vec3d d = (corners[ids[i]] - corners[ids.front()]).cast<double>();
+        const Vec3d d = position(ids[i]).cast<double>() - origin;
         p[i]          = Vec2d(d.dot(u), d.dot(v));
     }
 
@@ -330,13 +341,15 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
     }
     std::vector<int>   indices;
     std::vector<int>   uvs;
-    std::vector<Vec3f> corners;
     std::vector<std::array<int, 3>> triangles;
+    // For each triangle of the mesh, where the parser's material spans place it.
+    std::vector<int> triangle_spans;
     // Triangles the faces read so far count for in the material spans.
     size_t mtl_face_index              = 0;
     size_t num_degenerate_faces        = 0;
     size_t num_self_intersecting_faces = 0;
     size_t num_oversized_faces         = 0;
+    size_t num_zero_area_triangles     = 0;
     for (size_t i = 0; i < data.vertices.size();)
         if (data.vertices[i].coordIdx == -1)
             ++ i;
@@ -417,11 +430,9 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
                         }
                     }
                 };
-                corners.clear();
-                for (int index : indices)
-                    corners.push_back(its.vertices[index]);
-                switch (triangulate_face(corners, triangles)) {
+                switch (triangulate_face(indices, its.vertices, triangles)) {
                 case FaceSplit::Ok: break;
+                case FaceSplit::KeptWithoutArea: ++num_zero_area_triangles; break;
                 case FaceSplit::Degenerate: ++num_degenerate_faces; break;
                 case FaceSplit::SelfIntersecting: ++num_self_intersecting_faces; break;
                 case FaceSplit::TooManyCorners: ++num_oversized_faces; break;
@@ -429,17 +440,29 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
                 for (size_t k = 0; k < triangles.size(); ++k) {
                     const std::array<int, 3> &triangle = triangles[k];
                     its.indices.emplace_back(indices[triangle[0]], indices[triangle[1]], indices[triangle[2]]);
-                    if (exist_mtl)
+                    if (exist_mtl) {
                         set_face_color_by_mtl(int(its.indices.size()) - 1, int(mtl_face_index + k), triangle);
+                        triangle_spans.push_back(int(mtl_face_index + k));
+                    }
                 }
                 mtl_face_index += indices.size() - 2;
             }
         }
 
+    // Faces left out or split into fewer triangles than the parser counted shift the triangles after
+    // them, so the material spans handed on, which the texture import reads by triangle, are moved to
+    // the triangles the mesh has.
+    for (ObjParser::ObjUseMtl &usemtl : obj_info.usemtls) {
+        usemtl.face_start = int(std::lower_bound(triangle_spans.begin(), triangle_spans.end(), usemtl.face_start) - triangle_spans.begin());
+        usemtl.face_end = int(std::lower_bound(triangle_spans.begin(), triangle_spans.end(), usemtl.face_end + 1) - triangle_spans.begin()) - 1;
+    }
+    obj_info.zero_area_triangles = num_zero_area_triangles;
+    if (num_zero_area_triangles > 0)
+        BOOST_LOG_TRIVIAL(warning) << "load_obj: " << path << ": kept " << num_zero_area_triangles << " triangles without area.";
     obj_info.rejected_faces = num_degenerate_faces + num_self_intersecting_faces + num_oversized_faces;
     if (obj_info.rejected_faces > 0)
         BOOST_LOG_TRIVIAL(warning) << "load_obj: " << path << ": left out " << obj_info.rejected_faces
-                                   << " faces that cannot be split into triangles: " << num_degenerate_faces << " without area, "
+                                   << " faces that cannot be split into triangles: " << num_degenerate_faces << " without area or naming a vertex twice, "
                                    << num_self_intersecting_faces << " with a self-intersecting outline, " << num_oversized_faces
                                    << " not convex and with more than " << MAX_EAR_CLIPPED_FACE_CORNERS << " corners.";
 

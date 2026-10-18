@@ -19,10 +19,13 @@ struct ObjInfo {
     std::map<std::string,bool>  pngs;
     std::unordered_map<int, std::string> uv_map_pngs;
     bool              has_uv_png{false};
-    std::vector<ObjParser::ObjUseMtl>      usemtls; // material spans, for texture import
-    // Faces left out because no set of triangles covers them: without area, with a self-intersecting
-    // outline, or not convex and too large to ear clip. load_obj() logs a warning naming each kind.
+    std::vector<ObjParser::ObjUseMtl>      usemtls; // material spans in triangles of the loaded mesh, for texture import
+    // Faces left out because no set of triangles covers them: without area, a triangle naming a vertex
+    // twice, with a self-intersecting outline, or not convex and too large to ear clip. load_obj() logs
+    // a warning naming each kind.
     size_t            rejected_faces{0};
+    // Triangles kept although they have no area; load_obj() logs a warning with their count.
+    size_t            zero_area_triangles{0};
 
 };
 struct ObjDialogInOut

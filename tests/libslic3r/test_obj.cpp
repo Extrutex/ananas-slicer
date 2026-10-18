@@ -2,6 +2,7 @@
 
 #include "libslic3r/TriangleMesh.hpp"
 #include "libslic3r/Format/OBJ.hpp"
+#include "libslic3r/TexturePainting.hpp"
 
 #include <boost/nowide/fstream.hpp>
 
@@ -439,4 +440,73 @@ TEST_CASE("A face after a left-out face keeps its own material", "[OBJ][Regressi
     REQUIRE(loaded.mesh.facets_count() == 1);
     REQUIRE(loaded.info.face_colors.size() == 1);
     CHECK(loaded.info.face_colors[0][2] > loaded.info.face_colors[0][0]);
+}
+
+TEST_CASE("A long thin face with real area is split, not left out", "[OBJ][Regression]")
+{
+    // 1000 m by 0.1 um: an area of 0.1 mm2, far above rounding, at an aspect ratio of 1e13.
+    const LoadedObj loaded = load_plain_obj("v 0 0 0\nv 1000000 0 0\nv 1000000 1e-07 0\nv 0 1e-07 0\nf 1 2 3 4\n");
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.info.rejected_faces == 0);
+    CHECK(loaded.mesh.facets_count() == 2);
+    check_covers_flat_face(loaded.mesh.its, 0.1, 1e-6);
+}
+
+TEST_CASE("A triangle naming a vertex twice is left out", "[OBJ]")
+{
+    const LoadedObj loaded = load_plain_obj("v 0 0 0\nv 10 0 0\nv 0 10 0\nf 1 2 3\nf 1 1 2\n");
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 1);
+    CHECK(loaded.info.rejected_faces == 1);
+    CHECK(loaded.info.zero_area_triangles == 0);
+}
+
+TEST_CASE("A triangle of three distinct vertices on a line is kept and counted", "[OBJ]")
+{
+    // It may close a T-junction between its neighbours, so leaving it out could open the mesh.
+    const LoadedObj loaded = load_plain_obj("v 0 0 0\nv 10 0 0\nv 0 10 0\nv 5 0 0\nf 1 2 3\nf 1 4 2\n");
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 2);
+    CHECK(loaded.info.rejected_faces == 0);
+    CHECK(loaded.info.zero_area_triangles == 1);
+}
+
+TEST_CASE("A textured face after a left-out face keeps its own material", "[OBJ][Regression]")
+{
+    ScopedTemporaryFile obj(".obj");
+    ScopedTemporaryFile mtl(".mtl");
+    ScopedTemporaryFile png(".png");
+    {
+        // obj_to_textured_mesh() only reads the texture's bytes; decoding happens later.
+        boost::nowide::ofstream out(png.string(), std::ios::binary);
+        out << "texture";
+    }
+    {
+        boost::nowide::ofstream out(mtl.string());
+        out << "newmtl a\nKd 1 0 0\nnewmtl b\nKd 0 0 1\nmap_Kd " << png.path().filename().string() << "\n";
+    }
+    {
+        // The bow-tie under material a is left out, so the triangle under b is the mesh's first.
+        boost::nowide::ofstream out(obj.string());
+        out << "mtllib " << mtl.path().filename().string() << "\n"
+            << "v 0 0 0\nv 2 2 0\nv 0 2 0\nv 2 0 0\nv 0 0 5\nv 1 0 5\nv 0 1 5\nvt 0.25 0.5\n"
+            << "usemtl a\nf 1/1 2/1 3/1 4/1\nusemtl b\nf 5/1 6/1 7/1\n";
+    }
+    TriangleMesh       mesh;
+    ObjInfo            info;
+    ObjParser::MtlData mtl_data;
+    std::string        message;
+    REQUIRE(load_obj(obj.string().c_str(), &mesh, info, message, &mtl_data));
+    CHECK(info.rejected_faces == 1);
+    REQUIRE(mesh.facets_count() == 1);
+
+    TexturedMesh textured;
+    REQUIRE(obj_to_textured_mesh(info, mesh.its, mtl_data, obj.path().parent_path().string(), textured));
+    REQUIRE(textured.material_ids.size() == 1);
+    REQUIRE(textured.material_ids[0] >= 0);
+    REQUIRE(size_t(textured.material_ids[0]) < mtl_data.mtl_orders.size());
+    CHECK(mtl_data.mtl_orders[textured.material_ids[0]] == "b");
 }
