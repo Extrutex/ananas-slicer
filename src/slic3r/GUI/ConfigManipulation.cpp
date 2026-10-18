@@ -1095,6 +1095,10 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
         "min_bead_width", "wall_distribution_count", "initial_layer_min_bead_width", "wall_maximum_resolution", "wall_maximum_deviation"})
         toggle_line(el, have_arachne);
     toggle_field("detect_thin_wall", !have_arachne);
+    // The method only matters where the precise outer wall acts: Arachne walls printed inner wall first.
+    toggle_line("precise_outer_wall_method", have_arachne);
+    toggle_field("precise_outer_wall_method",
+                 config->opt_bool("precise_outer_wall") && config->opt_enum<WallSequence>("wall_sequence") == WallSequence::InnerOuter);
 
     // Orca
     auto is_role_based_wipe_speed = config->opt_bool("role_based_wipe_speed");

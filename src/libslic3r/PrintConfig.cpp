@@ -1679,9 +1679,9 @@ void PrintConfigDef::init_fff_params()
     def->tooltip = L("How the Arachne wall generator realises the precise wall.\n\n"
                      "Outline shrink: the outline is shrunk before the walls are generated. Thin features lose "
                      "that width, and features just above the minimum feature size are not printed.\n\n"
-                     "Toolpath shift: the walls are generated on the true outline and only the walls behind the "
-                     "outer wall move inwards, where the wall has room for it. The outer surface stays exact and "
-                     "thin features keep their thickness.\n\n"
+                     "Toolpath shift (experimental): the walls are generated on the true outline and only the walls "
+                     "behind the outer wall move inwards, where the wall has room for it. The outer surface stays exact "
+                     "and thin features keep their thickness.\n\n"
                      "The classic wall generator ignores this option.");
     def->enum_keys_map = &ConfigOptionEnum<PreciseOuterWallMethod>::get_enum_values();
     def->enum_values.push_back("outline_shrink");
