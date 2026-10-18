@@ -20,6 +20,32 @@ A user preset or project that sets a non-zero `default_jerk` or enables
 load. Calibration prints that sweep the corner velocity set it explicitly,
 independent of `default_jerk`.
 
+## State After the Print
+
+Klipper keeps the values of `SET_VELOCITY_LIMIT` and `SET_PRESSURE_ADVANCE`
+until it restarts. Without a restore, the end G-code and the next print's start
+G-code run with the acceleration of the last feature, and with the slicer's
+corner velocity, cruise ratio and pressure advance where the profile sends them.
+
+With `klipper_restore_state` the G-code calls `_KLIPSLICE_SAVE` right before the
+start G-code and `_KLIPSLICE_RESTORE` right before the end G-code, after the
+filament end G-code. The macros ship in `resources/klipper/klipslice_state.cfg`
+and are included from printer.cfg. `_KLIPSLICE_SAVE` records the toolhead's
+`max_velocity`, `max_accel`, `minimum_cruise_ratio` and
+`square_corner_velocity`; `_KLIPSLICE_RESTORE` sets them back and sets every
+`[extruder]`/`[extruderN]` pressure advance and smooth time to its printer.cfg
+value. The pressure advance comes from printer.cfg rather than from the save, so
+a print that was cancelled before its restore does not carry its value into the
+next one. A cancelled print never reaches the end G-code; `CANCEL_PRINT` has to
+call `_KLIPSLICE_RESTORE` itself, as the file describes.
+
+The slicer cannot see printer.cfg, so it cannot tell whether the macros exist.
+The option is therefore off by default and is enabled together with the
+include; Klipper answers a missing macro with `Unknown command`. Firmware
+retraction values sent with `SET_RETRACTION` are not restored: the command also
+clears Klipper's retracted flag, which would leave the filament retracted
+without Klipper knowing it.
+
 ## Profile Compatibility
 
 The stored keys remain `accel_to_decel_enable` and `accel_to_decel_factor`, so
@@ -72,7 +98,8 @@ abort the print.
 ## Verification
 
 `tests/fff_print/test_gcodewriter.cpp` checks enabled/disabled output, percentage
-boundaries, combined commands and actual Type1 prime-tower generation. It also
+boundaries, combined commands and actual Type1 prime-tower generation, and that
+every state change of a print lies between the save and the restore macro. It also
 replays sliced firmware-retraction output with the semantics of Klipper's
 `[firmware_retraction]` on a shared nozzle, including custom G-code that
 retracts or sets its own values. The

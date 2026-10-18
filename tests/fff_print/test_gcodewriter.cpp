@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -822,6 +823,97 @@ TEST_CASE("Klipper keeps square_corner_velocity and minimum_cruise_ratio by defa
     CHECK_THAT(gcode, Catch::Matchers::ContainsSubstring("SET_VELOCITY_LIMIT ACCEL="));
     CHECK(gcode.find("SQUARE_CORNER_VELOCITY") == std::string::npos);
     CHECK(gcode.find("MINIMUM_CRUISE_RATIO") == std::string::npos);
+}
+
+// Line numbers of the lines that are exactly `text`, or start with it when `prefix` is set.
+static std::vector<size_t> line_numbers(const std::string &gcode, const std::string &text, bool prefix)
+{
+    std::vector<size_t> found;
+    std::istringstream stream(gcode);
+    std::string line;
+    for (size_t number = 0; std::getline(stream, line); ++ number)
+        if (prefix ? line.rfind(text, 0) == 0 : line == text)
+            found.push_back(number);
+    return found;
+}
+
+TEST_CASE("Klipper motion state is saved before the start G-code and restored before the end G-code", "[GCodeWriter][Klipper][RestoreState]")
+{
+    const std::string gcode = slice_cube({
+        { "gcode_flavor",                "klipper" },
+        { "klipper_restore_state",       "1" },
+        { "machine_start_gcode",         ";TEST_START_GCODE" },
+        { "machine_end_gcode",           ";TEST_END_GCODE" },
+        { "layer_height",                "0.2" },
+        { "initial_layer_print_height",  "0.2" },
+        { "machine_max_acceleration_extruding", "20000,20000" },
+        { "machine_max_acceleration_x",  "20000,20000" },
+        { "machine_max_acceleration_y",  "20000,20000" },
+        { "machine_max_jerk_x",          "20,20" },
+        { "machine_max_jerk_y",          "20,20" },
+        { "default_acceleration",        "6000" },
+        { "outer_wall_acceleration",     "3000" },
+        { "travel_acceleration",         "8000" },
+        { "default_jerk",                "8" },
+        { "accel_to_decel_enable",       "1" },
+        { "accel_to_decel_factor",       "50%" },
+        { "enable_pressure_advance",     "1" },
+        { "pressure_advance",            "0.035" },
+    });
+
+    const std::vector<size_t> saves    = line_numbers(gcode, KLIPPER_SAVE_STATE_MACRO, false);
+    const std::vector<size_t> restores = line_numbers(gcode, KLIPPER_RESTORE_STATE_MACRO, false);
+    const std::vector<size_t> starts   = line_numbers(gcode, ";TEST_START_GCODE", false);
+    const std::vector<size_t> ends     = line_numbers(gcode, ";TEST_END_GCODE", false);
+    REQUIRE(saves.size() == 1);
+    REQUIRE(restores.size() == 1);
+    REQUIRE(starts.size() == 1);
+    REQUIRE(ends.size() == 1);
+    CHECK(saves.front() < starts.front());
+    CHECK(starts.front() < restores.front());
+    CHECK(restores.front() < ends.front());
+
+    // Every state the configuration makes the slicer change lies between the save and the restore.
+    std::vector<size_t> state_changes = line_numbers(gcode, "SET_VELOCITY_LIMIT", true);
+    const std::vector<size_t> pressure_advance = line_numbers(gcode, "SET_PRESSURE_ADVANCE", true);
+    REQUIRE_FALSE(state_changes.empty());
+    REQUIRE_FALSE(pressure_advance.empty());
+    CHECK_THAT(gcode, Catch::Matchers::ContainsSubstring("SQUARE_CORNER_VELOCITY=8"));
+    CHECK_THAT(gcode, Catch::Matchers::ContainsSubstring("MINIMUM_CRUISE_RATIO=0.5"));
+    state_changes.insert(state_changes.end(), pressure_advance.begin(), pressure_advance.end());
+    for (const size_t line : state_changes) {
+        CAPTURE(line);
+        CHECK(line > saves.front());
+        CHECK(line < restores.front());
+    }
+}
+
+TEST_CASE("Klipper state macros are called only with klipper_restore_state", "[GCodeWriter][Klipper][RestoreState]")
+{
+    // The option is off by default: existing printer presets produce the G-code they did before.
+    CHECK_FALSE(DynamicPrintConfig::full_print_config().opt_bool("klipper_restore_state"));
+    const std::string gcode = slice_cube({
+        { "gcode_flavor",                "klipper" },
+        { "klipper_restore_state",       "0" },
+        { "enable_pressure_advance",     "1" },
+        { "pressure_advance",            "0.035" },
+    });
+    CHECK_THAT(gcode, Catch::Matchers::ContainsSubstring("SET_PRESSURE_ADVANCE"));
+    CHECK(line_numbers(gcode, KLIPPER_SAVE_STATE_MACRO, true).empty());
+    CHECK(line_numbers(gcode, KLIPPER_RESTORE_STATE_MACRO, true).empty());
+}
+
+TEST_CASE("The shipped Klipper macros define the state macros the G-code calls", "[GCodeWriter][Klipper][RestoreState]")
+{
+    namespace fs = boost::filesystem;
+    const fs::path cfg = fs::path(std::string(TEST_DATA_DIR)) / ".." / ".." / "resources" / "klipper" / "klipslice_state.cfg";
+    REQUIRE(fs::is_regular_file(cfg));
+    fs::ifstream stream(cfg);
+    const std::string text{ std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>() };
+    for (const char *macro : { KLIPPER_SAVE_STATE_MACRO, KLIPPER_RESTORE_STATE_MACRO }) {
+        CAPTURE(macro);
+        CHECK(line_numbers(text, std::string("[gcode_macro ") + macro + "]", false).size() == 1);
+    }
 }
 
 TEST_CASE("Shipped process profiles leave the corner velocity and cruise ratio to Klipper", "[GCodeWriter][Klipper][Profiles]")

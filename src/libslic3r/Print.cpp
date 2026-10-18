@@ -205,6 +205,7 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "retraction_speed",
         "use_firmware_retraction",
         "firmware_owns_retraction",
+        "klipper_restore_state",
         "slow_down_layer_time",
         "standby_temperature_delta",
         "preheat_time",

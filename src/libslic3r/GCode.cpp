@@ -3709,6 +3709,11 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
             file.write(m_writer.set_chamber_temperature(max_chamber_temp, true)); // set chamber_temperature
     }
 
+    // Klipper keeps SET_VELOCITY_LIMIT and SET_PRESSURE_ADVANCE values until it restarts. Record the
+    // limits before the start G-code, so the restore before the end G-code undoes the whole print.
+    if (m_config.klipper_restore_state.value)
+        file.writeln(KLIPPER_SAVE_STATE_MACRO);
+
     // Write the custom start G-code
     file.writeln(machine_start_gcode);
     // Mark the end of the machine start g-code so the GCodeProcessor usage-block builder knows where user
@@ -4029,6 +4034,8 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
                 file.writeln(this->placeholder_parser_process("filament_end_gcode", end_gcode, extruder_id, &config));
             }
         }
+        if (m_config.klipper_restore_state.value)
+            file.writeln(KLIPPER_RESTORE_STATE_MACRO);
         file.writeln(this->placeholder_parser_process("machine_end_gcode", print.config().machine_end_gcode, m_writer.filament()->id(), &config));
     }
 

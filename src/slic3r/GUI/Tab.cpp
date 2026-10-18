@@ -5084,6 +5084,7 @@ void TabPrinter::build_fff()
         optgroup->append_single_option_line("use_relative_e_distances", "printer_basic_information_advanced#use-relative-e-distances");
         optgroup->append_single_option_line("use_firmware_retraction", "printer_basic_information_advanced#use-firmware-retraction");
         optgroup->append_single_option_line("firmware_owns_retraction", "printer_basic_information_advanced#use-firmware-retraction");
+        optgroup->append_single_option_line("klipper_restore_state");
         // optgroup->append_single_option_line("spaghetti_detector");
         optgroup->append_single_option_line("time_cost", "printer_basic_information_advanced#time-cost");
 
