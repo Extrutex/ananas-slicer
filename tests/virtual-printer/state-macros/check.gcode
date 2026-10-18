@@ -19,12 +19,16 @@ _KLIPSLICE_SAVE
 SET_VELOCITY_LIMIT VELOCITY=120 ACCEL=1500 MINIMUM_CRUISE_RATIO=0.2 SQUARE_CORNER_VELOCITY=9
 SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.2 SMOOTH_TIME=0.02
 SET_PRESSURE_ADVANCE EXTRUDER=Belt ADVANCE=0.3 SMOOTH_TIME=0.01
+M140 S60
 M104 S200
 M104 T1 S200
-; A cancelled print: heaters off, limits and printer.cfg pressure advance back
-; on every extruder stepper, the stepper-less extruder1 skipped.
+M106 S255
+; A cancelled print: heaters and part cooling fan off, limits and printer.cfg
+; pressure advance back on every extruder stepper, the stepper-less extruder1
+; skipped.
 CANCEL_PRINT
 _VP_EXPECT_HEATERS_OFF
+_VP_EXPECT_FAN_OFF
 _VP_EXPECT_LIMITS VELOCITY=300 ACCEL=7000 MINIMUM_CRUISE_RATIO=0.5 SQUARE_CORNER_VELOCITY=5
 _VP_EXPECT_PA EXTRUDER=extruder ADVANCE=0.04 SMOOTH_TIME=0.04
 _VP_EXPECT_PA STEPPER=Belt ADVANCE=0.06 SMOOTH_TIME=0.03

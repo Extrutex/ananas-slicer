@@ -103,14 +103,22 @@ compose run --rm --no-deps klipper-batch \
 
 # --- 3. State macros -------------------------------------------------------
 # resources/klipper/klipslice_state.cfg in Klipper batch mode: save, cancel and
-# restore with an extruder without a stepper and an [extruder_stepper]; the
-# check G-code raises a G-code error wherever Klipper's state is not the expected one.
+# restore with an extruder without a stepper and an [extruder_stepper], once
+# with the rig's own CANCEL_PRINT and once with Mainsail's and its cancel hook;
+# the check G-code raises a G-code error wherever Klipper's state is not the
+# expected one.
 log "checking the print state macros in Klipper batch mode"
 macros_rc=0
-compose run --rm --no-deps klipper-batch \
-    --config /vp/state-macros/printer.cfg --gcode /vp/state-macros/check.gcode --dict "$DICT" \
-    --log /out/state-macros.log --summary /out/state-macros.json > /dev/null || macros_rc=$?
-[ -f "$OUT/state-macros.json" ] || die "state macro check produced no result (exit $macros_rc)"
+# config:G-code:result name, all in state-macros/ and out/.
+for route in printer:check:state-macros printer-mainsail:check-mainsail:state-macros-mainsail; do
+    IFS=: read -r cfg check result <<< "$route"
+    rc=0
+    compose run --rm --no-deps klipper-batch \
+        --config "/vp/state-macros/$cfg.cfg" --gcode "/vp/state-macros/$check.gcode" --dict "$DICT" \
+        --log "/out/$result.log" --summary "/out/$result.json" > /dev/null || rc=$?
+    [ -f "$OUT/$result.json" ] || die "state macro check $check.gcode produced no result (exit $rc)"
+    [ "$rc" -eq 0 ] || { log "state macro check $check.gcode failed (exit $rc)"; macros_rc=$rc; }
+done
 
 # --- 4. Moonraker -----------------------------------------------------------
 log "starting virtual Klippy and Moonraker"
@@ -138,7 +146,7 @@ log "report: $OUT/report.md"
 
 status=0
 [ "$klipper_rc" -eq 0 ] || { log "FAIL: Klipper rejected the G-code (exit $klipper_rc)"; status=1; }
-[ "$macros_rc" -eq 0 ] || { log "FAIL: the state macros left Klipper in the wrong state (exit $macros_rc, see out/state-macros.json)"; status=1; }
+[ "$macros_rc" -eq 0 ] || { log "FAIL: the state macros left Klipper in the wrong state (exit $macros_rc, see out/state-macros*.json)"; status=1; }
 [ "$moonraker_rc" -eq 0 ] || { log "FAIL: Moonraker step failed (exit $moonraker_rc)"; status=1; }
 [ "$status" -eq 0 ] && log "PASS"
 exit "$status"

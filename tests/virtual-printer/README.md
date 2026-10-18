@@ -40,9 +40,13 @@ take about 30 seconds.
    printer plus an `[extruder1]` without a stepper and an
    `[extruder_stepper Belt]` with its own pressure advance. It sets per-feature
    values, cancels with and without `_KLIPSLICE_SAVE`, restores twice, and
-   checks after each step that the heaters are off, the velocity limits are
-   back and every extruder stepper has its printer.cfg pressure advance, or
-   that nothing changed when nothing was saved.
+   checks after each step that the heaters and the part cooling fan are off,
+   the velocity limits are back and every extruder stepper has its printer.cfg
+   pressure advance, or that nothing changed when nothing was saved. The same check runs a second time with Mainsail's
+   `CANCEL_PRINT` (`state-macros/check-mainsail.gcode` against
+   `state-macros/printer-mainsail.cfg`, which adds Mainsail's `client.cfg`,
+   copied unchanged as `state-macros/mainsail.cfg`, and the
+   `variable_user_cancel_macro` hook `klipslice_state.cfg` documents for it).
 4. **Moonraker.** A long-running Klippy with the same file-output MCU and its
    API socket open, and Moonraker connected to it. The check uploads the file
    (`/server/files/upload`), reads `/server/files/metadata`, starts the print
@@ -82,7 +86,7 @@ take about 30 seconds.
 | `klippy-constraints.txt`, `moonraker-constraints.txt` | Exact versions of every Python package, transitive ones included. |
 | `docker-compose.yml` | `klipper-batch` (one-shot), `klipper` and `moonraker` (long-running). Internal network, no ports, containers run as the invoking user. |
 | `printer.cfg` | Virtual Voron 2.4 350: CoreXY, four Z motors with quad gantry level, probe, input shaper (MZV 58.0/42.4 Hz), firmware retraction, arcs, exclude_object, virtual_sdcard, pause_resume, display_status. `PRINT_START`/`PRINT_END`/`CANCEL_PRINT` stub macros. |
-| `state-macros/` | Config and G-code of the state macro check (step 3). |
+| `state-macros/` | Configs and G-code of the state macro check (step 3), with the rig's own and with Mainsail's `CANCEL_PRINT`. |
 | `moonraker.conf` | Loopback only, loopback is the only trusted client, no CORS, no system service provider. |
 | `klippy_batch.py` | Runs `klippy.main()` in-process and observes it: log records with levels, which parameters each command handler read, toolhead print time, and the exact print time of marker commands (`--markers`). Klipper's code is not changed. |
 | `check_moonraker.py` | The Moonraker API steps, run inside the moonraker container against `127.0.0.1:7125`. |

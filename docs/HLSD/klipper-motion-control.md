@@ -38,9 +38,25 @@ pressure advance and smooth time of every extruder stepper (the stepper of an
 printer.cfg value. The pressure advance comes from printer.cfg rather than from
 the save, so a print that was cancelled before its restore does not carry its
 value into the next one. The restore does nothing unless `_KLIPSLICE_SAVE` ran
-since the last restore. A cancelled print never reaches the end G-code;
-`CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself, after the original
-`CANCEL_PRINT`, as the file describes.
+since the last restore. A cancelled print never reaches the end G-code, so
+`CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself:
+
+- With Mainsail's or Fluidd's macro file (`mainsail.cfg`, `fluidd.cfg`), set
+  `variable_user_cancel_macro: "_KLIPSLICE_RESTORE"` in
+  `[gcode_macro _CLIENT_VARIABLE]` and do not define a `CANCEL_PRINT` of your
+  own. Klipper merges sections of the same name and the later `gcode` wins, so
+  a second `CANCEL_PRINT` replaces the client's, which also drops its
+  `TURN_OFF_HEATERS`; `CANCEL_PRINT_BASE` (Klipper's own `CANCEL_PRINT`) leaves
+  the heaters on. The client's macro runs the hook after `TURN_OFF_HEATERS` and
+  `M106 S0`, right before `CANCEL_PRINT_BASE`.
+- Without such a file, `CANCEL_PRINT` renames the original and runs
+  `TURN_OFF_HEATERS`, `M107`, `CANCEL_PRINT_BASE` and then `_KLIPSLICE_RESTORE`
+  as the last command, so a G-code error in the restore cannot keep the heaters
+  on or the print running. The virtual printer (`tests/virtual-printer/printer.cfg`)
+  uses exactly this macro.
+
+`tests/virtual-printer/run.sh` checks both routes in Klipper batch mode, the
+first one with Mainsail's `client.cfg` as published.
 
 The slicer cannot see printer.cfg, so it cannot tell whether the macros exist.
 The option is therefore off by default and is enabled together with the

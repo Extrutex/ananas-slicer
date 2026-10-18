@@ -1,0 +1,33 @@
+; State macro check, Mainsail route (run.sh step 3), run in Klipper batch mode
+; against state-macros/printer-mainsail.cfg: Mainsail's CANCEL_PRINT with
+; variable_user_cancel_macro: "_KLIPSLICE_RESTORE" in _CLIENT_VARIABLE. Every
+; _VP_EXPECT_* raises a G-code error, and so fails the check, when Klipper's
+; state is not the expected one.
+
+_VP_EXPECT_CLIENT_CANCEL
+
+; A print with klipper_restore_state, cancelled: Mainsail switches the heaters
+; and the part cooling fan off, the hook restores limits and pressure advance.
+_KLIPSLICE_SAVE
+SET_VELOCITY_LIMIT VELOCITY=120 ACCEL=1500 MINIMUM_CRUISE_RATIO=0.2 SQUARE_CORNER_VELOCITY=9
+SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.2 SMOOTH_TIME=0.02
+SET_PRESSURE_ADVANCE EXTRUDER=Belt ADVANCE=0.3 SMOOTH_TIME=0.01
+M140 S60
+M104 S200
+M104 T1 S200
+M106 S255
+CANCEL_PRINT
+_VP_EXPECT_HEATERS_OFF
+_VP_EXPECT_FAN_OFF
+_VP_EXPECT_LIMITS VELOCITY=300 ACCEL=7000 MINIMUM_CRUISE_RATIO=0.5 SQUARE_CORNER_VELOCITY=5
+_VP_EXPECT_PA EXTRUDER=extruder ADVANCE=0.04 SMOOTH_TIME=0.04
+_VP_EXPECT_PA STEPPER=Belt ADVANCE=0.06 SMOOTH_TIME=0.03
+
+; A print without klipper_restore_state: the hook changes nothing.
+SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.11
+SET_VELOCITY_LIMIT ACCEL=6000
+M104 S200
+CANCEL_PRINT
+_VP_EXPECT_HEATERS_OFF
+_VP_EXPECT_PA EXTRUDER=extruder ADVANCE=0.11 SMOOTH_TIME=0.04
+_VP_EXPECT_LIMITS VELOCITY=300 ACCEL=6000 MINIMUM_CRUISE_RATIO=0.5 SQUARE_CORNER_VELOCITY=5
