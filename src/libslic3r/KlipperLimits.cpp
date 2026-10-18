@@ -68,29 +68,44 @@ size_t indentation(const std::string& line)
     return i;
 }
 
+std::string rtrim(const std::string& s)
+{
+    const auto end = std::find_if(s.rbegin(), s.rend(), [](unsigned char c) { return !std::isspace(c); }).base();
+    return std::string(s.begin(), end);
+}
+
 // configparser.RawConfigParser._read with Klipper's settings. A line indented deeper than the line
-// that started the current option continues that option's value (gcode, gantry corners); a line at
-// the same or a lower indentation starts a new option or section. Blank and comment-only lines
-// neither end a value nor change the indentation it is measured against.
+// that started the current option continues that option's value (gcode, gantry corners): its text is
+// appended on a new line, and the joined value is converted as a whole, as Klipper does. A line at
+// the same or a lower indentation starts a new option or section. Blank lines and the remains of
+// '#' comment lines add an empty line to the value, ';' comment lines nothing; neither ends a value
+// nor changes the indentation it is measured against.
 Sections parse_sections(const std::string& text, std::vector<std::string>& warnings)
 {
     Sections    sections;
     Section*    current      = nullptr;
-    bool        in_option    = false;
+    std::string* value       = nullptr;
     size_t      indent_level = 0;
     std::istringstream in(text);
     std::string raw;
     while (std::getline(in, raw)) {
         if (!raw.empty() && raw.back() == '\r')
             raw.pop_back();
-        raw                    = strip_semicolon_comment(strip_hash_comment(raw));
-        const std::string line = trim(raw);
-        if (line.empty())
+        const std::string uncommented = strip_hash_comment(raw);
+        raw                           = strip_semicolon_comment(uncommented);
+        const std::string line        = trim(raw);
+        if (line.empty()) {
+            if (value != nullptr && raw.size() == uncommented.size())
+                *value += '\n';
             continue;
+        }
         const size_t indent = indentation(raw);
-        if (in_option && indent > indent_level)
-            continue; // Continuation of a multi-line value; none of the limits is one.
+        if (value != nullptr && indent > indent_level) {
+            *value += '\n' + line;
+            continue;
+        }
         indent_level = indent;
+        value        = nullptr;
         if (line.front() == '[') {
             const size_t close = line.find(']');
             if (close == std::string::npos)
@@ -98,19 +113,20 @@ Sections parse_sections(const std::string& text, std::vector<std::string>& warni
             const std::string name = trim(line.substr(1, close - 1));
             if (name.rfind("include ", 0) == 0)
                 warnings.emplace_back("printer.cfg: [" + name + "] is not followed; pass the included file's text too if it holds [printer] or [extruder] limits");
-            current   = &sections[name];
-            in_option = false;
+            current = &sections[name];
             continue;
         }
         const size_t delim = line.find_first_of(":=");
-        if (delim == std::string::npos || current == nullptr) {
-            in_option = false;
+        if (delim == std::string::npos || current == nullptr)
             continue;
-        }
         const std::string key = to_lower(trim(line.substr(0, delim)));
-        (*current)[key]       = trim(line.substr(delim + 1));
-        in_option             = true;
+        value                 = &(*current)[key];
+        *value                = trim(line.substr(delim + 1));
     }
+    // configparser joins the lines and strips trailing whitespace only.
+    for (auto& [name, options] : sections)
+        for (auto& [key, option_value] : options)
+            option_value = rtrim(option_value);
     return sections;
 }
 
@@ -179,8 +195,10 @@ Sections read_printer_cfg(const std::string& text, std::vector<std::string>& war
     return sections;
 }
 
-std::optional<double> parse_number(const std::string& text)
+// Python's float(): surrounding whitespace, newlines of a continued value included, is allowed.
+std::optional<double> parse_number(const std::string& raw)
 {
+    const std::string text = trim(raw);
     if (text.empty())
         return std::nullopt;
     size_t       pos   = 0;

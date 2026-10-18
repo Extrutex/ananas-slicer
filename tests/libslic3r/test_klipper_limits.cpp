@@ -276,6 +276,30 @@ max_adjust: 10
     CHECK_THAT(l.pressure_advance, WithinRel(0.05, 1e-12));
 }
 
+TEST_CASE("printer.cfg continuation lines are part of the value", "[KlipperLimits]")
+{
+    // configparser joins an option's continuation lines into its value with newlines, and Klipper
+    // converts the whole value. Klipper v0.13.0 reads max_accel "\n3000" as 3000 and refuses
+    // "3000\n9000" (could not convert string to float).
+    const std::string head = "[extruder]\nnozzle_diameter: 0.4\nfilament_diameter: 1.75\n"
+                             "[printer]\nkinematics: corexy\nmax_velocity: 300\n";
+    SECTION("the value on the next line")
+    {
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(head + "max_accel:\n  3000\n");
+        CHECK_THAT(result.limits.max_accel, WithinRel(3000.0, 1e-12));
+    }
+    SECTION("blank and comment lines before it")
+    {
+        const KlipperLimitsImport result = parse_klipper_printer_cfg(head + "max_accel:\n\n# comment\n  3000\n");
+        CHECK_THAT(result.limits.max_accel, WithinRel(3000.0, 1e-12));
+    }
+    SECTION("two numbers are not one")
+    {
+        REQUIRE_THROWS_WITH(parse_klipper_printer_cfg(head + "max_accel: 3000\n  9000\n"),
+                            ContainsSubstring("max_accel"));
+    }
+}
+
 TEST_CASE("printer.cfg import refuses what Klipper refuses", "[KlipperLimits]")
 {
     SECTION("no [printer] section") {
