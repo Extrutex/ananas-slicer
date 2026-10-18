@@ -7,6 +7,7 @@
 #include "OBJ.hpp"
 #include "objparser.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <numeric>
@@ -30,36 +31,113 @@ namespace Slic3r {
 
 namespace {
 
-// Splits one OBJ face into triangles, each given as three positions into `corners` and wound like
-// the face. Ear clipping in the face's best-fit plane keeps the triangles of a concave face inside
-// its outline. The search starts at the second corner, so a convex face becomes a fan from its first
-// corner: for a quad that is the first-to-third corner diagonal the loader has always used.
-std::vector<std::array<int, 3>> triangulate_face(const std::vector<Vec3f> &corners)
+// A face that is not convex is ear clipped, at a cost of its corners times its reflex corners. Beyond
+// this many corners such a face is left out rather than stalling the import.
+constexpr size_t MAX_EAR_CLIPPED_FACE_CORNERS = 20000;
+
+enum class FaceSplit { Ok, Degenerate, SelfIntersecting, TooManyCorners };
+
+double cross2(const Vec2d &a, const Vec2d &b) { return a.x() * b.y() - a.y() * b.x(); }
+
+int orientation(const Vec2d &a, const Vec2d &b, const Vec2d &c)
 {
-    const int n = int(corners.size());
-    std::vector<std::array<int, 3>> triangles;
-    std::vector<int>                remaining(n);
-    std::iota(remaining.begin(), remaining.end(), 0);
-    auto fan_remaining = [&triangles, &remaining]() {
-        for (size_t k = 1; k + 1 < remaining.size(); ++k)
-            triangles.push_back({remaining.front(), remaining[k], remaining[k + 1]});
-    };
-    if (n == 3) {
-        fan_remaining();
-        return triangles;
+    const double v = cross2(b - a, c - a);
+    return (v > 0.) - (v < 0.);
+}
+
+// Whether q, collinear with segment ab, lies on it.
+bool on_segment(const Vec2d &a, const Vec2d &b, const Vec2d &q)
+{
+    return q.x() >= std::min(a.x(), b.x()) && q.x() <= std::max(a.x(), b.x()) && q.y() >= std::min(a.y(), b.y()) &&
+           q.y() <= std::max(a.y(), b.y());
+}
+
+// Whether the closed segments ab and cd share a point.
+bool segments_touch(const Vec2d &a, const Vec2d &b, const Vec2d &c, const Vec2d &d)
+{
+    const int o1 = orientation(a, b, c), o2 = orientation(a, b, d), o3 = orientation(c, d, a), o4 = orientation(c, d, b);
+    if (o1 != o2 && o3 != o4)
+        return true;
+    return (o1 == 0 && on_segment(a, b, c)) || (o2 == 0 && on_segment(a, b, d)) || (o3 == 0 && on_segment(c, d, a)) ||
+           (o4 == 0 && on_segment(c, d, b));
+}
+
+// Whether the closed outline crosses or touches itself, or runs straight back along an edge.
+bool outline_self_intersects(const std::vector<Vec2d> &p)
+{
+    const int n = int(p.size());
+    for (int i = 0; i < n; ++i) {
+        const Vec2d &a = p[(i + n - 1) % n], &b = p[i], &c = p[(i + 1) % n];
+        if (orientation(a, b, c) == 0 && (b - a).dot(c - b) < 0.)
+            return true;
+    }
+    // Edge i runs from corner i to corner i + 1. Sorted by their left end, an edge only has to be
+    // compared with the edges that start before its right end.
+    auto min_x = [&p, n](int i) { return std::min(p[i].x(), p[(i + 1) % n].x()); };
+    auto max_x = [&p, n](int i) { return std::max(p[i].x(), p[(i + 1) % n].x()); };
+    std::vector<int> order(n);
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [&min_x](int l, int r) { return min_x(l) < min_x(r); });
+    for (int k = 0; k < n; ++k) {
+        const int    i   = order[k];
+        const double end = max_x(i);
+        for (int l = k + 1; l < n && min_x(order[l]) <= end; ++l) {
+            const int j = order[l];
+            // Neighbouring edges share a corner, which the check above covers.
+            if (j == (i + 1) % n || i == (j + 1) % n)
+                continue;
+            if (segments_touch(p[i], p[(i + 1) % n], p[j], p[(j + 1) % n]))
+                return true;
+        }
+    }
+    return false;
+}
+
+// Splits one OBJ face into triangles, given as positions into `corners` and wound like the face.
+// A triangle is kept as it is. A larger face is split in its best-fit plane, after dropping corners that
+// repeat the one before them: a strictly convex face becomes a fan from its first corner, which for a
+// quad is the first-to-third corner diagonal the loader has always used, and any other face with a
+// simple outline is ear clipped, so its triangles stay inside the outline. A face without area or with
+// an outline that crosses or touches itself has no such split and is rejected, as is a non-convex face
+// with more than MAX_EAR_CLIPPED_FACE_CORNERS corners; `triangles` is then empty.
+FaceSplit triangulate_face(const std::vector<Vec3f> &corners, std::vector<std::array<int, 3>> &triangles)
+{
+    triangles.clear();
+    if (corners.size() == 3) {
+        triangles.push_back({0, 1, 2});
+        return FaceSplit::Ok;
     }
 
+    std::vector<int> ids;
+    ids.reserve(corners.size());
+    for (int i = 0; i < int(corners.size()); ++i)
+        if (ids.empty() || corners[i] != corners[ids.back()])
+            ids.push_back(i);
+    while (ids.size() > 1 && corners[ids.back()] == corners[ids.front()])
+        ids.pop_back();
+    const int n = int(ids.size());
+    if (n < 3)
+        return FaceSplit::Degenerate;
+
     // Newell's normal: the face winds counter-clockwise around it, also when it is not quite planar.
+    // Its length is twice the area of the face.
     Vec3d normal = Vec3d::Zero();
+    Vec3d lo     = corners[ids.front()].cast<double>();
+    Vec3d hi     = lo;
     for (int i = 0; i < n; ++i) {
-        const Vec3d a = corners[i].cast<double>();
-        const Vec3d b = corners[(i + 1) % n].cast<double>();
+        const Vec3d a = corners[ids[i]].cast<double>();
+        const Vec3d b = corners[ids[(i + 1) % n]].cast<double>();
         normal += Vec3d((a.y() - b.y()) * (a.z() + b.z()), (a.z() - b.z()) * (a.x() + b.x()), (a.x() - b.x()) * (a.y() + b.y()));
+        lo = lo.cwiseMin(a);
+        hi = hi.cwiseMax(a);
     }
-    if (normal.squaredNorm() == 0.) {
-        // No area to orient by: keep the fan.
-        fan_remaining();
-        return triangles;
+    // A face whose corners lie on a line, or whose outline encloses as much area clockwise as
+    // counter-clockwise like a bow-tie, has no side to cover.
+    if (!(normal.norm() > 1e-12 * (hi - lo).squaredNorm()))
+        return FaceSplit::Degenerate;
+    if (n == 3) {
+        triangles.push_back({ids[0], ids[1], ids[2]});
+        return FaceSplit::Ok;
     }
     normal.normalize();
     // u x v = normal, so the face is counter-clockwise in (u, v) as well.
@@ -67,44 +145,102 @@ std::vector<std::array<int, 3>> triangulate_face(const std::vector<Vec3f> &corne
     const Vec3d v = normal.cross(u);
     std::vector<Vec2d> p(n);
     for (int i = 0; i < n; ++i) {
-        const Vec3d d = (corners[i] - corners.front()).cast<double>();
+        const Vec3d d = (corners[ids[i]] - corners[ids.front()]).cast<double>();
         p[i]          = Vec2d(d.dot(u), d.dot(v));
     }
-    auto cross = [&p](int a, int b, int c) {
-        const Vec2d ab = p[b] - p[a];
-        const Vec2d ac = p[c] - p[a];
-        return ab.x() * ac.y() - ab.y() * ac.x();
-    };
 
-    while (remaining.size() > 3) {
-        const size_t m       = remaining.size();
-        bool         clipped = false;
-        for (size_t k = 1; k <= m && !clipped; ++k) {
-            const size_t ear = k % m;
-            const int    a   = remaining[(ear + m - 1) % m];
-            const int    b   = remaining[ear];
-            const int    c   = remaining[(ear + 1) % m];
-            // A reflex or straight corner is no ear.
-            if (cross(a, b, c) <= 0.)
-                continue;
-            bool empty = true;
-            for (int q : remaining)
-                if (q != a && q != b && q != c && cross(a, b, q) >= 0. && cross(b, c, q) >= 0. && cross(c, a, q) >= 0.) {
-                    empty = false;
-                    break;
-                }
-            if (!empty)
-                continue;
-            triangles.push_back({a, b, c});
-            remaining.erase(remaining.begin() + ear);
-            clipped = true;
-        }
-        // A self-intersecting outline can run out of ears: fan what is left rather than drop it.
-        if (!clipped)
-            break;
+    // Left turns only, adding up to a single full turn, make a convex outline; a star polygon turns
+    // left only as well, but twice around.
+    bool   strictly_convex = true;
+    double turning         = 0.;
+    for (int i = 0; i < n && strictly_convex; ++i) {
+        const Vec2d  e0 = p[i] - p[(i + n - 1) % n];
+        const Vec2d  e1 = p[(i + 1) % n] - p[i];
+        const double c  = cross2(e0, e1);
+        strictly_convex = c > 0.;
+        turning += std::atan2(c, e0.dot(e1));
     }
-    fan_remaining();
-    return triangles;
+    if (strictly_convex && turning < 3. * M_PI) {
+        for (int k = 1; k + 1 < n; ++k)
+            triangles.push_back({ids[0], ids[k], ids[k + 1]});
+        return FaceSplit::Ok;
+    }
+    if (size_t(n) > MAX_EAR_CLIPPED_FACE_CORNERS)
+        return FaceSplit::TooManyCorners;
+    if (outline_self_intersects(p))
+        return FaceSplit::SelfIntersecting;
+
+    // Ear clipping as in Eberly, "Triangulation by Ear Clipping". A corner is an ear when it is strictly
+    // convex and its triangle holds no other corner; in a simple outline it is enough to look for the
+    // reflex and straight ones. Clipping an ear changes only the triangles of its two neighbours, and a
+    // corner only ever turns from reflex to convex, so the ear flags of all other corners stay valid.
+    std::vector<int> prev(n), next(n);
+    for (int i = 0; i < n; ++i) {
+        prev[i] = (i + n - 1) % n;
+        next[i] = (i + 1) % n;
+    }
+    auto cross = [&p](int a, int b, int c) { return cross2(p[b] - p[a], p[c] - p[a]); };
+    // The reflex and straight corners, and where each one sits in that list.
+    std::vector<int> reflex;
+    std::vector<int> reflex_slot(n, -1);
+    for (int i = 0; i < n; ++i)
+        if (cross(prev[i], i, next[i]) <= 0.) {
+            reflex_slot[i] = int(reflex.size());
+            reflex.push_back(i);
+        }
+    auto drop_reflex = [&reflex, &reflex_slot](int i) {
+        const int slot    = reflex_slot[i];
+        const int last    = reflex.back();
+        reflex[slot]      = last;
+        reflex_slot[last] = slot;
+        reflex.pop_back();
+        reflex_slot[i] = -1;
+    };
+    auto is_ear = [&](int i) {
+        if (reflex_slot[i] >= 0)
+            return false;
+        const int a = prev[i], c = next[i];
+        for (int q : reflex)
+            if (q != a && q != c && cross(a, i, q) >= 0. && cross(i, c, q) >= 0. && cross(c, a, q) >= 0.)
+                return false;
+        return true;
+    };
+    std::vector<char> ear(n);
+    std::vector<int>  ears;
+    for (int i = n - 1; i >= 0; --i)
+        if ((ear[i] = is_ear(i)))
+            ears.push_back(i);
+
+    triangles.reserve(n - 2);
+    int last = 0;
+    for (int remaining = n; remaining > 3; --remaining) {
+        int i = -1;
+        while (!ears.empty() && i < 0) {
+            i = ears.back();
+            ears.pop_back();
+            if (!ear[i])
+                i = -1;
+        }
+        // Only rounding in a nearly degenerate outline can leave a simple polygon without ears.
+        if (i < 0) {
+            triangles.clear();
+            return FaceSplit::Degenerate;
+        }
+        const int a = prev[i], c = next[i];
+        triangles.push_back({ids[a], ids[i], ids[c]});
+        ear[i]  = false;
+        next[a] = c;
+        prev[c] = a;
+        for (int k : {a, c}) {
+            if (reflex_slot[k] >= 0 && cross(prev[k], k, next[k]) > 0.)
+                drop_reflex(k);
+            if ((ear[k] = is_ear(k)))
+                ears.push_back(k);
+        }
+        last = c;
+    }
+    triangles.push_back({ids[prev[last]], ids[last], ids[next[last]]});
+    return FaceSplit::Ok;
 }
 
 } // namespace
@@ -195,6 +331,12 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
     std::vector<int>   indices;
     std::vector<int>   uvs;
     std::vector<Vec3f> corners;
+    std::vector<std::array<int, 3>> triangles;
+    // Triangles the faces read so far count for in the material spans.
+    size_t mtl_face_index              = 0;
+    size_t num_degenerate_faces        = 0;
+    size_t num_self_intersecting_faces = 0;
+    size_t num_oversized_faces         = 0;
     for (size_t i = 0; i < data.vertices.size();)
         if (data.vertices[i].coordIdx == -1)
             ++ i;
@@ -260,13 +402,15 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
                         }
                     }
                 };
-                auto set_face_color_by_mtl = [&data, &set_face_color](int face_index, const std::array<int, 3> &corners) {
+                // The material spans count n - 2 triangles for a face of n corners, also for a face that
+                // is rejected or splits into fewer, so they are looked up by that count.
+                auto set_face_color_by_mtl = [&data, &set_face_color](int face_index, int span_index, const std::array<int, 3> &corners) {
                     if (data.usemtls.size() == 1) {
                         set_face_color(face_index, data.usemtls[0].name, corners);
                     } else {
                         for (size_t k = 0; k < data.usemtls.size(); k++) {
                             auto mtl = data.usemtls[k];
-                            if (face_index >= mtl.face_start && face_index <= mtl.face_end) {
+                            if (span_index >= mtl.face_start && span_index <= mtl.face_end) {
                                 set_face_color(face_index, data.usemtls[k].name, corners);
                                 break;
                             }
@@ -276,13 +420,28 @@ bool load_obj(const char *path, TriangleMesh *meshptr, ObjInfo& obj_info, std::s
                 corners.clear();
                 for (int index : indices)
                     corners.push_back(its.vertices[index]);
-                for (const std::array<int, 3> &triangle : triangulate_face(corners)) {
+                switch (triangulate_face(corners, triangles)) {
+                case FaceSplit::Ok: break;
+                case FaceSplit::Degenerate: ++num_degenerate_faces; break;
+                case FaceSplit::SelfIntersecting: ++num_self_intersecting_faces; break;
+                case FaceSplit::TooManyCorners: ++num_oversized_faces; break;
+                }
+                for (size_t k = 0; k < triangles.size(); ++k) {
+                    const std::array<int, 3> &triangle = triangles[k];
                     its.indices.emplace_back(indices[triangle[0]], indices[triangle[1]], indices[triangle[2]]);
                     if (exist_mtl)
-                        set_face_color_by_mtl(int(its.indices.size()) - 1, triangle);
+                        set_face_color_by_mtl(int(its.indices.size()) - 1, int(mtl_face_index + k), triangle);
                 }
+                mtl_face_index += indices.size() - 2;
             }
         }
+
+    obj_info.rejected_faces = num_degenerate_faces + num_self_intersecting_faces + num_oversized_faces;
+    if (obj_info.rejected_faces > 0)
+        BOOST_LOG_TRIVIAL(warning) << "load_obj: " << path << ": left out " << obj_info.rejected_faces
+                                   << " faces that cannot be split into triangles: " << num_degenerate_faces << " without area, "
+                                   << num_self_intersecting_faces << " with a self-intersecting outline, " << num_oversized_faces
+                                   << " not convex and with more than " << MAX_EAR_CLIPPED_FACE_CORNERS << " corners.";
 
     *meshptr = TriangleMesh(std::move(its));
     if (meshptr->empty()) {

@@ -5,6 +5,9 @@
 
 #include <boost/nowide/fstream.hpp>
 
+#include <chrono>
+#include <cmath>
+
 #include "test_utils.hpp"
 
 using namespace Slic3r;
@@ -66,7 +69,7 @@ LoadedObj load_flat_face(const std::vector<Vec2f> &corners)
 
 // A flat face is covered exactly when no triangle faces down and the triangle areas add up to the
 // face area: a triangle outside the outline is either flipped or makes the sum too large.
-void check_covers_flat_face(const indexed_triangle_set &its, double face_area)
+void check_covers_flat_face(const indexed_triangle_set &its, double face_area, double tolerance = 1e-3)
 {
     double area = 0.;
     for (const stl_triangle_vertex_indices &face : its.indices) {
@@ -76,7 +79,7 @@ void check_covers_flat_face(const indexed_triangle_set &its, double face_area)
         CHECK(n.z() > 0.f);
         area += 0.5 * n.norm();
     }
-    CHECK_THAT(area, WithinAbs(face_area, 1e-3));
+    CHECK_THAT(area, WithinAbs(face_area, tolerance));
 }
 
 // A tetrahedron with a material and two texture coordinates, (0.25, 0.5) and (0.75, 1).
@@ -92,6 +95,40 @@ void check_uv_is_vt(const Vec2f &uv, int vt)
 {
     CHECK_THAT(uv.x(), WithinAbs(vt / 10., 1e-6));
     CHECK_THAT(uv.y(), WithinAbs(vt / 20., 1e-6));
+}
+
+// The corners of a star in the z = 0 plane, counter-clockwise, alternating between radius 100 and 50.
+std::vector<Vec2f> star_corners(int num_corners)
+{
+    std::vector<Vec2f> corners;
+    for (int i = 0; i < num_corners; ++i) {
+        const double r = i % 2 == 0 ? 100. : 50.;
+        corners.emplace_back(float(r * std::cos(2. * M_PI * i / num_corners)), float(r * std::sin(2. * M_PI * i / num_corners)));
+    }
+    return corners;
+}
+
+// The area of a polygon given by its corners, positive when they run counter-clockwise.
+double signed_area(const std::vector<Vec2f> &corners)
+{
+    double area = 0.;
+    for (size_t i = 0; i < corners.size(); ++i) {
+        const Vec2d a = corners[i].cast<double>(), b = corners[(i + 1) % corners.size()].cast<double>();
+        area += 0.5 * (a.x() * b.y() - a.y() * b.x());
+    }
+    return area;
+}
+
+// Loads a triangle followed by a second face, so the file still has a mesh when that face is left out.
+LoadedObj load_triangle_and_face(const std::vector<Vec2f> &corners)
+{
+    std::string body = "v 0 0 -10\nv 10 0 -10\nv 0 10 -10\n";
+    for (const Vec2f &c : corners)
+        body += "v " + std::to_string(c.x()) + " " + std::to_string(c.y()) + " 0\n";
+    body += "f 1 2 3\nf";
+    for (size_t i = 1; i <= corners.size(); ++i)
+        body += " " + std::to_string(i + 3);
+    return load_plain_obj(body + "\n");
 }
 
 } // namespace
@@ -259,4 +296,147 @@ TEST_CASE("A convex quad keeps its first-to-third corner diagonal", "[OBJ]")
     REQUIRE(its.indices.size() == 2);
     CHECK(its.indices[0] == stl_triangle_vertex_indices(0, 1, 2));
     CHECK(its.indices[1] == stl_triangle_vertex_indices(0, 2, 3));
+}
+
+TEST_CASE("A bow-tie face is left out instead of split into overlapping triangles", "[OBJ][Regression]")
+{
+    // Its two halves wind opposite ways, so it encloses no area to cover.
+    const LoadedObj loaded = load_triangle_and_face({{0, 0}, {2, 2}, {0, 2}, {2, 0}});
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 1);
+    CHECK(loaded.info.rejected_faces == 1);
+}
+
+TEST_CASE("A face whose outline crosses itself is left out", "[OBJ][Regression]")
+{
+    const auto outline = GENERATE(
+        // A figure eight with one loop larger than the other, so it still has a net area.
+        std::vector<Vec2f>{{0, 0}, {4, 4}, {4, 0}, {0, 4}, {-1, 2}},
+        // A pentagram turns left at every corner, but twice around.
+        std::vector<Vec2f>{{10, 0}, {-8.09017f, 5.87785f}, {3.09017f, -9.51057f}, {3.09017f, 9.51057f}, {-8.09017f, -5.87785f}},
+        // Two corners at the same place, so the outline touches itself.
+        std::vector<Vec2f>{{0, 0}, {10, 0}, {5, 5}, {10, 10}, {0, 10}, {5, 5}});
+    CAPTURE(outline);
+    const LoadedObj loaded = load_triangle_and_face(outline);
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 1);
+    CHECK(loaded.info.rejected_faces == 1);
+}
+
+TEST_CASE("A face with all corners on a line is left out", "[OBJ]")
+{
+    const LoadedObj loaded = load_triangle_and_face({{0, 0}, {1, 1}, {2, 2}, {3, 3}});
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 1);
+    CHECK(loaded.info.rejected_faces == 1);
+}
+
+TEST_CASE("A corner repeating the one before it is dropped", "[OBJ]")
+{
+    const auto outline = GENERATE(std::vector<Vec2f>{{0, 0}, {10, 0}, {10, 0}, {10, 10}, {0, 10}},
+                                  std::vector<Vec2f>{{0, 0}, {10, 0}, {10, 10}, {0, 10}, {0, 0}});
+    CAPTURE(outline);
+    const LoadedObj loaded = load_flat_face(outline);
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 2);
+    CHECK(loaded.info.rejected_faces == 0);
+    check_covers_flat_face(loaded.mesh.its, 100.);
+}
+
+TEST_CASE("A face with straight corners splits into triangles that all have area", "[OBJ]")
+{
+    // The first one is straight, so a fan from it would hold a triangle without area.
+    const LoadedObj loaded = load_flat_face({{5, 0}, {10, 0}, {10, 10}, {5, 10}, {0, 10}, {0, 0}});
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 4);
+    CHECK(loaded.info.rejected_faces == 0);
+    check_covers_flat_face(loaded.mesh.its, 100.);
+}
+
+TEST_CASE("A concave face with many corners is covered by triangles wound like it", "[OBJ]")
+{
+    const std::vector<Vec2f> corners = star_corners(24);
+    const LoadedObj          loaded  = load_flat_face(corners);
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == corners.size() - 2);
+    check_covers_flat_face(loaded.mesh.its, signed_area(corners));
+}
+
+TEST_CASE("A convex face with ten thousand corners is split quickly", "[OBJ]")
+{
+    std::vector<Vec2f> corners;
+    for (int i = 0; i < 10000; ++i)
+        corners.emplace_back(float(100. * std::cos(2. * M_PI * i / 10000)), float(100. * std::sin(2. * M_PI * i / 10000)));
+    const auto      start   = std::chrono::steady_clock::now();
+    const LoadedObj loaded  = load_flat_face(corners);
+    const double    seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == corners.size() - 2);
+    // The corners are written with six decimals, which moves the area by a few square micrometres.
+    check_covers_flat_face(loaded.mesh.its, signed_area(corners), 1e-6 * signed_area(corners));
+    // Generous for slow machines; a cubic ear search takes minutes here.
+    CHECK(seconds < 10.);
+}
+
+TEST_CASE("A concave face with ten thousand corners is split in reasonable time", "[OBJ]")
+{
+    const std::vector<Vec2f> corners = star_corners(10000);
+    const auto               start   = std::chrono::steady_clock::now();
+    const LoadedObj          loaded  = load_flat_face(corners);
+    const double             seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == corners.size() - 2);
+    CHECK(loaded.info.rejected_faces == 0);
+    check_covers_flat_face(loaded.mesh.its, signed_area(corners), 1e-6 * signed_area(corners));
+    CHECK(seconds < 20.);
+}
+
+TEST_CASE("A non-convex face with more corners than can be ear clipped is left out", "[OBJ]")
+{
+    // The parser reads lines of up to 64 KiB, too short for 20001 distinct corner indices, so the face
+    // goes 6667 times around one triangle: left turns only, but not convex.
+    std::string body = "v 0 0 -10\nv 10 0 -10\nv 0 10 -10\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\nf";
+    for (int i = 0; i < 6667; ++i)
+        body += " 4 5 6";
+    const auto      start   = std::chrono::steady_clock::now();
+    const LoadedObj loaded  = load_plain_obj(body + "\n");
+    const double    seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.mesh.facets_count() == 1);
+    CHECK(loaded.info.rejected_faces == 1);
+    CHECK(seconds < 10.);
+}
+
+TEST_CASE("A face after a left-out face keeps its own material", "[OBJ][Regression]")
+{
+    ScopedTemporaryFile obj(".obj");
+    ScopedTemporaryFile mtl(".mtl");
+    {
+        boost::nowide::ofstream out(mtl.string());
+        out << "newmtl a\nKd 1 0 0\nnewmtl b\nKd 0 0 1\n";
+    }
+    {
+        boost::nowide::ofstream out(obj.string());
+        out << "mtllib " << mtl.path().filename().string() << "\n"
+            << "v 0 0 0\nv 2 2 0\nv 0 2 0\nv 2 0 0\nv 0 0 5\nv 1 0 5\nv 0 1 5\n"
+            << "usemtl a\nf 1 2 3 4\nusemtl b\nf 5 6 7\n";
+    }
+    LoadedObj   loaded;
+    std::string message;
+    loaded.ok = load_obj(obj.string().c_str(), &loaded.mesh, loaded.info, message);
+
+    REQUIRE(loaded.ok);
+    CHECK(loaded.info.rejected_faces == 1);
+    REQUIRE(loaded.mesh.facets_count() == 1);
+    REQUIRE(loaded.info.face_colors.size() == 1);
+    CHECK(loaded.info.face_colors[0][2] > loaded.info.face_colors[0][0]);
 }
