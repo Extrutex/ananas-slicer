@@ -30,6 +30,7 @@ add_executable(${_TEST_NAME}_tests
     test_plugin_json_depth.cpp
     test_shortcuts.cpp
     test_file_url.cpp
+    test_sequential_clearance.cpp
     ../fff_print/test_helpers.cpp
     )
 
