@@ -87,8 +87,8 @@ take about 30 seconds.
 - State macros: as for Klipper; every expectation in `check.gcode` is a macro
   that raises a G-code error when it does not hold.
 - Moonraker: Klippy ready; upload accepted and the print started or queued by
-  Moonraker; metadata has a slicer and a non-zero
-  `estimated_time`; the file carries thumbnail blocks and the metadata lists
+  Moonraker; metadata names the slicer `ANANAS SLICER` with a version and has
+  a non-zero `estimated_time` and `filament_total`; the file carries thumbnail blocks and the metadata lists
   one thumbnail per block (plus the 32x32 miniature Moonraker scales down
   when the file has none), each served from `.thumbs` as a PNG of its
   size; `exclude_object.objects` during the print equals the
