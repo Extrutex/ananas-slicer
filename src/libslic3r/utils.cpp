@@ -725,10 +725,13 @@ std::error_code rename_file(const std::string &from, const std::string &to)
 #endif
 }
 
-static std::error_code write_whole_file(const std::string &path, std::initializer_list<std::string_view> chunks, bool binary)
+// opened, if given, tells whether the file could be created at all, as opposed to failing while it was written.
+static std::error_code write_whole_file(const std::string &path, std::initializer_list<std::string_view> chunks, bool binary, bool *opened = nullptr)
 {
 	errno = 0;
 	FILE *file = boost::nowide::fopen(path.c_str(), binary ? "wb" : "w");
+	if (opened != nullptr)
+		*opened = file != nullptr;
 	if (file == nullptr)
 		return std::make_error_code(errno != 0 ? static_cast<std::errc>(errno) : std::errc::io_error);
 	bool ok = true;
@@ -772,9 +775,13 @@ std::error_code write_file_atomically(const std::string &path, std::initializer_
 	// without a lock never share a temporary.
 	static std::atomic<unsigned> counter{0};
 	const std::string tmp_path = path + "." + std::to_string(get_current_pid()) + "." + std::to_string(counter++) + ".tmp";
-	if (const std::error_code ec = write_whole_file(tmp_path, chunks, binary)) {
+	bool tmp_opened = false;
+	if (const std::error_code ec = write_whole_file(tmp_path, chunks, binary, &tmp_opened)) {
 		boost::nowide::remove(tmp_path.c_str());
-		if (! target_exists)
+		// Only a temporary that could not be created falls back to writing in place. One that failed
+		// while it was written (a full disk, a file size limit) would fail the same way in place, after
+		// the target had been truncated: the old file is kept instead.
+		if (! target_exists || tmp_opened)
 			return ec;
 		// A directory that lets this process write its files but not create
 		// one: losing the save is worse than a reader seeing a partial file.

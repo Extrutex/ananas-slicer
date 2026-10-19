@@ -15,6 +15,8 @@
 
 #ifndef _WIN32
 #include <unistd.h>     // getuid
+#include <sys/resource.h> // setrlimit
+#include <csignal>
 #endif
 
 using namespace Slic3r;
@@ -111,6 +113,37 @@ TEST_CASE("write_file_atomically writes in place when no temporary can be create
     std::string content;
     load_string_file(target, content);
     REQUIRE(content == "second");
+}
+#endif
+
+#ifndef _WIN32
+// A temporary that is created but cannot be written in full (here: past the file size limit, as on a
+// full disk) must not make the save fall back to truncating the target and writing it in place.
+TEST_CASE("write_file_atomically keeps the target when the temporary cannot be written in full", "[utils]") {
+    ScopedTemporaryDir dir;
+    const boost::filesystem::path target = dir.path() / "preset.json";
+    REQUIRE_FALSE(write_file_atomically(target.string(), "old"));
+
+    struct rlimit saved {};
+    REQUIRE(::getrlimit(RLIMIT_FSIZE, &saved) == 0);
+    struct rlimit limited = saved;
+    limited.rlim_cur      = 64;
+    if (saved.rlim_max != RLIM_INFINITY && saved.rlim_max < limited.rlim_cur)
+        SKIP("the hard file size limit is below the test's limit");
+    // Writing past the limit raises SIGXFSZ, which would end the process; ignored, write() fails with EFBIG.
+    void (*previous_handler)(int) = std::signal(SIGXFSZ, SIG_IGN);
+    REQUIRE(::setrlimit(RLIMIT_FSIZE, &limited) == 0);
+    const std::error_code ec = write_file_atomically(target.string(), std::string(4096, 'x'));
+    // Restored before any assertion.
+    ::setrlimit(RLIMIT_FSIZE, &saved);
+    std::signal(SIGXFSZ, previous_handler);
+
+    CHECK(ec);
+    std::string content;
+    load_string_file(target, content);
+    CHECK(content == "old");
+    for (const auto &entry : boost::filesystem::directory_iterator(dir.path()))
+        CHECK(entry.path().filename() == "preset.json");
 }
 #endif
 
