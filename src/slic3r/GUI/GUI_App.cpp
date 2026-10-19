@@ -330,7 +330,7 @@ public:
         m_fg_color          = wxColour("#8B99A4"); // alu-300
         m_version_color     = wxColour("#B4C0C9"); // alu-200
         m_progress_bg_color = wxColour("#262F37"); // line
-        m_progress_fg_color = wxColour("#4DB9FF"); // signal-path
+        m_progress_fg_color = wxColour("#F2B705"); // logo yellow (provisional logo, draft A)
         wxSize sz  = m_window->GetClientSize();
         BitmapCache bmp_cache;
         if (wxBitmap* bmp = bmp_cache.load_svg("AnanasSlicer_splash", 0, sz.GetHeight()))

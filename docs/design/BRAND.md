@@ -1,6 +1,6 @@
 # ANANAS SLICER — Brand & Design Foundation
 
-Status: design foundation, working title **ANANAS SLICER**. Tokens: `docs/design/tokens.css`,
+Status: design foundation for **ANANAS SLICER**. Tokens: `docs/design/tokens.css`,
 `docs/design/tailwind.tokens.js`. Reference components: `docs/design/preview/`.
 
 ## 0. Positioning
@@ -37,6 +37,12 @@ imagery.
 | **Deterministic** | Every visual state has exactly one meaning and a text label. No state is communicated by colour or icon alone. |
 
 ### 1.2 Logotype concepts
+
+The app ships a provisional logo until the final one is chosen: draft A "Schicht" (a pineapple
+cut into four printed layers, carbon `#10161B`, pineapple yellow `#F2B705`, crown green
+`#2E9E5B`) in `resources/images/AnanasSlicer*.svg`. Those SVG files are the source; the raster
+icons (PNG, ICO, ICNS) are generated from `AnanasSlicer.svg` by `scripts/brand/build_icons.py`.
+The concepts below were drawn for the product's earlier name and are kept as references.
 
 All three are set in caps from the UI family (Inter SemiBold) or the data family
 (IBM Plex Mono Medium) so the logotype needs no custom font licence. `cap` = cap height.
