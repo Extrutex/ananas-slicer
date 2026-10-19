@@ -1933,20 +1933,26 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
         if (auto layers = generate_object_layers(print_object.slicing_parameters(), layer_height_profile(print_object_idx), print_object.config().precise_z_height.value);
             !layers.empty()) {
 
-            Vec3d test =this->shrinkage_compensation();
+            // The object layers start above the raft, and they already carry the Z shrinkage compensation.
+            const double raft_z                   = print_object.slicing_parameters().object_print_z_min;
+            const double max_z                    = raft_z + layers.back();
+            const double printable_height         = this->config().printable_height;
             const double shrinkage_compensation_z = this->shrinkage_compensation().z();
-            
-            if (shrinkage_compensation_z != 1. && layers.back() > (this->config().printable_height / shrinkage_compensation_z + EPSILON)) {
+
+            if (shrinkage_compensation_z != 1. && max_z > printable_height + EPSILON &&
+                print_object.slicing_parameters().object_print_z_uncompensated_max <= printable_height + EPSILON) {
                 // The object exceeds the maximum build volume height because of shrinkage compensation.
                 return StringObjectException{
                     Slic3r::format(_u8L("While the object %1% itself fits the build volume, it exceeds the maximum build volume height because of material shrinkage compensation."), print_object.model_object()->name),
                     print_object.model_object(),
                     ""
                 };
-            } else if (layers.back() > this->config().printable_height + EPSILON) {
+            } else if (max_z > printable_height + EPSILON) {
                 // Test whether the last slicing plane is below or above the print volume.
+                const bool last_layer_below_max = layers.size() >= 2 &&
+                    raft_z + 0.5 * (layers[layers.size() - 2] + layers.back()) <= printable_height + EPSILON;
                 return StringObjectException{
-                    0.5 * (layers[layers.size() - 2] + layers.back()) > this->config().printable_height + EPSILON ?
+                    ! last_layer_below_max ?
                     Slic3r::format(_u8L("The object %1% exceeds the maximum build volume height."), print_object.model_object()->name) :
                     Slic3r::format(_u8L("While the object %1% itself fits the build volume, its last layer exceeds the maximum build volume height."), print_object.model_object()->name) +
                     " " + _u8L("You might want to reduce the size of your model or change current print settings and retry."),
