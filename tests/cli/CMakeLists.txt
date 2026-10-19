@@ -18,6 +18,15 @@ set_tests_properties(cli_wall_geometry PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 900)
 
+# Reads only the G-code, so it runs on macOS too; skipped on a Linux host without a display.
+add_test(NAME cli_gcode_thumbnails
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_gcode_thumbnails.sh $<TARGET_FILE:OrcaSlicer> ${ORCA_CLI_TEST_PYTHON}
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(cli_gcode_thumbnails PROPERTIES
+    LABELS "CLI;RequiresApp"
+    SKIP_RETURN_CODE 77
+    TIMEOUT 300)
+
 # The tests below read result.json, which the CLI writes on Linux only.
 if (APPLE)
     return()

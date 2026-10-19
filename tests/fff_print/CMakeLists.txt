@@ -23,6 +23,8 @@ add_executable(${_TEST_NAME}_tests
 	test_skirt_brim.cpp
 	test_slicing_pipeline_hook.cpp
 	test_support_material.cpp
+	# G-code thumbnail blocks (Base64 PNG) as Moonraker extracts them.
+	test_thumbnails.cpp
 	test_tree_support.cpp
 	test_trianglemesh.cpp
 	# Wall widths, volumes and positions measured against the rounded-rectangle bead model.

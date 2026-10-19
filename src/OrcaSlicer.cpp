@@ -532,6 +532,213 @@ static void glfw_callback(int error_code, const char* description)
     BOOST_LOG_TRIVIAL(error) << "error_code " <<error_code <<", description: " <<description<< std::endl;
 }
 
+// Extruder colours for the CLI thumbnail renderer, one per filament_colour entry.
+static std::vector<ColorRGBA> cli_thumbnail_colors(const ConfigOptionStrings* filament_color)
+{
+    std::vector<std::string> colors;
+    if (filament_color)
+        colors = filament_color->vserialize();
+    else
+        colors.push_back("#FFFFFFFF");
+
+    std::vector<ColorRGBA> colors_out(colors.size());
+    unsigned char rgb_color[4] = {};
+    for (size_t color_idx = 0; color_idx < colors.size(); ++color_idx) {
+        Slic3r::GUI::BitmapCache::parse_color4(colors[color_idx], rgb_color);
+        colors_out[color_idx] = ColorRGBA(float(rgb_color[0]) / 255.f, float(rgb_color[1]) / 255.f, float(rgb_color[2]) / 255.f, float(rgb_color[3]) / 255.f);
+    }
+    return colors_out;
+}
+
+// Initialises GLFW and makes the OpenGL context of a hidden window current, so the CLI can render
+// thumbnails off screen. Returns nullptr when no context is available (no display, no driver);
+// the caller then exports without thumbnails.
+static GLFWwindow* create_cli_thumbnail_gl_window()
+{
+    int glfw_major, glfw_minor, glfw_revision;
+    glfwGetVersion(&glfw_major, &glfw_minor, &glfw_revision);
+    BOOST_LOG_TRIVIAL(info) << boost::format("GLFW version %1%.%2%.%3%") % glfw_major % glfw_minor % glfw_revision;
+
+    glfwSetErrorCallback(glfw_callback);
+    // A command line run must not turn into a regular macOS application with menu bar and Dock icon.
+    glfwInitHint(GLFW_COCOA_MENUBAR, GLFW_FALSE);
+    if (glfwInit() == GLFW_FALSE) {
+        const char* error_msg = nullptr;
+        int code = glfwGetError(&error_msg);
+        BOOST_LOG_TRIVIAL(error) << "glfwInit return error, Error code: " << code << ", Error: " << (error_msg ? error_msg : "") << std::endl;
+        return nullptr;
+    }
+    BOOST_LOG_TRIVIAL(info) << "glfwInit Success."<< std::endl;
+    // Request OrcaSlicer's minimum OpenGL version, independently of the GLFW library version.
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_RED_BITS, 8);
+    glfwWindowHint(GLFW_GREEN_BITS, 8);
+    glfwWindowHint(GLFW_BLUE_BITS, 8);
+    glfwWindowHint(GLFW_ALPHA_BITS, 8);
+    glfwWindowHint(GLFW_VISIBLE, false);
+#ifdef __WXMAC__
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#else
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
+#endif
+
+    GLFWwindow* window = glfwCreateWindow(640, 480, "base_window", NULL, NULL);
+#ifndef __WXMAC__
+    if (window == NULL) {
+        // Some drivers (e.g. older Mesa) only expose compatibility profile 3.0; take whatever they offer.
+        BOOST_LOG_TRIVIAL(warning) << "Failed to create OpenGL 3.3 compatibility context, retrying with driver default" << std::endl;
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 1);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
+        window = glfwCreateWindow(640, 480, "base_window", NULL, NULL);
+    }
+#endif
+    if (window == NULL) {
+        BOOST_LOG_TRIVIAL(error) << "Failed to create GLFW window; skipping thumbnail rendering for CLI export" << std::endl;
+        return nullptr;
+    }
+    glfwMakeContextCurrent(window);
+    return window;
+}
+
+// Loads every volume instance of the model into the collection the thumbnail renderer draws,
+// coloured with the filament of its extruder.
+static void load_cli_thumbnail_volumes(const Model& model, const ConfigOptionStrings* filament_color, GLVolumeCollection& glvolume_collection)
+{
+    int obj_extruder_id = 1, volume_extruder_id = 1;
+    for (unsigned int obj_idx = 0; obj_idx < (unsigned int)model.objects.size(); ++ obj_idx) {
+        const ModelObject &model_object = *model.objects[obj_idx];
+        const ConfigOption* option = model_object.config.option("extruder");
+        if (option)
+            obj_extruder_id = (dynamic_cast<const ConfigOptionInt *>(option))->getInt();
+        else
+            obj_extruder_id = 1;
+        for (int volume_idx = 0; volume_idx < (int)model_object.volumes.size(); ++ volume_idx) {
+            const ModelVolume &model_volume = *model_object.volumes[volume_idx];
+            option = model_volume.config.option("extruder");
+            if (option)
+                volume_extruder_id = (dynamic_cast<const ConfigOptionInt *>(option))->getInt();
+            else
+                volume_extruder_id = obj_extruder_id;
+
+            BOOST_LOG_TRIVIAL(debug) << boost::format("volume %1%'s extruder_id %2%")%volume_idx %volume_extruder_id;
+            for (int instance_idx = 0; instance_idx < (int)model_object.instances.size(); ++ instance_idx) {
+                const ModelInstance &model_instance = *model_object.instances[instance_idx];
+                glvolume_collection.load_object_volume(&model_object, obj_idx, volume_idx, instance_idx, "volume", true, false, true);
+                std::string color = filament_color?filament_color->get_at(volume_extruder_id - 1):"#00FF00FF";
+
+                BOOST_LOG_TRIVIAL(debug) << boost::format("volume %1%'s color %2%")%volume_idx %color;
+
+                unsigned char  rgb_color[4] = {};
+                Slic3r::GUI::BitmapCache::parse_color4(color, rgb_color);
+
+                ColorRGBA new_color;
+                new_color.r(float(rgb_color[0]) / 255.f);
+                new_color.g(float(rgb_color[1]) / 255.f);
+                new_color.b(float(rgb_color[2]) / 255.f);
+                new_color.a(float(rgb_color[3]) / 255.f);
+
+                glvolume_collection.volumes.back()->set_render_color(new_color);
+                glvolume_collection.volumes.back()->set_color(new_color);
+                glvolume_collection.volumes.back()->printable = model_instance.printable;
+            }
+        }
+    }
+}
+
+// Renders the G-code thumbnails of a CLI slice (the "thumbnails" setting) the way the GUI does,
+// in an off-screen framebuffer. The OpenGL context is created on the first request, so a profile
+// without thumbnails never touches OpenGL; without a context the G-code is exported without them.
+class CliGCodeThumbnailRenderer
+{
+public:
+    CliGCodeThumbnailRenderer(Model& model, Slic3r::GUI::PartPlateList& plates, const ConfigOptionStrings* filament_color)
+        : m_model(model), m_plates(plates), m_filament_color(filament_color) {}
+    CliGCodeThumbnailRenderer(const CliGCodeThumbnailRenderer&) = delete;
+    CliGCodeThumbnailRenderer& operator=(const CliGCodeThumbnailRenderer&) = delete;
+    ~CliGCodeThumbnailRenderer() { release(); }
+
+    ThumbnailsList render(const ThumbnailsParams& params)
+    {
+        ThumbnailsList thumbnails;
+        if (!init())
+            return thumbnails;
+        for (const Vec2d& size : params.sizes) {
+            const Point isize(size); // round to ints
+            if (isize.x() <= 0 || isize.y() <= 0)
+                continue;
+            ThumbnailData data;
+            switch (Slic3r::GUI::OpenGLManager::get_framebuffers_type()) {
+            case Slic3r::GUI::OpenGLManager::EFramebufferType::Arb:
+                Slic3r::GUI::GLCanvas3D::render_thumbnail_framebuffer(data, isize.x(), isize.y(), params, m_plates, m_model.objects,
+                                                                      m_volumes, m_colors, m_shader, Slic3r::GUI::Camera::EType::Ortho);
+                break;
+            case Slic3r::GUI::OpenGLManager::EFramebufferType::Ext:
+                Slic3r::GUI::GLCanvas3D::render_thumbnail_framebuffer_ext(data, isize.x(), isize.y(), params, m_plates, m_model.objects,
+                                                                          m_volumes, m_colors, m_shader, Slic3r::GUI::Camera::EType::Ortho);
+                break;
+            default:
+                BOOST_LOG_TRIVIAL(warning) << "G-code thumbnail: no off-screen framebuffer support, skipping " << isize.x() << "x" << isize.y();
+                break;
+            }
+            if (data.is_valid())
+                thumbnails.push_back(std::move(data));
+        }
+        return thumbnails;
+    }
+
+    // Frees the GPU resources and the context; GLFW is terminated so a later 3MF thumbnail pass starts clean.
+    void release()
+    {
+        if (m_window == nullptr)
+            return;
+        glfwMakeContextCurrent(m_window);
+        m_volumes.clear();
+        m_opengl.reset();
+        glfwDestroyWindow(m_window);
+        m_window = nullptr;
+        glfwTerminate();
+    }
+
+private:
+    bool init()
+    {
+        if (m_state != State::Idle)
+            return m_state == State::Ready;
+        m_state = State::Failed;
+        m_window = create_cli_thumbnail_gl_window();
+        if (m_window == nullptr) {
+            BOOST_LOG_TRIVIAL(warning) << "No OpenGL context for the CLI; the G-code is exported without thumbnails";
+            glfwTerminate();
+            return false;
+        }
+        m_opengl = std::make_unique<Slic3r::GUI::OpenGLManager>();
+        if (!m_opengl->init_gl(false) || (m_shader = m_opengl->get_shader("thumbnail")) == nullptr) {
+            BOOST_LOG_TRIVIAL(error) << "Unable to initialise OpenGL for the G-code thumbnails; exporting without them";
+            release();
+            return false;
+        }
+        m_colors = cli_thumbnail_colors(m_filament_color);
+        load_cli_thumbnail_volumes(m_model, m_filament_color, m_volumes);
+        m_state = State::Ready;
+        return true;
+    }
+
+    enum class State { Idle, Ready, Failed };
+
+    Model&                                       m_model;
+    Slic3r::GUI::PartPlateList&                  m_plates;
+    const ConfigOptionStrings*                   m_filament_color;
+    State                                        m_state{State::Idle};
+    GLFWwindow*                                  m_window{nullptr};
+    std::unique_ptr<Slic3r::GUI::OpenGLManager>  m_opengl;
+    GLShaderProgram*                             m_shader{nullptr};
+    GLVolumeCollection                           m_volumes;
+    std::vector<ColorRGBA>                       m_colors;
+};
+
 const float bed3d_ax3s_default_stem_radius = 0.5f;
 const float bed3d_ax3s_default_stem_length = 25.0f;
 const float bed3d_ax3s_default_tip_radius = 2.5f * bed3d_ax3s_default_stem_radius;
@@ -6215,6 +6422,9 @@ int CLI::run(int argc, char **argv)
                 std::string outfile;
                 //Print       fff_print;
                 std::vector<size_t> plate_triangle_counts(partplate_list.get_plate_count(), 0);
+                // Renders the "thumbnails" sizes into the G-code like a GUI export; lives for this model's plates.
+                CliGCodeThumbnailRenderer gcode_thumbnails(model, partplate_list,
+                                                           dynamic_cast<const ConfigOptionStrings*>(m_print_config.option("filament_colour")));
 
                 // The stored (or default) tower position may not fit the tower these plates
                 // need, and no CLI placement site runs on a plain slice - mirror the GUI's
@@ -6897,7 +7107,8 @@ int CLI::run(int argc, char **argv)
                                     }
                                     BOOST_LOG_TRIVIAL(info) << "process finished, will export gcode temporarily to " << outfile << std::endl;
                                     temp_time = (long long)Slic3r::Utils::get_current_time_utc();
-                                    outfile = print_fff->export_gcode(outfile, gcode_result, nullptr);
+                                    outfile = print_fff->export_gcode(outfile, gcode_result,
+                                                                      [&gcode_thumbnails](const ThumbnailsParams& params) { return gcode_thumbnails.render(params); });
                                     time_using_cache = time_using_cache + ((long long)Slic3r::Utils::get_current_time_utc() - temp_time);
                                     BOOST_LOG_TRIVIAL(info) << "export_gcode finished: time_using_cache update to " << time_using_cache << " secs.";
                                     if (gcode_result && gcode_result->gcode_check_result.error_code) {
@@ -7184,72 +7395,9 @@ int CLI::run(int argc, char **argv)
         }
 
         if (need_regenerate_thumbnail || need_regenerate_no_light_thumbnail || need_regenerate_top_thumbnail) {
-            std::vector<std::string> colors;
-            if (filament_color) {
-                colors= filament_color->vserialize();
-            }
-            else
-                colors.push_back("#FFFFFFFF");
+            std::vector<ColorRGBA> colors_out = cli_thumbnail_colors(filament_color);
 
-            std::vector<ColorRGBA> colors_out(colors.size());
-            unsigned char rgb_color[4] = {};
-            for (const std::string& color : colors) {
-                Slic3r::GUI::BitmapCache::parse_color4(color, rgb_color);
-                size_t color_idx = &color - &colors.front();
-                colors_out[color_idx] = ColorRGBA(float(rgb_color[0]) / 255.f, float(rgb_color[1]) / 255.f, float(rgb_color[2]) / 255.f, float(rgb_color[3]) / 255.f);
-            }
-
-            int glfw_major, glfw_minor, glfw_revision;
-            glfwGetVersion(&glfw_major, &glfw_minor, &glfw_revision);
-            BOOST_LOG_TRIVIAL(info) << boost::format("GLFW version %1%.%2%.%3%") % glfw_major % glfw_minor % glfw_revision;
-
-            bool thumbnail_opengl_ready = false;
-            glfwSetErrorCallback(glfw_callback);
-            int ret = glfwInit();
-            if (ret == GLFW_FALSE) {
-                const char* error_msg;
-                int code = glfwGetError(&error_msg);
-                BOOST_LOG_TRIVIAL(error) << "glfwInit return error, Error code: " << code << ", Error: " << error_msg << std::endl;
-            }
-            else {
-                BOOST_LOG_TRIVIAL(info) << "glfwInit Success."<< std::endl;
-                // Request OrcaSlicer's minimum OpenGL version, independently of the GLFW library version.
-                glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-                glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-                glfwWindowHint(GLFW_RED_BITS, 8);
-                glfwWindowHint(GLFW_GREEN_BITS, 8);
-                glfwWindowHint(GLFW_BLUE_BITS, 8);
-                glfwWindowHint(GLFW_ALPHA_BITS, 8);
-                glfwWindowHint(GLFW_VISIBLE, false);
-                //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-                //glfwDisable(GLFW_AUTO_POLL_EVENTS);
-#ifdef __WXMAC__
-                glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-                glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#else
-                glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
-#endif
-
-                GLFWwindow* window = glfwCreateWindow(640, 480, "base_window", NULL, NULL);
-#ifndef __WXMAC__
-                if (window == NULL) {
-                    // Some drivers (e.g. older Mesa) only expose compatibility profile 3.0; take whatever they offer.
-                    BOOST_LOG_TRIVIAL(warning) << "Failed to create OpenGL 3.3 compatibility context, retrying with driver default" << std::endl;
-                    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 1);
-                    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-                    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
-                    window = glfwCreateWindow(640, 480, "base_window", NULL, NULL);
-                }
-#endif
-                if (window == NULL)
-                {
-                    BOOST_LOG_TRIVIAL(error) << "Failed to create GLFW window; skipping thumbnail rendering for CLI export" << std::endl;
-                }
-                else {
-                    glfwMakeContextCurrent(window);
-                    thumbnail_opengl_ready = true;
-                }
-            }
+            bool thumbnail_opengl_ready = create_cli_thumbnail_gl_window() != nullptr;
 
             //opengl manager related logic
             if (!thumbnail_opengl_ready) {
@@ -7269,48 +7417,7 @@ int CLI::run(int argc, char **argv)
                     BOOST_LOG_TRIVIAL(info) << "gladLoadGL Success." << std::endl;
                     GLVolumeCollection glvolume_collection;
                     Model &model = m_models[0];
-                    int obj_extruder_id = 1, volume_extruder_id = 1;
-                    for (unsigned int obj_idx = 0; obj_idx < (unsigned int)model.objects.size(); ++ obj_idx) {
-                        const ModelObject &model_object = *model.objects[obj_idx];
-                        const ConfigOption* option = model_object.config.option("extruder");
-                        if (option)
-                            obj_extruder_id = (dynamic_cast<const ConfigOptionInt *>(option))->getInt();
-                        else
-                            obj_extruder_id = 1;
-                        for (int volume_idx = 0; volume_idx < (int)model_object.volumes.size(); ++ volume_idx) {
-                            const ModelVolume &model_volume = *model_object.volumes[volume_idx];
-                            option = model_volume.config.option("extruder");
-                            if (option)
-                                volume_extruder_id = (dynamic_cast<const ConfigOptionInt *>(option))->getInt();
-                            else
-                                volume_extruder_id = obj_extruder_id;
-
-                            BOOST_LOG_TRIVIAL(debug) << boost::format("volume %1%'s extruder_id %2%")%volume_idx %volume_extruder_id;
-                            //if (!model_volume.is_model_part())
-                            //    continue;
-                            for (int instance_idx = 0; instance_idx < (int)model_object.instances.size(); ++ instance_idx) {
-                                const ModelInstance &model_instance = *model_object.instances[instance_idx];
-                                glvolume_collection.load_object_volume(&model_object, obj_idx, volume_idx, instance_idx, "volume", true, false, true);
-                                //glvolume_collection.volumes.back()->geometry_id = key.geometry_id;
-                                std::string color = filament_color?filament_color->get_at(volume_extruder_id - 1):"#00FF00FF";
-
-                                BOOST_LOG_TRIVIAL(debug) << boost::format("volume %1%'s color %2%")%volume_idx %color;
-
-                                unsigned char  rgb_color[4] = {};
-                                Slic3r::GUI::BitmapCache::parse_color4(color, rgb_color);
-
-                                ColorRGBA new_color;
-                                new_color.r(float(rgb_color[0]) / 255.f);
-                                new_color.g(float(rgb_color[1]) / 255.f);
-                                new_color.b(float(rgb_color[2]) / 255.f);
-                                new_color.a(float(rgb_color[3]) / 255.f);
-
-                                glvolume_collection.volumes.back()->set_render_color(new_color);
-                                glvolume_collection.volumes.back()->set_color(new_color);
-                                glvolume_collection.volumes.back()->printable = model_instance.printable;
-                            }
-                        }
-                    }
+                    load_cli_thumbnail_volumes(model, filament_color, glvolume_collection);
 
                     ThumbnailsParams thumbnail_params;
                     GLShaderProgram* shader = opengl_mgr.get_shader("thumbnail");
