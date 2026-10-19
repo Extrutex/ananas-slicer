@@ -1,6 +1,7 @@
 get_filename_component(_TEST_NAME ${CMAKE_CURRENT_LIST_DIR} NAME)
 add_executable(${_TEST_NAME}_tests
     ${_TEST_NAME}_tests_main.cpp
+    test_config_value_formatter.cpp
     test_filament_bitmap_utils.cpp
     test_scene_raycaster.cpp
     test_lazy.cpp
