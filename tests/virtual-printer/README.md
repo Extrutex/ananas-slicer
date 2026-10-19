@@ -88,7 +88,10 @@ take about 30 seconds.
   that raises a G-code error when it does not hold.
 - Moonraker: Klippy ready; upload accepted and the print started or queued by
   Moonraker; metadata has a slicer and a non-zero
-  `estimated_time`; `exclude_object.objects` during the print equals the
+  `estimated_time`; the file carries thumbnail blocks and the metadata lists
+  one thumbnail per block (plus the 32x32 miniature Moonraker scales down
+  when the file has none), each served from `.thumbs` as a PNG of its
+  size; `exclude_object.objects` during the print equals the
   file's `EXCLUDE_OBJECT_DEFINE` names; `print_stats` ends `complete`; no
   error or unknown-command response in the G-code store during the print.
 - Cancel: the print is `printing` and its loop advances the toolhead's print
@@ -110,7 +113,7 @@ take about 30 seconds.
   not from a list.
 - Klipper's own motion time for the printed part, and the first-layer time,
   next to the slicer's estimates.
-- Moonraker metadata fields, thumbnails, `print_stats.info`, Klipper config
+- Moonraker metadata fields, `print_stats.info`, Klipper config
   warnings. Every API response is kept in `out/moonraker.json`.
 
 ## How the parts fit

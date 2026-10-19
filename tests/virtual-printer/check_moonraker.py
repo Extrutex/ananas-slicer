@@ -13,6 +13,9 @@ Moonraker's only trusted client and no port is published). Steps:
    objects the file defines, print_stats must end "complete", and no G-code
    response may report an error or unknown command.
 3. GET /server/files/metadata: slicer, estimated_time, thumbnails, layers.
+   Every "; thumbnail begin WxH LEN" block of the file must come back as a
+   thumbnail of that size (plus the 32x32 miniature Moonraker scales down when
+   the file has none), and its file under .thumbs must be a PNG of WxH.
 
 Writes every API response used to a JSON file. Exit status: 0 pass, 1 fail,
 2 usage.
@@ -22,6 +25,7 @@ import argparse
 import json
 import os
 import re
+import struct
 import sys
 import time
 import urllib.error
@@ -90,6 +94,60 @@ def wait_for(description, timeout_s, poll):
         if time.monotonic() >= deadline:
             raise ApiError("timed out after %ds waiting for %s" % (timeout_s, description))
         time.sleep(0.5)
+
+
+def fetch(path):
+    """GET a file from Moonraker's file routes and return the raw bytes."""
+    url = BASE_URL + urllib.parse.quote(path)
+    try:
+        with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT_S) as resp:
+            return resp.read()
+    except urllib.error.HTTPError as exc:
+        raise ApiError("GET %s -> HTTP %d" % (path, exc.code)) from exc
+    except urllib.error.URLError as exc:
+        raise ApiError("GET %s -> %s" % (path, exc.reason)) from exc
+
+
+def thumbnail_sizes(gcode_path):
+    """(width, height) of every PNG thumbnail block the file carries, in file order."""
+    pattern = re.compile(r"^; thumbnail begin (\d+)x(\d+) \d+$")
+    sizes = []
+    with open(gcode_path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            match = pattern.match(line)
+            if match is not None:
+                sizes.append((int(match.group(1)), int(match.group(2))))
+    return sizes
+
+
+def check_thumbnails(meta, remote_name, gcode_path, fail):
+    """The thumbnails Moonraker extracted on upload match the file's blocks and are PNGs of that size."""
+    expected = thumbnail_sizes(gcode_path)
+    if not expected:
+        fail("G-code carries no thumbnail block")
+        return
+    thumbs = meta.get("thumbnails") or []
+    reported = [(t.get("width"), t.get("height")) for t in thumbs]
+    # Moonraker adds a 32x32 miniature, scaled from the largest thumbnail, when the file has none.
+    allowed = expected + ([] if (32, 32) in expected else [(32, 32)])
+    missing = [size for size in expected if size not in reported]
+    extra = [size for size in reported if size not in allowed]
+    if missing or extra or len(reported) != len(set(reported)):
+        fail("metadata thumbnails %s do not match the thumbnail blocks %s" % (reported, expected))
+    base = os.path.dirname(remote_name)
+    for t in thumbs:
+        rel = t.get("relative_path")
+        if not rel:
+            fail("metadata thumbnail %sx%s has no relative_path" % (t.get("width"), t.get("height")))
+            continue
+        png = fetch("/server/files/gcodes/" + os.path.join(base, rel))
+        if png[:8] != b"\x89PNG\r\n\x1a\n" or png[12:16] != b"IHDR":
+            fail("thumbnail %s is not a PNG" % rel)
+            continue
+        size = struct.unpack(">II", png[16:24])
+        if size != (t.get("width"), t.get("height")):
+            fail("thumbnail %s is %dx%d, metadata says %sx%s"
+                 % (rel, size[0], size[1], t.get("width"), t.get("height")))
 
 
 def defined_objects(gcode_path):
@@ -174,6 +232,7 @@ def main():
             fail("metadata: no slicer detected")
         if not meta.get("estimated_time"):
             fail("metadata: estimated_time missing or zero")
+        check_thumbnails(meta, args.remote_name, args.gcode, fail)
 
         def poll_done():
             status = request("GET", "/printer/objects/query", query)["result"]["status"]
