@@ -326,6 +326,48 @@ const std::string& data_dir()
     return g_data_dir;
 }
 
+LegacyDataDirCopy copy_legacy_data_dir(const std::string &legacy_dir, const std::string &legacy_key,
+                                       const std::string &data_dir, const std::string &new_key)
+{
+    namespace fs = boost::filesystem;
+    boost::system::error_code ec;
+    const fs::path source(legacy_dir);
+    const fs::path target(data_dir);
+    // symlink_status: a dangling symlink at the target still counts as an existing data directory.
+    if (fs::exists(fs::symlink_status(target, ec)) || !fs::is_directory(source, ec))
+        return LegacyDataDirCopy::NotNeeded;
+
+    const fs::path temp = fs::unique_path(target.string() + ".copy-%%%%-%%%%", ec);
+    if (ec)
+        return LegacyDataDirCopy::Failed;
+    try {
+        fs::create_directories(temp);
+        for (fs::recursive_directory_iterator it(source), end; it != end; ++it) {
+            const fs::path  rel  = fs::relative(it->path(), source);
+            const fs::path  dest = temp / rel;
+            const fs::file_status st = it->symlink_status();
+            if (fs::is_symlink(st))
+                fs::copy_symlink(it->path(), dest);
+            else if (fs::is_directory(st))
+                fs::create_directory(dest);
+            else if (fs::is_regular_file(st))
+                fs::copy_file(it->path(), dest);
+        }
+        for (fs::directory_iterator it(temp), end; it != end; ++it) {
+            const std::string name = it->path().filename().string();
+            if (fs::is_regular_file(it->symlink_status()) && boost::starts_with(name, legacy_key))
+                fs::rename(it->path(), temp / (new_key + name.substr(legacy_key.size())));
+        }
+        fs::rename(temp, target);
+    } catch (const std::exception &ex) {
+        BOOST_LOG_TRIVIAL(error) << "copy_legacy_data_dir: copying " << source << " to " << target << " failed: " << ex.what();
+        fs::remove_all(temp, ec);
+        return LegacyDataDirCopy::Failed;
+    }
+    BOOST_LOG_TRIVIAL(info) << "copy_legacy_data_dir: copied " << source << " to " << target;
+    return LegacyDataDirCopy::Copied;
+}
+
 std::string custom_shapes_dir()
 {
     return (boost::filesystem::path(g_data_dir) / "shapes").string();

@@ -1315,6 +1315,8 @@ void GUI_App::init_app_config()
                 std::string data_dir = wxStandardPaths::Get().GetUserDataDir().ToUTF8().data();
                 //BBS create folder if not exists
                 data_dir_path = boost::filesystem::path(data_dir);
+                copy_legacy_data_dir((data_dir_path.parent_path() / SLIC3R_LEGACY_APP_KEY).string(), SLIC3R_LEGACY_APP_KEY,
+                                     data_dir, SLIC3R_APP_KEY);
                 set_data_dir(data_dir);
             #else
                 // Since version 2.3, config dir on Linux is in ${XDG_CONFIG_HOME}.
@@ -1323,6 +1325,8 @@ void GUI_App::init_app_config()
                 if (! wxGetEnv(wxS("XDG_CONFIG_HOME"), &dir) || dir.empty() )
                     dir = wxFileName::GetHomeDir() + wxS("/.config");
                 data_dir_path = boost::filesystem::path((dir + "/" + GetAppName()).ToUTF8().data());
+                copy_legacy_data_dir((data_dir_path.parent_path() / SLIC3R_LEGACY_APP_KEY).string(), SLIC3R_LEGACY_APP_KEY,
+                                     data_dir_path.string(), SLIC3R_APP_KEY);
                 set_data_dir(data_dir_path.string());
             #endif
             if (!boost::filesystem::exists(data_dir_path)){

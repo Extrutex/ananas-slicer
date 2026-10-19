@@ -12,6 +12,10 @@ print host, and printer profiles only for machines that verifiably run Klipper.
 > ANANAS SLICER is an independent project and is not affiliated with or
 > endorsed by the Klipper project.
 
+> ANANAS SLICER was called KLIPSLICE until October 2026. On its first start it
+> copies the KLIPSLICE settings directory (presets, printers, `KLIPSLICE.conf`)
+> to its own; the KLIPSLICE directory itself is left untouched.
+
 ## Why a Klipper-only slicer
 
 Klipper executes the limits the G-code sets. Since April 2021 `SET_VELOCITY_LIMIT`

@@ -528,3 +528,74 @@ TEST_CASE("is_safe_to_open_file_name rejects programs and anything it does not k
     INFO(unsafe);
     CHECK_FALSE(is_safe_to_open_file_name(unsafe));
 }
+
+TEST_CASE("copy_legacy_data_dir copies the data directory of the previous app key once", "[utils]") {
+    namespace fs = boost::filesystem;
+    ScopedTemporaryDir root("datadir");
+    const fs::path legacy  = root.path() / "KLIPSLICE";
+    const fs::path current = root.path() / "AnanasSlicer";
+    const auto write = [](const fs::path &p, const std::string &text) {
+        fs::create_directories(p.parent_path());
+        std::ofstream(p.string()) << text;
+    };
+    const auto read = [](const fs::path &p) {
+        std::ifstream in(p.string());
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+
+    SECTION("nothing to copy without a legacy directory") {
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::NotNeeded);
+        CHECK_FALSE(fs::exists(current));
+    }
+
+    write(legacy / "KLIPSLICE.conf", "{\"app\":1}");
+    write(legacy / "KLIPSLICEGcodeViewer.conf", "viewer");
+    write(legacy / "user" / "default" / "filament" / "My PLA.json", "pla");
+    write(legacy / "user" / "KLIPSLICE.conf", "nested");
+
+    SECTION("copies everything and renames the top-level files of the old key") {
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
+        CHECK(read(current / "AnanasSlicerGcodeViewer.conf") == "viewer");
+        CHECK(read(current / "user" / "default" / "filament" / "My PLA.json") == "pla");
+        // Only the top-level files carry the app key; nested files keep their names.
+        CHECK(read(current / "user" / "KLIPSLICE.conf") == "nested");
+        CHECK_FALSE(fs::exists(current / "KLIPSLICE.conf"));
+        // The legacy directory stays as it was.
+        CHECK(read(legacy / "KLIPSLICE.conf") == "{\"app\":1}");
+        CHECK(read(legacy / "user" / "default" / "filament" / "My PLA.json") == "pla");
+        // No temporary copy is left next to the data directory.
+        size_t entries = 0;
+        for (fs::directory_iterator it(root.path()), end; it != end; ++it)
+            ++entries;
+        CHECK(entries == 2);
+
+        SECTION("a second start leaves the new directory alone") {
+            write(current / "AnanasSlicer.conf", "changed");
+            CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::NotNeeded);
+            CHECK(read(current / "AnanasSlicer.conf") == "changed");
+        }
+    }
+
+    SECTION("an existing data directory is never overwritten") {
+        fs::create_directories(current);
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::NotNeeded);
+        CHECK(fs::is_empty(current));
+    }
+
+#ifndef _WIN32
+    SECTION("a failed copy leaves no data directory behind") {
+        if (geteuid() == 0)
+            SKIP("root reads files without read permission");
+        const fs::path unreadable = legacy / "user" / "KLIPSLICE.conf";
+        fs::permissions(unreadable, fs::no_perms);
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Failed);
+        fs::permissions(unreadable, fs::owner_read | fs::owner_write);
+        CHECK_FALSE(fs::exists(current));
+        size_t entries = 0;
+        for (fs::directory_iterator it(root.path()), end; it != end; ++it)
+            ++entries;
+        CHECK(entries == 1);
+    }
+#endif
+}
