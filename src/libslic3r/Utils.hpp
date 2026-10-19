@@ -197,8 +197,9 @@ enum class LegacyDataDirCopy { NotNeeded, Copied, Failed };
 // First start under a new app key: copies the data directory of the previous key (legacy_dir) to
 // data_dir and renames its top-level files named after legacy_key (legacy_key.conf, ...) to new_key.
 // The copy is assembled in a temporary sibling of data_dir unique to the process, gets the marker
-// ".migrated-from-<legacy_key>" as its last file and is renamed into place, so only a finished copy
-// ever becomes data_dir. A data_dir holding the marker or any other content is never touched; an empty
+// ".migrated-from-<legacy_key>" as its last file (a file of that name in legacy_dir is not copied) and
+// is renamed into place, so only a finished copy ever becomes data_dir; on POSIX everything is flushed
+// to disk before the marker and the rename. A data_dir holding the marker or any other content is never touched; an empty
 // one is replaced. When another instance moved its finished copy into place first, that one is kept
 // (NotNeeded). legacy_dir is only read. Symbolic links are copied as links (on Windows left out and
 // named in message), permissions are kept with write access added for the owner, and the regenerated
@@ -212,13 +213,14 @@ std::vector<std::string> legacy_data_dir_candidates(const std::string &data_dir,
                                                     const std::string &home, bool flatpak);
 // The data directory for a GUI start: copies the first existing legacy directory with
 // copy_legacy_data_dir() and returns data_dir; message then names links left out, if any. When the copy
-// fails it returns a new temporary directory instead (owner-only access, marked with the process id),
-// sets message to the reason, and leaves data_dir uncreated so the next start tries again.
+// fails it returns a new session directory next to data_dir instead (owner-only access, marked with the
+// process id), sets message to the reason, and leaves data_dir uncreated so the next start tries again.
+// Throws when not even the session directory can be created.
 std::string start_data_dir(const std::vector<std::string> &legacy_dirs, const std::string &legacy_key,
                            const std::string &data_dir, const std::string &new_key, std::string &message);
-// Removes the temporary data directories of start_data_dir() whose process is gone (a session that
-// ended without OnExit()).
-void remove_orphaned_session_dirs(const std::string &new_key);
+// Removes the session directories of start_data_dir() next to data_dir whose process is gone (a session
+// that ended without OnExit()). Only directories carrying a marker of this user's are touched.
+void remove_orphaned_session_dirs(const std::string &data_dir, const std::string &new_key);
 
 // BBL: true: succeed create or dir exists; false: fail to create
 bool makedir(const std::string path);

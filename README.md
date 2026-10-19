@@ -19,6 +19,10 @@ print host, and printer profiles only for machines that verifiably run Klipper.
 > the old app id. If the copy fails, the app says why, runs that session on
 > temporary settings and tries again on the next start. On Windows, links inside
 > the old directory are not copied; the app names them after the start.
+> The copy only runs while the ANANAS SLICER settings directory does not exist
+> or is empty; once it holds anything (your own settings, or files you copied by
+> hand) it is never overwritten. To run the copy again, quit the app and rename
+> or empty that directory (`AnanasSlicer` next to `KLIPSLICE`).
 
 ## Why a Klipper-only slicer
 

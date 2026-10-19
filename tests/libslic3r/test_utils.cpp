@@ -17,6 +17,7 @@
 #ifndef _WIN32
 #include <unistd.h>     // getuid
 #include <sys/resource.h> // setrlimit
+#include <sys/stat.h>     // mkfifo
 #include <csignal>
 #endif
 
@@ -658,6 +659,15 @@ TEST_CASE("copy_legacy_data_dir copies the data directory of the previous app ke
         CHECK(read(outside / "external.json") == "external");
     }
 
+    SECTION("a marker name in the old directory is neither copied nor followed") {
+        const fs::path outside = root.path() / "outside.txt";
+        write(outside, "keep");
+        fs::create_symlink(outside, legacy / ".migrated-from-KLIPSLICE");
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK(read(outside) == "keep");
+        CHECK(fs::is_regular_file(fs::symlink_status(current / ".migrated-from-KLIPSLICE")));
+    }
+
     SECTION("permissions are kept, plus write access for the owner") {
         const fs::path script = legacy / "user" / "post.sh";
         write(script, "#!/bin/sh");
@@ -751,7 +761,8 @@ TEST_CASE("start_data_dir keeps the data directory uncreated while the copy fail
         const std::string session = start_data_dir({ legacy.string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error);
         fs::permissions(unreadable, fs::owner_read | fs::owner_write);
         CHECK(session != current.string());
-        // Created at once and private: it holds this session's settings and logs.
+        // Created at once next to the data directory, in the user's own area, and private.
+        CHECK(fs::path(session).parent_path() == current.parent_path());
         REQUIRE(fs::is_directory(session));
         CHECK((fs::status(session).permissions() & fs::perms_mask) == fs::owner_all);
         fs::remove_all(session);
@@ -767,22 +778,39 @@ TEST_CASE("start_data_dir keeps the data directory uncreated while the copy fail
 
 TEST_CASE("remove_orphaned_session_dirs removes only marked directories of ended processes", "[utils]") {
     namespace fs = boost::filesystem;
-    const std::string key  = "AnanasSlicerTest" + fs::unique_path("%%%%%%").string();
-    const fs::path    base = fs::temp_directory_path();
+    ScopedTemporaryDir root("sessions");
+    const std::string data_dir = (root.path() / "AnanasSlicer").string();
     const auto make = [&](const std::string &suffix, const std::string &pid) {
-        const fs::path dir = base / (key + "-session-" + suffix);
+        const fs::path dir = root.path() / ("AnanasSlicer-session-" + suffix);
         fs::create_directories(dir);
         if (!pid.empty())
-            std::ofstream((dir / (".session-of-" + key)).string()) << pid << "\n";
+            std::ofstream((dir / ".session-of-AnanasSlicer").string()) << pid << "\n";
         return dir;
     };
     const fs::path ended    = make("ended", "999999");
     const fs::path running  = make("running", std::to_string(get_current_pid()));
     const fs::path unmarked = make("unmarked", "");
-    remove_orphaned_session_dirs(key);
+#ifndef _WIN32
+    // remove_all removes a link inside an ended session, never what it points to.
+    const fs::path outside = root.path() / "outside";
+    fs::create_directories(outside);
+    std::ofstream((outside / "keep.txt").string()) << "keep";
+    fs::create_symlink(outside, ended / "link");
+    // A FIFO under the marker name must neither hang the start nor count as a marker.
+    const fs::path fifo = make("fifo", "");
+    REQUIRE(::mkfifo((fifo / ".session-of-AnanasSlicer").c_str(), 0600) == 0);
+    // Neither does a link under the marker name.
+    const fs::path linked = make("linked", "");
+    std::ofstream((root.path() / "pid.txt").string()) << "999999\n";
+    fs::create_symlink(root.path() / "pid.txt", linked / ".session-of-AnanasSlicer");
+#endif
+    remove_orphaned_session_dirs(data_dir, "AnanasSlicer");
     CHECK_FALSE(fs::exists(ended));
     CHECK(fs::exists(running));
     CHECK(fs::exists(unmarked));
-    fs::remove_all(running);
-    fs::remove_all(unmarked);
+#ifndef _WIN32
+    CHECK(fs::exists(outside / "keep.txt"));
+    CHECK(fs::exists(fifo));
+    CHECK(fs::exists(linked));
+#endif
 }

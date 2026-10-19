@@ -1326,7 +1326,7 @@ void GUI_App::init_app_config()
             // First start after the rename: take over the KLIPSLICE data directory. When the copy fails,
             // this session runs on a temporary directory and the real one is not created, so the next
             // start tries again; post_init tells the user.
-            remove_orphaned_session_dirs(SLIC3R_APP_KEY);
+            remove_orphaned_session_dirs(data_dir_path.string(), SLIC3R_APP_KEY);
             wxString flatpak_id;
             const bool flatpak = wxGetEnv(wxS("FLATPAK_ID"), &flatpak_id) && !flatpak_id.empty();
             std::string chosen = data_dir_path.string();
@@ -1335,9 +1335,15 @@ void GUI_App::init_app_config()
                     legacy_data_dir_candidates(data_dir_path.string(), SLIC3R_LEGACY_APP_KEY, wxGetHomeDir().ToUTF8().data(), flatpak),
                     SLIC3R_LEGACY_APP_KEY, data_dir_path.string(), SLIC3R_APP_KEY, m_legacy_copy_message);
             } catch (const std::exception &ex) {
-                // Not even a temporary directory: the app has to run on the real one.
+                // The copy failed and not even a session directory could be made. Running on the real data
+                // directory would fill it and rule out the copy for good, so the start ends here, with
+                // nothing created. wxSafeShowMessage works before the event loop runs.
                 BOOST_LOG_TRIVIAL(error) << "start_data_dir: " << ex.what();
-                m_legacy_copy_message = ex.what();
+                wxSafeShowMessage(SLIC3R_APP_NAME,
+                    from_u8(format(_u8L("The settings of %1% could not be copied to\n%2%\n\n%3%\n\n%4%\n\n"
+                                        "%5% cannot start without settings. Please check the folders and start %5% again."),
+                                   SLIC3R_LEGACY_APP_KEY, data_dir_path.string(), m_legacy_copy_message, ex.what(), SLIC3R_APP_NAME)));
+                std::exit(EXIT_FAILURE);
             }
             if (chosen != data_dir_path.string()) {
                 m_legacy_copy_target = data_dir_path.string();
