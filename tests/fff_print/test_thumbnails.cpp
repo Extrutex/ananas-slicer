@@ -2,6 +2,7 @@
 
 #include "libslic3r/libslic3r.h"
 #include "libslic3r/GCode/ThumbnailData.hpp"
+#include "libslic3r/GCode/Thumbnails.hpp"
 #include "libslic3r/Model.hpp"
 #include "libslic3r/Print.hpp"
 
@@ -9,6 +10,10 @@
 #include "test_utils.hpp"
 
 #include <boost/beast/core/detail/base64.hpp>
+
+#include <csetjmp>
+#include <cstdio>
+#include <jpeglib.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -108,6 +113,67 @@ std::string export_with_thumbnails(const std::string &thumbnails, std::vector<Ve
     return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 }
 
+// A thumbnail with varying colours, so the encoders produce more than a minimal file.
+ThumbnailData gradient_thumbnail(unsigned int size)
+{
+    ThumbnailData data;
+    data.set(size, size);
+    for (unsigned int y = 0; y < size; ++y)
+        for (unsigned int x = 0; x < size; ++x) {
+            unsigned char *px = &data.pixels[4 * (y * size + x)];
+            px[0] = (unsigned char) (x * 255 / size);
+            px[1] = (unsigned char) (y * 255 / size);
+            px[2] = (unsigned char) ((x * y) & 0xFF);
+            px[3] = 0xFF;
+        }
+    return data;
+}
+
+struct JpegSize
+{
+    bool         ok{false};
+    unsigned int width{0};
+    unsigned int height{0};
+};
+
+// Decodes the whole file with libjpeg; a truncated or corrupt stream reports !ok.
+JpegSize decode_jpeg(const unsigned char *bytes, size_t size)
+{
+    struct Error
+    {
+        jpeg_error_mgr mgr;
+        jmp_buf        jump;
+    };
+    JpegSize                      result;
+    jpeg_decompress_struct        info;
+    Error                         err;
+    std::vector<unsigned char>    row;
+    info.err             = jpeg_std_error(&err.mgr);
+    err.mgr.error_exit   = [](j_common_ptr cinfo) { longjmp(reinterpret_cast<Error *>(cinfo->err)->jump, 1); };
+    err.mgr.emit_message = [](j_common_ptr cinfo, int level) {
+        // A corrupt-data warning (level -1) makes the file invalid as well.
+        if (level < 0)
+            longjmp(reinterpret_cast<Error *>(cinfo->err)->jump, 1);
+    };
+    if (setjmp(err.jump)) {
+        jpeg_destroy_decompress(&info);
+        return JpegSize{};
+    }
+    jpeg_create_decompress(&info);
+    jpeg_mem_src(&info, bytes, (unsigned long) size);
+    jpeg_read_header(&info, TRUE);
+    jpeg_start_decompress(&info);
+    row.resize(size_t(info.output_width) * info.output_components);
+    while (info.output_scanline < info.output_height) {
+        unsigned char *rows[] = {row.data()};
+        jpeg_read_scanlines(&info, rows, 1);
+    }
+    result = {true, info.output_width, info.output_height};
+    jpeg_finish_decompress(&info);
+    jpeg_destroy_decompress(&info);
+    return result;
+}
+
 } // namespace
 
 TEST_CASE("Configured PNG thumbnails are written as blocks Moonraker can decode", "[Thumbnails]")
@@ -154,4 +220,39 @@ TEST_CASE("An empty thumbnails setting never calls the renderer", "[Thumbnails]"
     const std::string gcode = export_with_thumbnails("", requested);
     CHECK(requested.empty());
     CHECK(thumbnail_blocks(gcode).empty());
+}
+
+TEST_CASE("JPG thumbnails are complete JPEG files at every size", "[Thumbnails]")
+{
+    // The encoder starts with an output buffer of width * height * 4 bytes; a JPEG larger than that
+    // (1x1 always is) must still be returned whole.
+    const unsigned int size = GENERATE(1u, 16u, 300u);
+    INFO("thumbnail " << size << "x" << size);
+    const auto compressed = GCodeThumbnails::compress_thumbnail(gradient_thumbnail(size), GCodeThumbnailsFormat::JPG);
+    REQUIRE(compressed->data != nullptr);
+    REQUIRE(compressed->size > 4);
+    const auto *bytes = static_cast<const unsigned char *>(compressed->data);
+    CHECK(bytes[0] == 0xFF);
+    CHECK(bytes[1] == 0xD8);
+    CHECK(bytes[compressed->size - 2] == 0xFF);
+    CHECK(bytes[compressed->size - 1] == 0xD9);
+    const JpegSize decoded = decode_jpeg(bytes, compressed->size);
+    REQUIRE(decoded.ok);
+    CHECK(decoded.width == size);
+    CHECK(decoded.height == size);
+}
+
+TEST_CASE("QOI thumbnails carry the header and end marker of their size", "[Thumbnails]")
+{
+    const unsigned int size = GENERATE(1u, 16u, 300u);
+    INFO("thumbnail " << size << "x" << size);
+    const auto compressed = GCodeThumbnails::compress_thumbnail(gradient_thumbnail(size), GCodeThumbnailsFormat::QOI);
+    REQUIRE(compressed->data != nullptr);
+    REQUIRE(compressed->size >= 14 + 8);
+    const auto *bytes = static_cast<const unsigned char *>(compressed->data);
+    CHECK(std::string(bytes, bytes + 4) == "qoif");
+    CHECK(read_be32(std::vector<unsigned char>(bytes, bytes + 12), 4) == size);
+    CHECK(read_be32(std::vector<unsigned char>(bytes, bytes + 12), 8) == size);
+    const unsigned char end_marker[] = {0, 0, 0, 0, 0, 0, 0, 1};
+    CHECK(std::equal(std::begin(end_marker), std::end(end_marker), bytes + compressed->size - 8));
 }

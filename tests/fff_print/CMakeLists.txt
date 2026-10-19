@@ -32,7 +32,9 @@ add_executable(${_TEST_NAME}_tests
 	test_wipe.cpp
 	test_wipe_tower.cpp
 	)
-target_link_libraries(${_TEST_NAME}_tests test_common libslic3r Catch2::Catch2WithMain)
+# libjpeg decodes the JPG thumbnails in test_thumbnails.cpp.
+find_package(JPEG REQUIRED)
+target_link_libraries(${_TEST_NAME}_tests test_common libslic3r Catch2::Catch2WithMain JPEG::JPEG)
 set_property(TARGET ${_TEST_NAME}_tests PROPERTY FOLDER "tests")
 
 orcaslicer_copy_test_dlls()
