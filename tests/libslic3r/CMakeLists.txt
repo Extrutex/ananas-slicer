@@ -61,6 +61,7 @@ add_executable(${_TEST_NAME}_tests
     test_indexed_triangle_set.cpp
     test_klipper_limits.cpp
     test_klipper_motion_model.cpp
+    test_instance_lock.cpp
     ../libnest2d/printer_parts.cpp
     )
 
