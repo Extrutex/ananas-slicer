@@ -761,11 +761,13 @@ private:
     bool                    m_unsigned_plugin_warning_shown { false };
     boost::optional<Semver> m_last_config_version;
     bool                    m_config_corrupted { false };
-    // Set when copying the KLIPSLICE data directory failed: the reason, the data directory it was meant
-    // for, and the temporary data directory this session uses instead (see init_app_config()).
-    std::string             m_legacy_copy_error;
+    // Taking over the KLIPSLICE data directory (see init_app_config()): what the user is told after the
+    // start (the reason of a failure, or links left out), the data directory the copy was meant for, and
+    // the temporary data directory this session uses when the copy failed.
+    std::string             m_legacy_copy_message;
     std::string             m_legacy_copy_target;
     std::string             m_session_data_dir;
+    void                    remove_session_data_dir();
     std::string             m_open_method;
 };
 

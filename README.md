@@ -17,7 +17,8 @@ print host, and printer profiles only for machines that verifiably run Klipper.
 > to its own, without the regenerated `cache` and `log` folders; the KLIPSLICE
 > directory itself is left untouched. The Flatpak reads it from the sandbox of
 > the old app id. If the copy fails, the app says why, runs that session on
-> temporary settings and tries again on the next start.
+> temporary settings and tries again on the next start. On Windows, links inside
+> the old directory are not copied; the app names them after the start.
 
 ## Why a Klipper-only slicer
 

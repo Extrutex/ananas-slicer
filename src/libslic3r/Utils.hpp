@@ -196,25 +196,29 @@ const std::string& data_dir();
 enum class LegacyDataDirCopy { NotNeeded, Copied, Failed };
 // First start under a new app key: copies the data directory of the previous key (legacy_dir) to
 // data_dir and renames its top-level files named after legacy_key (legacy_key.conf, ...) to new_key.
-// Symbolic links are copied as links, permissions are kept, and the regenerated top-level cache and
-// log directories are left out. Does nothing when data_dir already exists or legacy_dir is not a
-// directory. legacy_dir is only read. The copy is assembled in a temporary sibling of data_dir unique
-// to the process and renamed into place, so a failed copy leaves no partial data_dir behind and the
-// next start tries again; when another instance moved its copy into place first, that one is kept
-// (NotNeeded).
+// The copy is assembled in a temporary sibling of data_dir unique to the process, gets the marker
+// ".migrated-from-<legacy_key>" as its last file and is renamed into place, so only a finished copy
+// ever becomes data_dir. A data_dir holding the marker or any other content is never touched; an empty
+// one is replaced. When another instance moved its finished copy into place first, that one is kept
+// (NotNeeded). legacy_dir is only read. Symbolic links are copied as links (on Windows left out and
+// named in message), permissions are kept with write access added for the owner, and the regenerated
+// top-level cache and log directories are left out. message receives the reason of a failure.
 LegacyDataDirCopy copy_legacy_data_dir(const std::string &legacy_dir, const std::string &legacy_key,
                                        const std::string &data_dir, const std::string &new_key,
-                                       std::string *error = nullptr);
+                                       std::string *message = nullptr);
 // Where the data directory of the previous app key may live, in the order to try: next to data_dir,
 // and in a Flatpak sandbox also in the sandbox of the previous Flatpak app id under home.
 std::vector<std::string> legacy_data_dir_candidates(const std::string &data_dir, const std::string &legacy_key,
                                                     const std::string &home, bool flatpak);
 // The data directory for a GUI start: copies the first existing legacy directory with
-// copy_legacy_data_dir() and returns data_dir. When that copy fails it returns a new, empty temporary
-// directory for this session instead and sets error, so data_dir is not created and the next start
-// tries the copy again.
+// copy_legacy_data_dir() and returns data_dir; message then names links left out, if any. When the copy
+// fails it returns a new temporary directory instead (owner-only access, marked with the process id),
+// sets message to the reason, and leaves data_dir uncreated so the next start tries again.
 std::string start_data_dir(const std::vector<std::string> &legacy_dirs, const std::string &legacy_key,
-                           const std::string &data_dir, const std::string &new_key, std::string &error);
+                           const std::string &data_dir, const std::string &new_key, std::string &message);
+// Removes the temporary data directories of start_data_dir() whose process is gone (a session that
+// ended without OnExit()).
+void remove_orphaned_session_dirs(const std::string &new_key);
 
 // BBL: true: succeed create or dir exists; false: fail to create
 bool makedir(const std::string path);

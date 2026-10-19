@@ -562,6 +562,8 @@ TEST_CASE("copy_legacy_data_dir copies the data directory of the previous app ke
         // Only the top-level files carry the app key; nested files keep their names.
         CHECK(read(current / "user" / "KLIPSLICE.conf") == "nested");
         CHECK_FALSE(fs::exists(current / "KLIPSLICE.conf"));
+        // The finished copy carries its marker.
+        CHECK(fs::exists(current / ".migrated-from-KLIPSLICE"));
         // The legacy directory stays as it was.
         CHECK(read(legacy / "KLIPSLICE.conf") == "{\"app\":1}");
         CHECK(read(legacy / "user" / "default" / "filament" / "My PLA.json") == "pla");
@@ -656,26 +658,42 @@ TEST_CASE("copy_legacy_data_dir copies the data directory of the previous app ke
         CHECK(read(outside / "external.json") == "external");
     }
 
-    SECTION("permissions of directories and files are kept") {
+    SECTION("permissions are kept, plus write access for the owner") {
         const fs::path script = legacy / "user" / "post.sh";
         write(script, "#!/bin/sh");
         fs::permissions(legacy, fs::owner_all);
         fs::permissions(legacy / "user", fs::owner_all);
         fs::permissions(legacy / "user" / "default", fs::owner_read | fs::owner_exe);
         fs::permissions(legacy / "KLIPSLICE.conf", fs::owner_read | fs::owner_write);
+        fs::permissions(legacy / "KLIPSLICEGcodeViewer.conf", fs::owner_read | fs::group_read);
         fs::permissions(script, fs::owner_all | fs::group_read | fs::group_exe | fs::others_read | fs::others_exe);
 
         REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
         const auto mode = [](const fs::path &p) { return fs::symlink_status(p).permissions() & fs::perms_mask; };
         CHECK(mode(current) == fs::owner_all);
         CHECK(mode(current / "user") == fs::owner_all);
-        CHECK(mode(current / "user" / "default") == (fs::owner_read | fs::owner_exe));
+        // A read-only source would leave the app unable to write its presets and logs: the owner always
+        // gets write access, group and others never get more than they had.
+        CHECK(mode(current / "user" / "default") == fs::owner_all);
         CHECK(mode(current / "AnanasSlicer.conf") == (fs::owner_read | fs::owner_write));
+        CHECK(mode(current / "AnanasSlicerGcodeViewer.conf") == (fs::owner_read | fs::owner_write | fs::group_read));
         CHECK(mode(current / "user" / "post.sh") == mode(script));
-        // The read-only directory still received its contents.
         CHECK(read(current / "user" / "default" / "filament" / "My PLA.json") == "pla");
         fs::permissions(legacy / "user" / "default", fs::owner_all);
-        fs::permissions(current / "user" / "default", fs::owner_all);
+    }
+
+    SECTION("a failed copy into an empty data directory is not taken for done") {
+        if (geteuid() == 0)
+            SKIP("root reads files without read permission");
+        fs::create_directories(current);
+        const fs::path unreadable = legacy / "user" / "KLIPSLICE.conf";
+        fs::permissions(unreadable, fs::no_perms);
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Failed);
+        fs::permissions(unreadable, fs::owner_read | fs::owner_write);
+        CHECK(fs::is_empty(current));
+        // The next start copies.
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
     }
 
     SECTION("a failed copy leaves no data directory behind") {
@@ -733,7 +751,10 @@ TEST_CASE("start_data_dir keeps the data directory uncreated while the copy fail
         const std::string session = start_data_dir({ legacy.string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error);
         fs::permissions(unreadable, fs::owner_read | fs::owner_write);
         CHECK(session != current.string());
-        CHECK_FALSE(fs::exists(session));
+        // Created at once and private: it holds this session's settings and logs.
+        REQUIRE(fs::is_directory(session));
+        CHECK((fs::status(session).permissions() & fs::perms_mask) == fs::owner_all);
+        fs::remove_all(session);
         CHECK_FALSE(error.empty());
         CHECK_FALSE(fs::exists(current));
 
@@ -742,4 +763,26 @@ TEST_CASE("start_data_dir keeps the data directory uncreated while the copy fail
         CHECK(fs::exists(current / "AnanasSlicer.conf"));
     }
 #endif
+}
+
+TEST_CASE("remove_orphaned_session_dirs removes only marked directories of ended processes", "[utils]") {
+    namespace fs = boost::filesystem;
+    const std::string key  = "AnanasSlicerTest" + fs::unique_path("%%%%%%").string();
+    const fs::path    base = fs::temp_directory_path();
+    const auto make = [&](const std::string &suffix, const std::string &pid) {
+        const fs::path dir = base / (key + "-session-" + suffix);
+        fs::create_directories(dir);
+        if (!pid.empty())
+            std::ofstream((dir / (".session-of-" + key)).string()) << pid << "\n";
+        return dir;
+    };
+    const fs::path ended    = make("ended", "999999");
+    const fs::path running  = make("running", std::to_string(get_current_pid()));
+    const fs::path unmarked = make("unmarked", "");
+    remove_orphaned_session_dirs(key);
+    CHECK_FALSE(fs::exists(ended));
+    CHECK(fs::exists(running));
+    CHECK(fs::exists(unmarked));
+    fs::remove_all(running);
+    fs::remove_all(unmarked);
 }

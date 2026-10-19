@@ -1326,11 +1326,19 @@ void GUI_App::init_app_config()
             // First start after the rename: take over the KLIPSLICE data directory. When the copy fails,
             // this session runs on a temporary directory and the real one is not created, so the next
             // start tries again; post_init tells the user.
+            remove_orphaned_session_dirs(SLIC3R_APP_KEY);
             wxString flatpak_id;
             const bool flatpak = wxGetEnv(wxS("FLATPAK_ID"), &flatpak_id) && !flatpak_id.empty();
-            const std::string chosen = start_data_dir(
-                legacy_data_dir_candidates(data_dir_path.string(), SLIC3R_LEGACY_APP_KEY, wxGetHomeDir().ToUTF8().data(), flatpak),
-                SLIC3R_LEGACY_APP_KEY, data_dir_path.string(), SLIC3R_APP_KEY, m_legacy_copy_error);
+            std::string chosen = data_dir_path.string();
+            try {
+                chosen = start_data_dir(
+                    legacy_data_dir_candidates(data_dir_path.string(), SLIC3R_LEGACY_APP_KEY, wxGetHomeDir().ToUTF8().data(), flatpak),
+                    SLIC3R_LEGACY_APP_KEY, data_dir_path.string(), SLIC3R_APP_KEY, m_legacy_copy_message);
+            } catch (const std::exception &ex) {
+                // Not even a temporary directory: the app has to run on the real one.
+                BOOST_LOG_TRIVIAL(error) << "start_data_dir: " << ex.what();
+                m_legacy_copy_message = ex.what();
+            }
             if (chosen != data_dir_path.string()) {
                 m_legacy_copy_target = data_dir_path.string();
                 m_session_data_dir   = chosen;
@@ -1462,16 +1470,24 @@ bool GUI_App::OnInit()
     }
 }
 
+// The temporary data directory of a session whose KLIPSLICE settings could not be copied. Removed on
+// exit and on the end of the session; whatever a hard end leaves, the next start removes
+// (remove_orphaned_session_dirs()).
+void GUI_App::remove_session_data_dir()
+{
+    if (!m_session_data_dir.empty()) {
+        boost::system::error_code ec;
+        boost::filesystem::remove_all(m_session_data_dir, ec);
+        m_session_data_dir.clear();
+    }
+}
+
 int GUI_App::OnExit()
 {
     stop_http_server();
     stop_sync_user_preset();
 
-    // The temporary data directory of a session whose KLIPSLICE settings could not be copied.
-    if (!m_session_data_dir.empty()) {
-        boost::system::error_code ec;
-        boost::filesystem::remove_all(m_session_data_dir, ec);
-    }
+    remove_session_data_dir();
 
     if (m_agent) {
         delete m_agent;
@@ -1675,8 +1691,9 @@ bool GUI_App::on_init_inner()
     // A quit request from the Dock, a logout or a restart ends with AppKit calling exit() right after this event, so
     // OnExit() and ~GUI_App() never run. Shut the plugins and Python down here as ~GUI_App() does. Left to
     // PluginManager's static destructor, the shutdown locks hook state that has already been destroyed and aborts.
-    wxGetApp().Bind(wxEVT_END_SESSION, [](wxCloseEvent &e) {
+    wxGetApp().Bind(wxEVT_END_SESSION, [this](wxCloseEvent &e) {
         BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "received wxEVT_END_SESSION";
+        remove_session_data_dir();
         Slic3r::PluginManager::instance().shutdown();
         Slic3r::PythonInterpreter::instance().shutdown();
         e.Skip();
@@ -2222,7 +2239,11 @@ bool GUI_App::on_init_inner()
                    format(_u8L("The settings of %1% could not be copied to\n%2%\n\n%3%\n\n"
                                "This session uses temporary settings, which are deleted when %4% closes. "
                                "%4% tries to copy the settings again on the next start."),
-                          SLIC3R_LEGACY_APP_KEY, m_legacy_copy_target, m_legacy_copy_error, SLIC3R_APP_NAME));
+                          SLIC3R_LEGACY_APP_KEY, m_legacy_copy_target, m_legacy_copy_message, SLIC3R_APP_NAME));
+    } else if (!m_legacy_copy_message.empty()) {
+        show_info(nullptr,
+                  from_u8(format(_u8L("The settings of %1% were copied, with a remark:\n%2%"), SLIC3R_LEGACY_APP_KEY, m_legacy_copy_message)),
+                  from_u8(SLIC3R_APP_NAME));
     }
     if (m_config_corrupted) {
         m_config_corrupted = false;
