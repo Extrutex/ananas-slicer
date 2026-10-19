@@ -10,6 +10,7 @@ add_executable(${_TEST_NAME}_tests
     test_appconfig.cpp
     test_arachne_walls.cpp
     test_arrange.cpp
+    test_assemble_list.cpp
     test_buildvolume.cpp
     test_calib.cpp
     test_clipper_offset.cpp
