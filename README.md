@@ -14,7 +14,10 @@ print host, and printer profiles only for machines that verifiably run Klipper.
 
 > ANANAS SLICER was called KLIPSLICE until October 2026. On its first start it
 > copies the KLIPSLICE settings directory (presets, printers, `KLIPSLICE.conf`)
-> to its own; the KLIPSLICE directory itself is left untouched.
+> to its own, without the regenerated `cache` and `log` folders; the KLIPSLICE
+> directory itself is left untouched. The Flatpak reads it from the sandbox of
+> the old app id. If the copy fails, the app says why, runs that session on
+> temporary settings and tries again on the next start.
 
 ## Why a Klipper-only slicer
 

@@ -205,6 +205,16 @@ enum class LegacyDataDirCopy { NotNeeded, Copied, Failed };
 LegacyDataDirCopy copy_legacy_data_dir(const std::string &legacy_dir, const std::string &legacy_key,
                                        const std::string &data_dir, const std::string &new_key,
                                        std::string *error = nullptr);
+// Where the data directory of the previous app key may live, in the order to try: next to data_dir,
+// and in a Flatpak sandbox also in the sandbox of the previous Flatpak app id under home.
+std::vector<std::string> legacy_data_dir_candidates(const std::string &data_dir, const std::string &legacy_key,
+                                                    const std::string &home, bool flatpak);
+// The data directory for a GUI start: copies the first existing legacy directory with
+// copy_legacy_data_dir() and returns data_dir. When that copy fails it returns a new, empty temporary
+// directory for this session instead and sets error, so data_dir is not created and the next start
+// tries the copy again.
+std::string start_data_dir(const std::vector<std::string> &legacy_dirs, const std::string &legacy_key,
+                           const std::string &data_dir, const std::string &new_key, std::string &error);
 
 // BBL: true: succeed create or dir exists; false: fail to create
 bool makedir(const std::string path);

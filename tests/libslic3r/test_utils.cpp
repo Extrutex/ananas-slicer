@@ -693,3 +693,53 @@ TEST_CASE("copy_legacy_data_dir copies the data directory of the previous app ke
     }
 #endif
 }
+
+TEST_CASE("legacy_data_dir_candidates looks next to the data directory and in the old Flatpak sandbox", "[utils]") {
+    namespace fs = boost::filesystem;
+    const std::string data_dir = (fs::path("home") / ".config" / "AnanasSlicer").string();
+    const auto native = legacy_data_dir_candidates(data_dir, "KLIPSLICE", "home", false);
+    REQUIRE(native.size() == 1);
+    CHECK(fs::path(native[0]) == fs::path("home") / ".config" / "KLIPSLICE");
+    const auto flatpak = legacy_data_dir_candidates(data_dir, "KLIPSLICE", "home", true);
+    REQUIRE(flatpak.size() == 2);
+    CHECK(fs::path(flatpak[0]) == fs::path("home") / ".config" / "KLIPSLICE");
+    CHECK(fs::path(flatpak[1]) == fs::path("home") / ".var" / "app" / "de._3dwindt.KLIPSLICE" / "config" / "KLIPSLICE");
+}
+
+TEST_CASE("start_data_dir keeps the data directory uncreated while the copy fails", "[utils]") {
+    namespace fs = boost::filesystem;
+    ScopedTemporaryDir root("startdir");
+    const fs::path legacy  = root.path() / "KLIPSLICE";
+    const fs::path current = root.path() / "AnanasSlicer";
+    fs::create_directories(legacy / "user");
+    std::ofstream((legacy / "KLIPSLICE.conf").string()) << "conf";
+    std::string error;
+
+    SECTION("without a legacy directory the data directory is used") {
+        CHECK(start_data_dir({ (root.path() / "missing").string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error) == current.string());
+        CHECK(error.empty());
+    }
+    SECTION("the first existing candidate is copied") {
+        CHECK(start_data_dir({ (root.path() / "missing").string(), legacy.string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error) == current.string());
+        CHECK(error.empty());
+        CHECK(fs::exists(current / "AnanasSlicer.conf"));
+    }
+#ifndef _WIN32
+    SECTION("a failed copy gives a session directory and the next start copies") {
+        if (geteuid() == 0)
+            SKIP("root reads files without read permission");
+        const fs::path unreadable = legacy / "KLIPSLICE.conf";
+        fs::permissions(unreadable, fs::no_perms);
+        const std::string session = start_data_dir({ legacy.string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error);
+        fs::permissions(unreadable, fs::owner_read | fs::owner_write);
+        CHECK(session != current.string());
+        CHECK_FALSE(fs::exists(session));
+        CHECK_FALSE(error.empty());
+        CHECK_FALSE(fs::exists(current));
+
+        CHECK(start_data_dir({ legacy.string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error) == current.string());
+        CHECK(error.empty());
+        CHECK(fs::exists(current / "AnanasSlicer.conf"));
+    }
+#endif
+}

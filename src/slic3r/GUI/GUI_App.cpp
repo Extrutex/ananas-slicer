@@ -1315,9 +1315,6 @@ void GUI_App::init_app_config()
                 std::string data_dir = wxStandardPaths::Get().GetUserDataDir().ToUTF8().data();
                 //BBS create folder if not exists
                 data_dir_path = boost::filesystem::path(data_dir);
-                copy_legacy_data_dir((data_dir_path.parent_path() / SLIC3R_LEGACY_APP_KEY).string(), SLIC3R_LEGACY_APP_KEY,
-                                     data_dir, SLIC3R_APP_KEY);
-                set_data_dir(data_dir);
             #else
                 // Since version 2.3, config dir on Linux is in ${XDG_CONFIG_HOME}.
                 // https://github.com/prusa3d/PrusaSlicer/issues/2911
@@ -1325,10 +1322,21 @@ void GUI_App::init_app_config()
                 if (! wxGetEnv(wxS("XDG_CONFIG_HOME"), &dir) || dir.empty() )
                     dir = wxFileName::GetHomeDir() + wxS("/.config");
                 data_dir_path = boost::filesystem::path((dir + "/" + GetAppName()).ToUTF8().data());
-                copy_legacy_data_dir((data_dir_path.parent_path() / SLIC3R_LEGACY_APP_KEY).string(), SLIC3R_LEGACY_APP_KEY,
-                                     data_dir_path.string(), SLIC3R_APP_KEY);
-                set_data_dir(data_dir_path.string());
             #endif
+            // First start after the rename: take over the KLIPSLICE data directory. When the copy fails,
+            // this session runs on a temporary directory and the real one is not created, so the next
+            // start tries again; post_init tells the user.
+            wxString flatpak_id;
+            const bool flatpak = wxGetEnv(wxS("FLATPAK_ID"), &flatpak_id) && !flatpak_id.empty();
+            const std::string chosen = start_data_dir(
+                legacy_data_dir_candidates(data_dir_path.string(), SLIC3R_LEGACY_APP_KEY, wxGetHomeDir().ToUTF8().data(), flatpak),
+                SLIC3R_LEGACY_APP_KEY, data_dir_path.string(), SLIC3R_APP_KEY, m_legacy_copy_error);
+            if (chosen != data_dir_path.string()) {
+                m_legacy_copy_target = data_dir_path.string();
+                m_session_data_dir   = chosen;
+                data_dir_path        = boost::filesystem::path(chosen);
+            }
+            set_data_dir(data_dir_path.string());
             if (!boost::filesystem::exists(data_dir_path)){
                 boost::filesystem::create_directory(data_dir_path);
             }
@@ -1458,6 +1466,12 @@ int GUI_App::OnExit()
 {
     stop_http_server();
     stop_sync_user_preset();
+
+    // The temporary data directory of a session whose KLIPSLICE settings could not be copied.
+    if (!m_session_data_dir.empty()) {
+        boost::system::error_code ec;
+        boost::filesystem::remove_all(m_session_data_dir, ec);
+    }
 
     if (m_agent) {
         delete m_agent;
@@ -2203,6 +2217,13 @@ bool GUI_App::on_init_inner()
     flush_logs();
 
     BOOST_LOG_TRIVIAL(info) << "finished the gui app init";
+    if (!m_session_data_dir.empty()) {
+        show_error(nullptr,
+                   format(_u8L("The settings of %1% could not be copied to\n%2%\n\n%3%\n\n"
+                               "This session uses temporary settings, which are deleted when %4% closes. "
+                               "%4% tries to copy the settings again on the next start."),
+                          SLIC3R_LEGACY_APP_KEY, m_legacy_copy_target, m_legacy_copy_error, SLIC3R_APP_NAME));
+    }
     if (m_config_corrupted) {
         m_config_corrupted = false;
         show_error(nullptr,

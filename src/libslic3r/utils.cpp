@@ -408,6 +408,34 @@ LegacyDataDirCopy copy_legacy_data_dir(const std::string &legacy_dir, const std:
     return LegacyDataDirCopy::Copied;
 }
 
+std::vector<std::string> legacy_data_dir_candidates(const std::string &data_dir, const std::string &legacy_key,
+                                                    const std::string &home, bool flatpak)
+{
+    namespace fs = boost::filesystem;
+    std::vector<std::string> out { (fs::path(data_dir).parent_path() / legacy_key).string() };
+    if (flatpak && !home.empty())
+        out.emplace_back((fs::path(home) / ".var" / "app" / SLIC3R_LEGACY_FLATPAK_ID / "config" / legacy_key).string());
+    return out;
+}
+
+std::string start_data_dir(const std::vector<std::string> &legacy_dirs, const std::string &legacy_key,
+                           const std::string &data_dir, const std::string &new_key, std::string &error)
+{
+    namespace fs = boost::filesystem;
+    error.clear();
+    boost::system::error_code ec;
+    for (const std::string &legacy : legacy_dirs) {
+        if (!fs::is_directory(legacy, ec))
+            continue;
+        if (copy_legacy_data_dir(legacy, legacy_key, data_dir, new_key, &error) != LegacyDataDirCopy::Failed)
+            return data_dir;
+        const fs::path session = fs::temp_directory_path(ec) / fs::unique_path(new_key + "-session-%%%%-%%%%-%%%%");
+        BOOST_LOG_TRIVIAL(warning) << "start_data_dir: using " << session << " for this session, " << data_dir << " is left for the next start";
+        return session.string();
+    }
+    return data_dir;
+}
+
 std::string custom_shapes_dir()
 {
     return (boost::filesystem::path(g_data_dir) / "shapes").string();

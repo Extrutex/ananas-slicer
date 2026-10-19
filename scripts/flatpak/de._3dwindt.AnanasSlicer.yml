@@ -35,6 +35,10 @@ finish-args:
   - --own-name=de._3dwindt.AnanasSlicer.InstanceCheck.*
   - --system-talk-name=org.freedesktop.UDisks2
   - --env=SPNAV_SOCKET=/run/spnav.sock
+  # Read-only access to the sandbox of the app id before the rename (KLIPSLICE): on the first start
+  # the app copies its settings from ~/.var/app/de._3dwindt.KLIPSLICE/config/KLIPSLICE
+  # (legacy_data_dir_candidates()). --filesystem=home does not include ~/.var/app.
+  - --filesystem=~/.var/app/de._3dwindt.KLIPSLICE:ro
 
 modules:
 
