@@ -1371,3 +1371,21 @@ TEST_CASE("The default bed type of a printer profile resolves the way the GUI se
         CHECK(default_bed_type_from_config(config) == btPC);
     }
 }
+
+TEST_CASE("Default options of enum lists get their definition's keys map", "[Config]")
+{
+    size_t enum_lists = 0;
+    for (const auto &[key, def] : print_config_def.options) {
+        if (def.type != coEnums || !def.default_value)
+            continue;
+        INFO(key);
+        const std::unique_ptr<ConfigOption> opt(def.create_default_option());
+        CHECK(*opt == *def.default_value);
+        const auto *nullable_enums = dynamic_cast<const ConfigOptionEnumsGenericNullable *>(opt.get());
+        const auto *enums          = dynamic_cast<const ConfigOptionEnumsGeneric *>(opt.get());
+        REQUIRE((nullable_enums != nullptr) != (enums != nullptr));
+        CHECK((nullable_enums != nullptr ? nullable_enums->keys_map : enums->keys_map) == def.enum_keys_map);
+        ++enum_lists;
+    }
+    CHECK(enum_lists > 0);
+}
