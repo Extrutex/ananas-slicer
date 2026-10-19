@@ -722,7 +722,7 @@ int GuideFrame::SaveProfile()
     // app_config values (Preferences) are left untouched.
 
     //finish
-    m_MainPtr->app_config->set(std::string(m_SectionName.mb_str()), "finish", "1");
+    m_MainPtr->app_config->set(std::string(m_SectionName.mb_str()), "finish", true);
 
     m_MainPtr->app_config->save();
 
