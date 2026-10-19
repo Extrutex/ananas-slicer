@@ -1222,7 +1222,7 @@ elseif (SLIC3R_FHS)
     endif()
     install(FILES src/dev-utils/platform/unix/de._3dwindt.AnanasSlicer.desktop DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
     foreach(SIZE 32 128 192 256 512)
-        install(FILES ${SLIC3R_RESOURCES_DIR}/images/ANANAS SLICER_${SIZE}px.png
+        install(FILES ${SLIC3R_RESOURCES_DIR}/images/AnanasSlicer_${SIZE}px.png
             DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${SIZE}x${SIZE}/apps RENAME AnanasSlicer.png
         )
     endforeach()
