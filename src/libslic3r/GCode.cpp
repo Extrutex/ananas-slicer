@@ -3038,7 +3038,7 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
     m_is_role_based_fan_on.fill(false);
     m_role_based_fan_marker_layer.fill(-1);
 
-    m_fan_mover.release();
+    m_fan_mover.reset();
     m_ordering_cache.clear();
 
     // How many times will be change_layer() called?
