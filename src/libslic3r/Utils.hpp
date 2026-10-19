@@ -196,11 +196,15 @@ const std::string& data_dir();
 enum class LegacyDataDirCopy { NotNeeded, Copied, Failed };
 // First start under a new app key: copies the data directory of the previous key (legacy_dir) to
 // data_dir and renames its top-level files named after legacy_key (legacy_key.conf, ...) to new_key.
-// Does nothing when data_dir already exists or legacy_dir is not a directory. legacy_dir is only read.
-// The copy is assembled in a temporary sibling of data_dir and renamed into place, so a failed copy
-// leaves no partial data_dir behind and the next start tries again.
+// Symbolic links are copied as links, permissions are kept, and the regenerated top-level cache and
+// log directories are left out. Does nothing when data_dir already exists or legacy_dir is not a
+// directory. legacy_dir is only read. The copy is assembled in a temporary sibling of data_dir unique
+// to the process and renamed into place, so a failed copy leaves no partial data_dir behind and the
+// next start tries again; when another instance moved its copy into place first, that one is kept
+// (NotNeeded).
 LegacyDataDirCopy copy_legacy_data_dir(const std::string &legacy_dir, const std::string &legacy_key,
-                                       const std::string &data_dir, const std::string &new_key);
+                                       const std::string &data_dir, const std::string &new_key,
+                                       std::string *error = nullptr);
 
 // BBL: true: succeed create or dir exists; false: fail to create
 bool makedir(const std::string path);

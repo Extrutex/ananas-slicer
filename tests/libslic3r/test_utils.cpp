@@ -7,6 +7,7 @@
 #include <boost/filesystem.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <fstream>
 #include <string>
@@ -578,12 +579,105 @@ TEST_CASE("copy_legacy_data_dir copies the data directory of the previous app ke
     }
 
     SECTION("an existing data directory is never overwritten") {
-        fs::create_directories(current);
+        write(current / "AnanasSlicer.conf", "own");
         CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::NotNeeded);
-        CHECK(fs::is_empty(current));
+        CHECK(read(current / "AnanasSlicer.conf") == "own");
+        CHECK_FALSE(fs::exists(current / "user"));
+    }
+
+    SECTION("an empty data directory is filled") {
+        fs::create_directories(current);
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
+    }
+
+    SECTION("two instances starting at once copy once and leave no temporary copy") {
+        // Enough files that both copies run at the same time and race for the final rename.
+        for (int i = 0; i < 300; ++i)
+            write(legacy / "user" / "default" / "process" / ("p" + std::to_string(i) + ".json"), "{}");
+        for (int round = 0; round < 10; ++round) {
+            CAPTURE(round);
+            fs::remove_all(current);
+            std::atomic<int> copied { 0 }, not_needed { 0 }, failed { 0 };
+            const auto start = [&]() {
+                switch (copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer")) {
+                case LegacyDataDirCopy::Copied:    ++copied; break;
+                case LegacyDataDirCopy::NotNeeded: ++not_needed; break;
+                case LegacyDataDirCopy::Failed:    ++failed; break;
+                }
+            };
+            std::thread a(start), b(start);
+            a.join();
+            b.join();
+            CHECK(copied == 1);
+            CHECK(not_needed == 1);
+            CHECK(failed == 0);
+            CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
+            size_t entries = 0;
+            for (fs::directory_iterator it(root.path()), end; it != end; ++it)
+                ++entries;
+            CHECK(entries == 2);
+        }
+    }
+
+    SECTION("the regenerated cache and log directories are not copied") {
+        write(legacy / "cache" / "wizard_profile_data.json", "stale paths");
+        write(legacy / "log" / "debug.log", "old log");
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK_FALSE(fs::exists(current / "cache"));
+        CHECK_FALSE(fs::exists(current / "log"));
+        CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
     }
 
 #ifndef _WIN32
+    SECTION("symbolic links are copied as links, never followed") {
+        const fs::path outside = root.path() / "outside";
+        write(outside / "external.json", "external");
+        fs::create_symlink("default/filament/My PLA.json", legacy / "user" / "internal.json");
+        fs::create_symlink(outside / "external.json", legacy / "user" / "external.json");
+        fs::create_symlink(outside, legacy / "user" / "external_dir");
+        fs::create_symlink("missing.json", legacy / "user" / "broken.json");
+        fs::create_symlink("loop_b", legacy / "user" / "loop_a");
+        fs::create_symlink("loop_a", legacy / "user" / "loop_b");
+
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        for (const char *name : {"internal.json", "external.json", "external_dir", "broken.json", "loop_a", "loop_b"}) {
+            CAPTURE(name);
+            const fs::path copied = current / "user" / name;
+            REQUIRE(fs::is_symlink(fs::symlink_status(copied)));
+            CHECK(fs::read_symlink(copied) == fs::read_symlink(legacy / "user" / name));
+        }
+        CHECK(read(current / "user" / "default" / "filament" / "My PLA.json") == "pla");
+        // Nothing was written outside the data directories.
+        size_t outside_entries = 0;
+        for (fs::directory_iterator it(outside), end; it != end; ++it)
+            ++outside_entries;
+        CHECK(outside_entries == 1);
+        CHECK(read(outside / "external.json") == "external");
+    }
+
+    SECTION("permissions of directories and files are kept") {
+        const fs::path script = legacy / "user" / "post.sh";
+        write(script, "#!/bin/sh");
+        fs::permissions(legacy, fs::owner_all);
+        fs::permissions(legacy / "user", fs::owner_all);
+        fs::permissions(legacy / "user" / "default", fs::owner_read | fs::owner_exe);
+        fs::permissions(legacy / "KLIPSLICE.conf", fs::owner_read | fs::owner_write);
+        fs::permissions(script, fs::owner_all | fs::group_read | fs::group_exe | fs::others_read | fs::others_exe);
+
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        const auto mode = [](const fs::path &p) { return fs::symlink_status(p).permissions() & fs::perms_mask; };
+        CHECK(mode(current) == fs::owner_all);
+        CHECK(mode(current / "user") == fs::owner_all);
+        CHECK(mode(current / "user" / "default") == (fs::owner_read | fs::owner_exe));
+        CHECK(mode(current / "AnanasSlicer.conf") == (fs::owner_read | fs::owner_write));
+        CHECK(mode(current / "user" / "post.sh") == mode(script));
+        // The read-only directory still received its contents.
+        CHECK(read(current / "user" / "default" / "filament" / "My PLA.json") == "pla");
+        fs::permissions(legacy / "user" / "default", fs::owner_all);
+        fs::permissions(current / "user" / "default", fs::owner_all);
+    }
+
     SECTION("a failed copy leaves no data directory behind") {
         if (geteuid() == 0)
             SKIP("root reads files without read permission");

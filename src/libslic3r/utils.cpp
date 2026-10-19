@@ -327,41 +327,81 @@ const std::string& data_dir()
 }
 
 LegacyDataDirCopy copy_legacy_data_dir(const std::string &legacy_dir, const std::string &legacy_key,
-                                       const std::string &data_dir, const std::string &new_key)
+                                       const std::string &data_dir, const std::string &new_key,
+                                       std::string *error)
 {
     namespace fs = boost::filesystem;
     boost::system::error_code ec;
     const fs::path source(legacy_dir);
     const fs::path target(data_dir);
-    // symlink_status: a dangling symlink at the target still counts as an existing data directory.
-    if (fs::exists(fs::symlink_status(target, ec)) || !fs::is_directory(source, ec))
+    // symlink_status: a dangling symlink at the target still counts as an existing data directory. An
+    // empty directory holds no settings yet (created by hand, or by a start that had nothing to copy and
+    // never wrote anything), so the copy goes ahead and replaces it.
+    const fs::file_status target_status = fs::symlink_status(target, ec);
+    const bool            target_empty  = fs::is_directory(target_status) && fs::is_empty(target, ec) && !ec;
+    if ((fs::exists(target_status) && !target_empty) || !fs::is_directory(source, ec))
         return LegacyDataDirCopy::NotNeeded;
 
-    const fs::path temp = fs::unique_path(target.string() + ".copy-%%%%-%%%%", ec);
-    if (ec)
+    // Unique per process, so two instances starting at once never share a temporary copy.
+    const fs::path temp = fs::unique_path(target.string() + ".copy-%%%%-%%%%-%%%%", ec);
+    if (ec) {
+        if (error)
+            *error = ec.message();
         return LegacyDataDirCopy::Failed;
+    }
     try {
+        // Directories get their permissions after their contents, so a read-only one can still be filled.
+        std::vector<std::pair<fs::path, fs::perms>> dir_perms { { temp, fs::status(source).permissions() } };
         fs::create_directories(temp);
         for (fs::recursive_directory_iterator it(source), end; it != end; ++it) {
-            const fs::path  rel  = fs::relative(it->path(), source);
-            const fs::path  dest = temp / rel;
-            const fs::file_status st = it->symlink_status();
-            if (fs::is_symlink(st))
+            // Lexical: resolving the entry would follow a symlink out of the directory or into a loop.
+            const fs::path        rel  = it->path().lexically_relative(source);
+            const fs::path        dest = temp / rel;
+            // The free function: directory_entry::symlink_status() also stats the link target and throws
+            // on a link loop.
+            const fs::file_status st   = fs::symlink_status(it->path());
+            // cache and log hold data the app regenerates; the cache stores absolute paths into the old directory.
+            if (it.depth() == 0 && fs::is_directory(st) && (rel == "cache" || rel == "log")) {
+                it.disable_recursion_pending();
+                continue;
+            }
+            if (fs::is_symlink(st)) {
+                // Copied as a link with the same target, never followed (recursive_directory_iterator
+                // does not descend into directory links either).
                 fs::copy_symlink(it->path(), dest);
-            else if (fs::is_directory(st))
+            } else if (fs::is_directory(st)) {
                 fs::create_directory(dest);
-            else if (fs::is_regular_file(st))
+                dir_perms.emplace_back(dest, st.permissions());
+            } else if (fs::is_regular_file(st)) {
                 fs::copy_file(it->path(), dest);
+                fs::permissions(dest, st.permissions() & fs::perms_mask);
+            }
         }
         for (fs::directory_iterator it(temp), end; it != end; ++it) {
             const std::string name = it->path().filename().string();
-            if (fs::is_regular_file(it->symlink_status()) && boost::starts_with(name, legacy_key))
+            if (fs::is_regular_file(fs::symlink_status(it->path())) && boost::starts_with(name, legacy_key))
                 fs::rename(it->path(), temp / (new_key + name.substr(legacy_key.size())));
         }
+        for (auto it = dir_perms.rbegin(); it != dir_perms.rend(); ++it)
+            fs::permissions(it->first, it->second & fs::perms_mask);
+        if (target_empty)
+            fs::remove(target); // only ever removes an empty directory, throws on a non-empty one
         fs::rename(temp, target);
     } catch (const std::exception &ex) {
-        BOOST_LOG_TRIVIAL(error) << "copy_legacy_data_dir: copying " << source << " to " << target << " failed: " << ex.what();
+        // Undo the permissions first: a read-only directory in the copy would block its removal.
+        for (fs::recursive_directory_iterator it(temp, ec), end; !ec && it != end; it.increment(ec))
+            if (fs::is_directory(fs::symlink_status(it->path(), ec)))
+                fs::permissions(it->path(), fs::owner_all, ec);
+        fs::permissions(temp, fs::owner_all, ec);
         fs::remove_all(temp, ec);
+        if (fs::is_directory(fs::symlink_status(target, ec))) {
+            // Another instance started at the same time and moved its copy into place first.
+            BOOST_LOG_TRIVIAL(info) << "copy_legacy_data_dir: " << target << " was created meanwhile, keeping it";
+            return LegacyDataDirCopy::NotNeeded;
+        }
+        BOOST_LOG_TRIVIAL(error) << "copy_legacy_data_dir: copying " << source << " to " << target << " failed: " << ex.what();
+        if (error)
+            *error = ex.what();
         return LegacyDataDirCopy::Failed;
     }
     BOOST_LOG_TRIVIAL(info) << "copy_legacy_data_dir: copied " << source << " to " << target;
