@@ -1,6 +1,6 @@
 # Virtual printer rig
 
-An end-to-end check that G-code produced by KLIPSLICE is accepted by real,
+An end-to-end check that G-code produced by ANANAS SLICER is accepted by real,
 unmodified upstream Klipper and Moonraker. It runs entirely in local Docker
 containers on an internal network with no published ports: no real printer is
 contacted, and nothing on the LAN can reach the rig.
@@ -15,18 +15,18 @@ results and all logs.
 
 | Variable | Meaning |
 |---|---|
-| `KLIPSLICE_BIN` | Slicer binary. Default: `<build dir>/src/Release/KLIPSLICE.app/Contents/MacOS/KLIPSLICE` on macOS, `<build dir>/package/bin/klipslice` on Linux. An extracted AppImage's `AppRun` works too. |
-| `KLIPSLICE_BUILD_DIR` | Build tree the default binary is taken from, absolute or relative to the repository. Default: `build/arm64` on macOS, `build` on Linux. Ignored when `KLIPSLICE_BIN` is set. |
-| `VP_KEEP_RIG=1` | Leave the Klipper and Moonraker containers running for manual inspection (`docker compose -p klipslice-vp ...`). |
+| `ANANAS_SLICER_BIN` | Slicer binary. Default: `<build dir>/src/Release/AnanasSlicer.app/Contents/MacOS/AnanasSlicer` on macOS, `<build dir>/package/bin/ananas-slicer` on Linux. An extracted AppImage's `AppRun` works too. |
+| `ANANAS_SLICER_BUILD_DIR` | Build tree the default binary is taken from, absolute or relative to the repository. Default: `build/arm64` on macOS, `build` on Linux. Ignored when `ANANAS_SLICER_BIN` is set. |
+| `VP_KEEP_RIG=1` | Leave the Klipper and Moonraker containers running for manual inspection (`docker compose -p ananas-slicer-vp ...`). |
 
-Requirements: Docker with Compose v2, bash, and a KLIPSLICE build. The image
+Requirements: Docker with Compose v2, bash, and a ANANAS SLICER build. The image
 is about 450 MB and each container is limited to 512 MB of RAM. The first run
 builds the image from GitHub sources (about a minute); later runs reuse it and
 take about 30 seconds.
 
 ## What runs
 
-1. **Slice.** The KLIPSLICE CLI slices `tests/data/20mm_cube.obj` with the
+1. **Slice.** The ANANAS SLICER CLI slices `tests/data/20mm_cube.obj` with the
    shipped `Voron 2.4 350 0.4 nozzle`, `0.20mm Standard @Voron` and
    `Generic PLA @System` presets.
 2. **Klipper batch mode.** `klippy.py printer.cfg -i <gcode> -o /dev/null -d <dict>`,
@@ -34,21 +34,21 @@ take about 30 seconds.
    `printer.cfg`: kinematics, travel limits, macros, extrusion limits,
    exclude_object. The data dictionary comes from building Klipper for its
    Linux host-MCU target inside the image.
-3. **State macros.** The print state macros KLIPSLICE ships
-   (`resources/klipper/klipslice_state.cfg`) in the same batch mode:
+3. **State macros.** The print state macros ANANAS SLICER ships
+   (`resources/klipper/ananas_slicer_state.cfg`) in the same batch mode:
    `state-macros/check.gcode` against `state-macros/printer.cfg`, the virtual
    printer plus an `[extruder1]` without a stepper and an
    `[extruder_stepper Belt]` with its own pressure advance. It sets per-feature
-   values, cancels with and without `_KLIPSLICE_SAVE`, restores twice, and
+   values, cancels with and without `_ANANAS_SLICER_SAVE`, restores twice, and
    checks after each step that the heaters and the part cooling fan are off,
    the velocity limits are back and every extruder stepper has its printer.cfg
    pressure advance, or that nothing changed when nothing was saved. A
-   `_KLIPSLICE_SAVE` after a cancel that skipped the restore must keep the
+   `_ANANAS_SLICER_SAVE` after a cancel that skipped the restore must keep the
    earlier snapshot. The same check runs a second time with Mainsail's
    `CANCEL_PRINT` (`state-macros/check-mainsail.gcode` against
    `state-macros/printer-mainsail.cfg`, which adds Mainsail's `client.cfg`,
    copied unchanged as `state-macros/mainsail.cfg`, and the
-   `variable_user_cancel_macro` hook `klipslice_state.cfg` documents for it).
+   `variable_user_cancel_macro` hook `ananas_slicer_state.cfg` documents for it).
    A third route (`state-macros/check-case.gcode` against
    `state-macros/printer-case.cfg`) adds an `[extruder_stepper belt]` next to
    `[extruder_stepper Belt]`: Klipper keeps the two steppers apart, but
@@ -98,7 +98,7 @@ take about 30 seconds.
   time before the cancel; afterwards `print_stats` is `cancelled`,
   `virtual_sdcard` idle, every heater target 0, the part cooling fan off, the
   motion limits and printer.cfg pressure advance back and the
-  `_KLIPSLICE_SAVE` snapshot gone; the print time then stands still and the
+  `_ANANAS_SLICER_SAVE` snapshot gone; the print time then stands still and the
   line after the loop has not run; no error response in the G-code store; the
   history records the job as `cancelled`.
 
@@ -210,7 +210,7 @@ corexy.
    tag, take the `^{}` commit).
 2. Regenerate the constraints file from a fresh build of the new requirements,
    e.g. remove the `-c` option once, build, and write
-   `docker run --rm klipslice-vp:local /opt/<klippy|moonraker>-env/bin/pip freeze`
+   `docker run --rm ananas-slicer-vp:local /opt/<klippy|moonraker>-env/bin/pip freeze`
    back into the file.
 3. Review `DEPRECATED_PARAMS` in `klippy_batch.py` against the new Klipper's
    `docs/Config_Changes.md`.
@@ -224,6 +224,6 @@ corexy.
 every successful "Build all" run triggered by a push to `dev`, and on demand
 (`workflow_dispatch`, optionally with the ID of a "Build all" run). It builds
 nothing heavy: it downloads that run's Linux x86_64 AppImage artifact, extracts
-it, and runs `run.sh` with `KLIPSLICE_BIN` pointing at its `AppRun`. The report
+it, and runs `run.sh` with `ANANAS_SLICER_BIN` pointing at its `AppRun`. The report
 is added to the job summary and `out/` is uploaded as an artifact.
 `workflow_run` triggers only fire for workflow files on the default branch.

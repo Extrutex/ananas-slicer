@@ -1,4 +1,4 @@
-# Kinematics in KLIPSLICE
+# Kinematics in ANANAS SLICER
 
 Every machine profile names the Klipper `kinematics` the printer runs on. The
 kinematics decide which parts move, which motors share a move, and therefore
@@ -51,7 +51,7 @@ part later in the job.
 
 What this means for a profile: Klipper has one `max_accel` for XY, but on this
 layout the Y axis is the weak one. A profile for a bed slinger can derate Y on
-its own through `machine_max_acceleration_y`, and KLIPSLICE keeps X and Y as
+its own through `machine_max_acceleration_y`, and ANANAS SLICER keeps X and Y as
 separate limits for exactly this case.
 
 Machines: Prusa i3 family, Ender 3 and clones converted to Klipper, Sovol SV06.
@@ -111,5 +111,5 @@ Machines: RatRig V-Core 4 IDEX, self-built dual-carriage gantries.
 
 Klipper does not clamp `SET_VELOCITY_LIMIT` or `M204` to these values (since the
 change of 2021-04-30). A slicer that emits a higher value changes the live limit.
-KLIPSLICE treats `printer.cfg` as the envelope every emitted value is checked
+ANANAS SLICER treats `printer.cfg` as the envelope every emitted value is checked
 against; reading it live through Moonraker is on the roadmap.

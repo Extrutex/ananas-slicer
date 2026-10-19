@@ -266,7 +266,7 @@ bool is_associate_files(std::wstring extend)
     wchar_t app_path[MAX_PATH];
     ::GetModuleFileNameW(nullptr, app_path, sizeof(app_path));
 
-    std::wstring prog_id             = L"KLIPSLICE.1";
+    std::wstring prog_id             = L"AnanasSlicer.1";
     std::wstring reg_base            = L"Software\\Classes";
     std::wstring reg_extension       = reg_base + L"\\." + extend;
 
@@ -287,7 +287,7 @@ bool is_associate_files(std::wstring extend)
 
 class SplashScreen : public wxSplashScreen
 {
-    // Splash window size in DIP; 2:1 like the KLIPSLICE_splash.svg artwork.
+    // Splash window size in DIP; 2:1 like the AnanasSlicer_splash.svg artwork.
     static constexpr int SPLASH_W = 600;
     static constexpr int SPLASH_H = 300;
 
@@ -322,8 +322,8 @@ public:
         this->SetPosition(pos);
         this->CenterOnScreen();
 
-        // KLIPSLICE splash: always dark, independent of the colour mode. The artwork
-        // (resources/images/KLIPSLICE_splash.svg, 1200 x 600) carries the lockup, the
+        // ANANAS SLICER splash: always dark, independent of the colour mode. The artwork
+        // (resources/images/AnanasSlicer_splash.svg, 1200 x 600) carries the lockup, the
         // tagline and a thin rule at y = 548; the version and the loading step are drawn
         // left/right aligned above that rule, and the rule itself doubles as the progress bar.
         m_bg_color          = wxColour("#0B0E11"); // carbon-900
@@ -333,7 +333,7 @@ public:
         m_progress_fg_color = wxColour("#4DB9FF"); // signal-path
         wxSize sz  = m_window->GetClientSize();
         BitmapCache bmp_cache;
-        if (wxBitmap* bmp = bmp_cache.load_svg("KLIPSLICE_splash", 0, sz.GetHeight()))
+        if (wxBitmap* bmp = bmp_cache.load_svg("AnanasSlicer_splash", 0, sz.GetHeight()))
             m_logo_bmp = *bmp;
 
         m_window->Bind(wxEVT_PAINT, &SplashScreen::OnPaint, this);
@@ -700,7 +700,7 @@ static void generic_exception_handle()
         // and terminate the app so it is at least certain to happen now.
         BOOST_LOG_TRIVIAL(error) << boost::format("std::bad_alloc exception: %1%") % ex.what();
         flush_logs();
-        wxString errmsg = wxString::Format(_L("KLIPSLICE will terminate because of running out of memory. "
+        wxString errmsg = wxString::Format(_L("ANANAS SLICER will terminate because of running out of memory. "
                                               "It may be a bug. It will be appreciated if you report the issue to our team."));
         wxMessageBox(errmsg + "\n\n" + wxString(ex.what()), _L("Fatal error"), wxOK | wxICON_ERROR);
 
@@ -709,7 +709,7 @@ static void generic_exception_handle()
      } catch (const boost::io::bad_format_string& ex) {
      	BOOST_LOG_TRIVIAL(error) << boost::format("Uncaught exception: %1%") % ex.what();
         	flush_logs();
-        wxString errmsg = _L("KLIPSLICE will terminate because of a localization error. "
+        wxString errmsg = _L("ANANAS SLICER will terminate because of a localization error. "
                              "It will be appreciated if you report the specific scenario this issue happened.");
         wxMessageBox(errmsg + "\n\n" + wxString(ex.what()), _L("Critical error"), wxOK | wxICON_ERROR);
         std::terminate();
@@ -717,7 +717,7 @@ static void generic_exception_handle()
     } catch (const std::exception& ex) {
         BOOST_LOG_TRIVIAL(error) << boost::format("Uncaught exception: %1%") % ex.what();
         flush_logs();
-        wxLogError(format_wxstr(_L("KLIPSLICE got an unhandled exception: %1%"), ex.what()));
+        wxLogError(format_wxstr(_L("ANANAS SLICER got an unhandled exception: %1%"), ex.what()));
         throw;
     }
 //#endif
@@ -961,9 +961,9 @@ void GUI_App::post_init()
         CallAfter([] {
             const wxString wiki_url = "https://www.orcaslicer.com/wiki/user_profiles/user_profiles.html#profiles-missing-after-updating-from-bambu-cloud";
             MessageDialog dlg(nullptr,
-                _L("Since version 2.4.0, KLIPSLICE syncs user profiles through the cloud instead of Bambu Cloud.\n\n"
+                _L("Since version 2.4.0, ANANAS SLICER syncs user profiles through the cloud instead of Bambu Cloud.\n\n"
                    "To migrate your existing profiles, log in to the cloud and they will be transferred automatically. "
-                   "To learn more about how KLIPSLICE stores and syncs your profiles, or to migrate your presets manually, check out our wiki.\n\n"
+                   "To learn more about how ANANAS SLICER stores and syncs your profiles, or to migrate your presets manually, check out our wiki.\n\n"
                    "If you did not use Bambu Cloud to sync profiles, this change does not affect you and you can safely ignore this message."),
                 _L("Profile syncing change"),
                 wxOK,
@@ -1252,7 +1252,7 @@ void GUI_App::init_webview_runtime()
     }
 
     BOOST_LOG_TRIVIAL(warning) << "WebView2 runtime not found; prompting user to install.";
-    int nRet = wxMessageBox(_L("KLIPSLICE requires the Microsoft WebView2 Runtime to operate certain features.\nClick Yes to install it now."),
+    int nRet = wxMessageBox(_L("ANANAS SLICER requires the Microsoft WebView2 Runtime to operate certain features.\nClick Yes to install it now."),
                             _L("WebView2 Runtime"), wxYES_NO);
     if (nRet != wxYES) {
         BOOST_LOG_TRIVIAL(warning) << "User declined WebView2 runtime installation.";
@@ -1274,7 +1274,7 @@ void GUI_App::init_webview_runtime()
         BOOST_LOG_TRIVIAL(error) << "WebView2 runtime installation failed or still not detected.";
         wxMessageBox(_L("The Microsoft WebView2 Runtime could not be installed.\n"
                         "Some features, including the setup wizard, may appear blank until it is installed.\n"
-                        "Please install it manually from https://developer.microsoft.com/microsoft-edge/webview2/ and restart KLIPSLICE."),
+                        "Please install it manually from https://developer.microsoft.com/microsoft-edge/webview2/ and restart ANANAS SLICER."),
                      _L("WebView2 Runtime"), wxOK | wxICON_WARNING);
     }
 }
@@ -1585,7 +1585,7 @@ bool GUI_App::on_init_inner()
     wxLog::SetActiveTarget(new wxBoostLog());
 
 #ifdef __APPLE__
-    // Override wxWidgets' kAEGetURL handler so klipslice:// deep links keep
+    // Override wxWidgets' kAEGetURL handler so ananas-slicer:// deep links keep
     // working after the wxWidgets 3.3.2 upgrade on macOS (#13119).
     register_mac_deep_link_handler();
 #endif
@@ -1857,7 +1857,7 @@ bool GUI_App::on_init_inner()
             associate_files(L"step");
             associate_files(L"stp");
         }
-        associate_url(L"klipslice");
+        associate_url(L"ananas-slicer");
 
         if (app_config->get("associate_gcode") == "true")
             associate_files(L"gcode");
@@ -1871,7 +1871,7 @@ bool GUI_App::on_init_inner()
                /* wxString tips = wxString::Format(_L("Click to download new version in default browser: %s"), version_info.version_str);
                 DownloadDialog dialog(this->mainframe,
                     tips,
-                    _L("New version of KLIPSLICE"),
+                    _L("New version of ANANAS SLICER"),
                     false,
                     wxCENTER | wxICON_INFORMATION);
 
@@ -1922,7 +1922,7 @@ bool GUI_App::on_init_inner()
                 wxString tips = wxString::Format(_L("Click to download new version in default browser: %s"), version_str);
                 DownloadDialog dialog(this->mainframe,
                     tips,
-                    _L("KLIPSLICE needs an update"),
+                    _L("ANANAS SLICER needs an update"),
                     false,
                     wxCENTER | wxICON_INFORMATION);
                 dialog.SetExtendedMessage(description_text);
@@ -2203,7 +2203,7 @@ bool GUI_App::on_init_inner()
         m_config_corrupted = false;
         show_error(nullptr,
                    _u8L(
-                       "The KLIPSLICE configuration file may be corrupted and cannot be parsed.\nKLIPSLICE has attempted to recreate the "
+                       "The ANANAS SLICER configuration file may be corrupted and cannot be parsed.\nANANAS SLICER has attempted to recreate the "
                        "configuration file.\nPlease note, application settings will be lost, but printer profiles will not be affected."));
     }
     return true;
@@ -3469,7 +3469,7 @@ void GUI_App::on_http_error(wxCommandEvent &evt)
 
     // Version limit
     if (code == HttpErrorVersionLimited) {
-        MessageDialog msg_dlg(nullptr, _L("The version of KLIPSLICE is too low and needs to be updated to the latest version before it can be used normally."), "", wxAPPLY | wxOK);
+        MessageDialog msg_dlg(nullptr, _L("The version of ANANAS SLICER is too low and needs to be updated to the latest version before it can be used normally."), "", wxAPPLY | wxOK);
         if (msg_dlg.ShowModal() == wxOK) {
         }
     }
@@ -5888,14 +5888,14 @@ bool GUI_App::load_language(wxString language, bool initial)
 
     if (!wxLocale::IsAvailable(locale_language_info->Language)) {
     	// Loading the language dictionary failed.
-	    wxString message = wxString::Format(_L("Switching KLIPSLICE to language %s failed."), requested_language_code);
+	    wxString message = wxString::Format(_L("Switching ANANAS SLICER to language %s failed."), requested_language_code);
 #if !defined(_WIN32) && !defined(__APPLE__)
         // likely some linux system
         message += _L("\nYou may need to reconfigure the missing locales, likely by running the \"locale-gen\" and \"dpkg-reconfigure locales\" commands.\n");
 #endif
         if (initial)
         	message + "\n\nApplication will close.";
-        wxMessageBox(message, _L("KLIPSLICE - Switching language failed"), wxOK | wxICON_ERROR);
+        wxMessageBox(message, _L("ANANAS SLICER - Switching language failed"), wxOK | wxICON_ERROR);
         if (initial)
 			std::exit(EXIT_FAILURE);
 		else
@@ -6297,7 +6297,7 @@ void GUI_App::open_preferences(PreferencesTab tab, const std::string& highlight_
                     associate_files(L"step");
                     associate_files(L"stp");
                 }
-                associate_url(L"klipslice");
+                associate_url(L"ananas-slicer");
             }
             else {
                 if (app_config->get("associate_gcode") == "true")
@@ -7400,8 +7400,8 @@ void GUI_App::associate_files(std::wstring extend)
     ::GetModuleFileNameW(nullptr, app_path, sizeof(app_path));
 
     std::wstring prog_path = L"\"" + std::wstring(app_path) + L"\"";
-    std::wstring prog_id = L"KLIPSLICE.1";
-    std::wstring prog_desc = L"KLIPSLICE";
+    std::wstring prog_id = L"AnanasSlicer.1";
+    std::wstring prog_desc = L"ANANAS SLICER";
     std::wstring prog_command = prog_path + L" \"%1\"";
     std::wstring reg_base = L"Software\\Classes";
     std::wstring reg_extension = reg_base + L"\\." + extend;
@@ -7427,8 +7427,8 @@ void GUI_App::disassociate_files(std::wstring extend)
     ::GetModuleFileNameW(nullptr, app_path, sizeof(app_path));
 
     std::wstring prog_path = L"\"" + std::wstring(app_path) + L"\"";
-    std::wstring prog_id = L"KLIPSLICE.1";
-    std::wstring prog_desc = L"KLIPSLICE";
+    std::wstring prog_id = L"AnanasSlicer.1";
+    std::wstring prog_desc = L"ANANAS SLICER";
     std::wstring prog_command = prog_path + L" \"%1\"";
     std::wstring reg_base = L"Software\\Classes";
     std::wstring reg_extension = reg_base + L"\\." + extend;

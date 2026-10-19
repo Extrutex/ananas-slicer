@@ -128,10 +128,10 @@ public:
     void set_is_first_layer(bool bval) { m_is_first_layer = bval; }
     void invalidate_acceleration() { m_last_acceleration = 0; }
     void invalidate_jerk() { m_last_jerk = 0; }
-    // KLIPSLICE: custom G-code sent its own SET_RETRACTION, so the values the writer sent last are
+    // ANANAS SLICER: custom G-code sent its own SET_RETRACTION, so the values the writer sent last are
     // no longer the active ones; the next G10 sends the active filament's values again.
     void invalidate_firmware_retraction_values() { m_firmware_retraction_sent.reset(); }
-    // KLIPSLICE: custom G-code left Klipper's [firmware_retraction] retracted (G10) or not
+    // ANANAS SLICER: custom G-code left Klipper's [firmware_retraction] retracted (G10) or not
     // (G11, SET_RETRACTION). The writer must not send SET_RETRACTION while it is retracted.
     void set_firmware_retracted(bool retracted) { m_firmware_retracted = retracted; }
   private:
@@ -193,7 +193,7 @@ public:
     // Orca: true if a full spiral-lift circle (center in bed coordinates, mm) fits inside the active printable area.
     bool spiral_lift_fits_printable_area(const Vec2d &center, double radius) const;
     std::string _retract(double length, double restart_extra, const std::string &comment);
-    // KLIPSLICE: SET_RETRACTION with the active filament's values when the slicer owns Klipper's
+    // ANANAS SLICER: SET_RETRACTION with the active filament's values when the slicer owns Klipper's
     // firmware retraction values. Empty if they are already active, the firmware owns them, or
     // Klipper is retracted.
     std::string set_firmware_retraction();

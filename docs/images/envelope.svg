@@ -71,6 +71,6 @@
   <!-- caption -->
   <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">
     <text x="40" y="368">Klipper executes the limits the G-code sets, so an over-limit value from the slicer reaches the steppers</text>
-    <text x="40" y="386">unchanged; KLIPSLICE treats printer.cfg as the envelope every value is checked against.</text>
+    <text x="40" y="386">unchanged; ANANAS SLICER treats printer.cfg as the envelope every value is checked against.</text>
   </g>
 </svg>

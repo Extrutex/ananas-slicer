@@ -14,9 +14,9 @@
 // be a Docker port bound to numeric loopback; never accept a real printer URL.
 TEST_CASE("The Moonraker host uploads and starts a print on the virtual API", "[Moonraker][VirtualPrinter][.]")
 {
-    const char* url   = std::getenv("KLIPSLICE_VIRTUAL_HOST_URL");
-    const char* key   = std::getenv("KLIPSLICE_VIRTUAL_API_KEY");
-    const char* gcode = std::getenv("KLIPSLICE_VIRTUAL_GCODE");
+    const char* url   = std::getenv("ANANAS_SLICER_VIRTUAL_HOST_URL");
+    const char* key   = std::getenv("ANANAS_SLICER_VIRTUAL_API_KEY");
+    const char* gcode = std::getenv("ANANAS_SLICER_VIRTUAL_GCODE");
     if (url == nullptr || key == nullptr || gcode == nullptr)
         SKIP("Run through FLUXRAKER tests/virtual-printer/run.py with the isolated rig.");
 
@@ -38,7 +38,7 @@ TEST_CASE("The Moonraker host uploads and starts a print on the virtual API", "[
 
     Slic3r::PrintHostUpload upload;
     upload.source_path = gcode;
-    upload.upload_path = "klipslice virtual cube.gcode";
+    upload.upload_path = "ananas-slicer virtual cube.gcode";
     upload.storage = "gcodes";
     upload.post_action = Slic3r::PrintHostPostUploadAction::StartPrint;
     std::vector<std::string> errors;

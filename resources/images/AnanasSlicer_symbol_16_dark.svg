@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
-  <title>KLIPSLICE symbol, direction A (Klipper-derived), 16 px hinted source, dark background.</title>
+  <title>ANANAS SLICER symbol, direction A (Klipper-derived), 16 px hinted source, dark background.</title>
   <!-- Reduced drawing for 16/24/32 px: two layers per arm instead of five,
        1 px gaps, 2 px stem and foot on whole pixels. Diagonals stay antialiased. -->
   <path fill="#b4c0c9" d="M1 2L6 7H2L1 6Z M3 8H6V11Z M15 2L10 7H14L15 6Z M13 8H10V11Z"/>

@@ -205,7 +205,7 @@ TEST_CASE("Native command icons resolve to shipped SVGs", "[ActionSource][SpeedD
                               Expected{"import_file", "menu_open"},
                               Expected{"help_open_config_folder", "open_project"},
                               Expected{"help_check_updates", "refresh"},
-                              Expected{"help_about", "KLIPSLICE_symbol_dark"},
+                              Expected{"help_about", "AnanasSlicer_symbol_dark"},
                               Expected{"go_to_tab", ""}}) {
         const std::string* icon = icon_of(e.key);
         INFO(e.key);

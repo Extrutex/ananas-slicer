@@ -9,14 +9,14 @@ Requires the Windows SDK (makeappx.exe) unless -StageOnly is used.
 #>
 param(
     [string]$InstallDir = "build/OrcaSlicer",
-    [string]$OutputPath = "build/KLIPSLICE_Windows_MSIX.msix",
+    [string]$OutputPath = "build/AnanasSlicer_Windows_MSIX.msix",
     [ValidateSet("x64", "arm64")]
     [string]$Architecture = "x64",
     [string]$StagingDir = "",
     [switch]$StageOnly,
-    [string]$IdentityName = "KLIPSLICE",
-    [string]$Publisher = "CN=KLIPSLICE contributors",
-    [string]$PublisherDisplayName = "KLIPSLICE contributors"
+    [string]$IdentityName = "AnanasSlicer",
+    [string]$Publisher = "CN=ANANAS SLICER contributors",
+    [string]$PublisherDisplayName = "ANANAS SLICER contributors"
 )
 $ErrorActionPreference = 'Stop'
 
@@ -31,8 +31,8 @@ if ($versionContent -notmatch 'set\(SoftFever_VERSION "(\d+)\.(\d+)\.(\d+)') {
 $msixVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3]).0"
 Write-Output "MSIX version: $msixVersion"
 
-if (-not (Test-Path (Join-Path $InstallDir 'klipslice.exe'))) {
-    throw "klipslice.exe not found in '$InstallDir' - build the install tree first"
+if (-not (Test-Path (Join-Path $InstallDir 'ananas-slicer.exe'))) {
+    throw "ananas-slicer.exe not found in '$InstallDir' - build the install tree first"
 }
 
 if ([string]::IsNullOrEmpty($StagingDir)) {

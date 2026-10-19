@@ -99,7 +99,7 @@ enum class WipeTowerType {
     Type2,
 };
 
-// KLIPSLICE: Moonraker is the only print host. Other values a project or preset may still carry
+// ANANAS SLICER: Moonraker is the only print host. Other values a project or preset may still carry
 // are rewritten by PrintConfigDef::handle_legacy().
 enum PrintHostType {
     htMoonraker

@@ -131,7 +131,7 @@ TroubleshootDialog::TroubleshootDialog()
     // LEFT SIZER //////////////////////
 
     // HEADER
-    m_logo            = ScalableBitmap(this, is_dark ? "KLIPSLICE_horizontal_dark" : "KLIPSLICE_horizontal_light", 64);
+    m_logo            = ScalableBitmap(this, is_dark ? "AnanasSlicer_horizontal_dark" : "AnanasSlicer_horizontal_light", 64);
     m_header_logo     = new wxStaticBitmap(this, wxID_ANY, m_logo.bmp());
     auto logo_line    = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, FromDIP(2)));
     logo_line->SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#3D4953")));
@@ -973,7 +973,7 @@ void TroubleshootDialog::RebuildSystemProfiles()
     
     MessageDialog msg(this,
         _L("Restart Required") + "\n" +
-        _L("Please make sure any instances of KLIPSLICE are not running") + "\n" +
+        _L("Please make sure any instances of ANANAS SLICER are not running") + "\n" +
         _L("Do you want to continue?")
         , wxString(SLIC3R_APP_FULL_NAME), wxICON_QUESTION | wxOK | wxCANCEL
     );

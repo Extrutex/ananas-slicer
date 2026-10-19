@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <title>KLIPSLICE symbol, direction A (Klipper-derived), dark background.</title>
+  <title>ANANAS SLICER symbol, direction A (Klipper-derived), dark background.</title>
   <!--
     Geometry (64 u grid, content box x 4..60, y 8..56):
     - body: the Klipper chevron (two arms, top edges y = x + 6 and y = 70 - x,
@@ -7,7 +7,7 @@
       (y 10-15, 17-23, 25-31, 33-39, 41-48). The slice motif.
     - trace: the Klipper Y-path (7 u diagonals, 5 u stem, foot turning left),
       kept continuous across all layers: the toolpath. 2 u clearance to the body.
-    Do not use for 16/32 px output: use KLIPSLICE_symbol_16_*.svg.
+    Do not use for 16/32 px output: use AnanasSlicer_symbol_16_*.svg.
   -->
   <path fill="#b4c0c9" d="M4 10L9 15H4Z M4 17H11L17 23H4Z M5 25H19L25 31H11Z M13 33H27L28 34V39H19Z M21 41H28V48Z M60 10L55 15H60Z M60 17H53L47 23H60Z M59 25H45L39 31H53Z M51 33H37L36 34V39H45Z M43 41H36V48Z"/>
   <path fill="#4db9ff" d="M4 8H11L32 29L53 8H60L34.5 33.5V54L32.5 56H22V51H29.5V33.5Z"/>

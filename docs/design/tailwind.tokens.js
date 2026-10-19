@@ -1,5 +1,5 @@
 /**
- * KLIPSLICE Tailwind theme extension.
+ * ANANAS SLICER Tailwind theme extension.
  *
  * Usage (tailwind.config.js):
  *   const ks = require("./docs/design/tailwind.tokens.js");

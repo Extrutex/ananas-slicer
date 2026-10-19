@@ -907,7 +907,7 @@ TEST_CASE("Klipper state macros are called only with klipper_restore_state", "[G
 TEST_CASE("The shipped Klipper macros define the state macros the G-code calls", "[GCodeWriter][Klipper][RestoreState]")
 {
     namespace fs = boost::filesystem;
-    const fs::path cfg = fs::path(std::string(TEST_DATA_DIR)) / ".." / ".." / "resources" / "klipper" / "klipslice_state.cfg";
+    const fs::path cfg = fs::path(std::string(TEST_DATA_DIR)) / ".." / ".." / "resources" / "klipper" / "ananas_slicer_state.cfg";
     REQUIRE(fs::is_regular_file(cfg));
     fs::ifstream stream(cfg);
     const std::string text{ std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>() };

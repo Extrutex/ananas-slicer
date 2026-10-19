@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the Klipper timing corpus and its reference timings.
 
-The corpus is G-code the KLIPSLICE time estimate is checked against: real
+The corpus is G-code the ANANAS SLICER time estimate is checked against: real
 slices, reduced to what Klipper executes (comments and blank lines removed,
 optionally cut to the first layers), so every line of a corpus file is one
 command and line numbers mean the same to Klipper, to this script and to the

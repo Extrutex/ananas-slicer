@@ -43,7 +43,7 @@ PrintHost* PrintHost::get_print_host(DynamicPrintConfig *config)
         }
     }
 
-    // KLIPSLICE: Moonraker is the only print host, and there is no SLA host.
+    // ANANAS SLICER: Moonraker is the only print host, and there is no SLA host.
     return tech == ptFFF ? new Moonraker(config) : nullptr;
 }
 

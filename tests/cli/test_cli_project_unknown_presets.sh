@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # End-to-end check that the CLI keeps a project whose system presets are not shipped.
 #
-# KLIPSLICE ships no Bambu Lab (BBL) profiles, but users still open projects saved by Bambu Studio or
+# ANANAS SLICER ships no Bambu Lab (BBL) profiles, but users still open projects saved by Bambu Studio or
 # upstream OrcaSlicer that name BBL printer, process and filament presets. Such a project must slice
 # and re-export with its embedded settings: the unresolved presets are logged, never fatal, and never
 # a crash. A project is exported from the shipped Voron 2.4 350 presets, its preset identity is

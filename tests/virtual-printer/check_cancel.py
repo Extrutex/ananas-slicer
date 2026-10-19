@@ -3,7 +3,7 @@
 
 Runs inside the moonraker container against http://127.0.0.1:7125, with Klippy
 on state-macros/printer-cancel.cfg (Mainsail's CANCEL_PRINT and its
-user_cancel_macro hook calling _KLIPSLICE_RESTORE). Steps:
+user_cancel_macro hook calling _ANANAS_SLICER_RESTORE). Steps:
 
 1. CANCEL_PRINT must be the client's macro (_VP_EXPECT_CLIENT_CANCEL).
 2. Upload state-macros/cancel.gcode and start it. It saves the motion limits,
@@ -40,7 +40,7 @@ PRESSURE_ADVANCE = {"extruder": (0.04, 0.04), "extruder_stepper Belt": (0.06, 0.
 PRINT_PRESSURE_ADVANCE = {"extruder": (0.2, 0.02), "extruder_stepper Belt": (0.3, 0.01)}
 HEATERS = ("extruder", "extruder1", "heater_bed")
 STATE = "gcode_macro _VP_CANCEL_STATE"
-SAVE = "gcode_macro _KLIPSLICE_SAVE"
+SAVE = "gcode_macro _ANANAS_SLICER_SAVE"
 # Seconds the print time must stand still after the cancel.
 SETTLE_S = 2.0
 
@@ -127,7 +127,7 @@ def main():
                 fail("before the cancel: %s target 0, the print did not heat" % name)
         check_values(before, PRINT_LIMITS, PRINT_PRESSURE_ADVANCE, "before the cancel", fail)
         if not before[SAVE]["saved"]:
-            fail("before the cancel: _KLIPSLICE_SAVE recorded no snapshot")
+            fail("before the cancel: _ANANAS_SLICER_SAVE recorded no snapshot")
 
         # What a client's cancel button sends: Moonraker runs CANCEL_PRINT.
         responses["print_cancel"] = request("POST", "/printer/print/cancel")
@@ -166,7 +166,7 @@ def main():
             fail("part cooling fan speed %s after the cancel" % settled["fan"]["speed"])
         check_values(settled, LIMITS, PRESSURE_ADVANCE, "after the cancel", fail)
         if settled[SAVE]["saved"]:
-            fail("after the cancel: the _KLIPSLICE_SAVE snapshot is still there, the restore did not run")
+            fail("after the cancel: the _ANANAS_SLICER_SAVE snapshot is still there, the restore did not run")
         time.sleep(SETTLE_S)
         final = query()
         responses["final"] = final

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# KLIPSLICE virtual printer check: slice a calibration cube with the shipped
+# ANANAS SLICER virtual printer check: slice a calibration cube with the shipped
 # Voron 2.4 350 presets, run the G-code through upstream Klipper in batch mode,
 # check the shipped print state macros in batch mode, then upload and print the
 # G-code through upstream Moonraker on a virtual Klippy, and cancel a running
@@ -8,11 +8,11 @@
 # printer is ever contacted.
 #
 # usage: tests/virtual-printer/run.sh
-#   KLIPSLICE_BIN   slicer binary; default: the app bundle under
-#                   KLIPSLICE_BUILD_DIR on Darwin, its package/bin/klipslice on Linux
-#   KLIPSLICE_BUILD_DIR  build tree the default binary is taken from (absolute or
+#   ANANAS_SLICER_BIN   slicer binary; default: the app bundle under
+#                   ANANAS_SLICER_BUILD_DIR on Darwin, its package/bin/ananas-slicer on Linux
+#   ANANAS_SLICER_BUILD_DIR  build tree the default binary is taken from (absolute or
 #                   relative to the repository); default build/arm64 on Darwin,
-#                   build on Linux. Ignored when KLIPSLICE_BIN is set.
+#                   build on Linux. Ignored when ANANAS_SLICER_BIN is set.
 #   VP_KEEP_RIG=1   leave the Klipper/Moonraker containers running afterwards
 #
 # Writes tests/virtual-printer/out/ (report.md, G-code, logs, JSON results).
@@ -26,7 +26,7 @@ REPO="$(cd -- "$HERE/../.." && pwd)"
 OUT="$HERE/out"
 PROFILES="$REPO/resources/profiles"
 MODEL="$REPO/tests/data/20mm_cube.obj"
-GCODE_NAME="klipslice_voron24_cube.gcode"
+GCODE_NAME="ananas_slicer_voron24_cube.gcode"
 DICT=/opt/klipper-dict/linux-host.dict
 PRINTER_PRESET="$PROFILES/Voron/machine/Voron 2.4 350 0.4 nozzle.json"
 PROCESS_PRESET="$PROFILES/Voron/process/0.20mm Standard @Voron.json"
@@ -37,21 +37,21 @@ PRINT_TIMEOUT=300
 log() { printf '[virtual-printer] %s\n' "$*"; }
 die() { printf '[virtual-printer] ERROR: %s\n' "$*" >&2; exit 1; }
 
-if [ -n "${KLIPSLICE_BIN:-}" ]; then
-    BIN="$KLIPSLICE_BIN"
+if [ -n "${ANANAS_SLICER_BIN:-}" ]; then
+    BIN="$ANANAS_SLICER_BIN"
 else
     case "$(uname -s)" in
-        Darwin) BUILD_DIR="${KLIPSLICE_BUILD_DIR:-build/arm64}" ;;
-        Linux) BUILD_DIR="${KLIPSLICE_BUILD_DIR:-build}" ;;
-        *) die "unsupported host $(uname -s); set KLIPSLICE_BIN" ;;
+        Darwin) BUILD_DIR="${ANANAS_SLICER_BUILD_DIR:-build/arm64}" ;;
+        Linux) BUILD_DIR="${ANANAS_SLICER_BUILD_DIR:-build}" ;;
+        *) die "unsupported host $(uname -s); set ANANAS_SLICER_BIN" ;;
     esac
     case "$BUILD_DIR" in
         /*) ;;
         *) BUILD_DIR="$REPO/$BUILD_DIR" ;;
     esac
     case "$(uname -s)" in
-        Darwin) BIN="$BUILD_DIR/src/Release/KLIPSLICE.app/Contents/MacOS/KLIPSLICE" ;;
-        Linux) BIN="$BUILD_DIR/package/bin/klipslice" ;;
+        Darwin) BIN="$BUILD_DIR/src/Release/AnanasSlicer.app/Contents/MacOS/AnanasSlicer" ;;
+        Linux) BIN="$BUILD_DIR/package/bin/ananas-slicer" ;;
     esac
 fi
 [ -x "$BIN" ] || die "slicer binary not found or not executable: $BIN"
@@ -105,7 +105,7 @@ compose run --rm --no-deps klipper-batch \
 [ -f "$OUT/klipper.json" ] || die "Klipper batch run produced no result (exit $klipper_rc)"
 
 # --- 3. State macros -------------------------------------------------------
-# resources/klipper/klipslice_state.cfg in Klipper batch mode: save, cancel and
+# resources/klipper/ananas_slicer_state.cfg in Klipper batch mode: save, cancel and
 # restore with an extruder without a stepper and an [extruder_stepper], once
 # with the rig's own CANCEL_PRINT and once with Mainsail's and its cancel hook,
 # with two extruder steppers whose names differ only in case, and with
@@ -127,13 +127,13 @@ for route in printer:check:state-macros printer-mainsail:check-mainsail:state-ma
 done
 # The restore says why it skips the steppers whose names differ only in case.
 for stepper in Belt belt; do
-    grep -qF "_KLIPSLICE_RESTORE: [extruder_stepper $stepper] and another section differ only in case" \
+    grep -qF "_ANANAS_SLICER_RESTORE: [extruder_stepper $stepper] and another section differ only in case" \
         "$OUT/state-macros-case.log" \
         || { log "state macro check check-case.gcode: no console warning for [extruder_stepper $stepper]"; macros_rc=1; }
 done
 # It also says why it skips the steppers whose names it cannot pass unquoted.
 for stepper in "Belt'aux" 'Belt\aux'; do
-    grep -qF "_KLIPSLICE_RESTORE: the name of [extruder_stepper $stepper] holds characters other than" \
+    grep -qF "_ANANAS_SLICER_RESTORE: the name of [extruder_stepper $stepper] holds characters other than" \
         "$OUT/state-macros-names.log" \
         || { log "state macro check check-names.gcode: no console warning for [extruder_stepper $stepper]"; macros_rc=1; }
 done
@@ -158,14 +158,14 @@ compose exec -T moonraker cat /printer_data/logs/moonraker.log > "$OUT/moonraker
 # The batch routes of step 3 call CANCEL_PRINT without a print running, so they
 # would not notice a cancel that leaves the print running. Here the
 # long-running Klippy gets state-macros/printer-cancel.cfg (Mainsail's
-# CANCEL_PRINT with the _KLIPSLICE_RESTORE hook), prints
+# CANCEL_PRINT with the _ANANAS_SLICER_RESTORE hook), prints
 # state-macros/cancel.gcode through Moonraker and cancels it mid-print.
 log "cancelling a running print through Moonraker (Mainsail's CANCEL_PRINT)"
 cancel_rc=0
 compose down -v --remove-orphans > /dev/null 2>&1 || die "could not reset the rig"
 if VP_PRINTER_CFG=state-macros/printer-cancel.cfg compose up -d --wait --wait-timeout 180 klipper moonraker; then
     compose exec -T moonraker /opt/moonraker-env/bin/python /vp/check_cancel.py \
-        --gcode /vp/state-macros/cancel.gcode --remote-name klipslice_vp_cancel.gcode \
+        --gcode /vp/state-macros/cancel.gcode --remote-name ananas_slicer_vp_cancel.gcode \
         --result /out/cancel.json || cancel_rc=$?
 else
     cancel_rc=1

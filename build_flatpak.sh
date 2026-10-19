@@ -255,8 +255,8 @@ mkdir -p "$BUILD_DIR"
 rm -rf "$BUILD_DIR/build-dir"
 
 # Check if flatpak manifest exists
-if [[ ! -f "./scripts/flatpak/de._3dwindt.KLIPSLICE.yml" ]]; then
-    echo -e "${RED}Error: Flatpak manifest not found at scripts/flatpak/de._3dwindt.KLIPSLICE.yml${NC}"
+if [[ ! -f "./scripts/flatpak/de._3dwindt.AnanasSlicer.yml" ]]; then
+    echo -e "${RED}Error: Flatpak manifest not found at scripts/flatpak/de._3dwindt.AnanasSlicer.yml${NC}"
     exit 1
 fi
 
@@ -268,7 +268,7 @@ echo -e "${YELLOW}Building Flatpak package...${NC}"
 echo -e "This may take a while (30+ minutes depending on your system)..."
 echo ""
 
-BUNDLE_NAME="KLIPSLICE-Linux-flatpak_${VER}_${ARCH}.flatpak"
+BUNDLE_NAME="AnanasSlicer-Linux-flatpak_${VER}_${ARCH}.flatpak"
 
 # Remove any existing bundle
 rm -f "$BUNDLE_NAME"
@@ -319,11 +319,11 @@ if [[ "$DISABLE_ROFILES_FUSE" == true ]]; then
 fi
 
 # Use a temp manifest with no-debuginfo if requested
-MANIFEST="scripts/flatpak/de._3dwindt.KLIPSLICE.yml"
+MANIFEST="scripts/flatpak/de._3dwindt.AnanasSlicer.yml"
 if [[ "$NO_DEBUGINFO" == true ]]; then
-    MANIFEST="scripts/flatpak/de._3dwindt.KLIPSLICE.no-debug.yml"
+    MANIFEST="scripts/flatpak/de._3dwindt.AnanasSlicer.no-debug.yml"
     sed '/^build-options:/a\  no-debuginfo: true\n  strip: true' \
-        scripts/flatpak/de._3dwindt.KLIPSLICE.yml > "$MANIFEST"
+        scripts/flatpak/de._3dwindt.AnanasSlicer.yml > "$MANIFEST"
     echo -e "${YELLOW}Debug info disabled (using temp manifest)${NC}"
 fi
 
@@ -333,19 +333,19 @@ if ! flatpak-builder \
     "$MANIFEST"; then
     echo -e "${RED}Error: flatpak-builder failed${NC}"
     echo -e "${YELLOW}Check the build log above for details${NC}"
-    rm -f "scripts/flatpak/de._3dwindt.KLIPSLICE.no-debug.yml"
+    rm -f "scripts/flatpak/de._3dwindt.AnanasSlicer.no-debug.yml"
     exit 1
 fi
 
 # Clean up temp manifest
-rm -f "scripts/flatpak/de._3dwindt.KLIPSLICE.no-debug.yml"
+rm -f "scripts/flatpak/de._3dwindt.AnanasSlicer.no-debug.yml"
 
 # Create bundle
 echo -e "${YELLOW}Creating Flatpak bundle...${NC}"
 if ! flatpak build-bundle \
     "$BUILD_DIR/repo" \
     "$BUNDLE_NAME" \
-    de._3dwindt.KLIPSLICE \
+    de._3dwindt.AnanasSlicer \
     --arch="$ARCH"; then
     echo -e "${RED}Error: Failed to create Flatpak bundle${NC}"
     exit 1
@@ -364,10 +364,10 @@ echo -e "${BLUE}To install the Flatpak:${NC}"
 echo -e "flatpak install --user $BUNDLE_NAME"
 echo ""
 echo -e "${BLUE}To run OrcaSlicer:${NC}"
-echo -e "flatpak run de._3dwindt.KLIPSLICE"
+echo -e "flatpak run de._3dwindt.AnanasSlicer"
 echo ""
 echo -e "${BLUE}To uninstall:${NC}"
-echo -e "flatpak uninstall --user de._3dwindt.KLIPSLICE"
+echo -e "flatpak uninstall --user de._3dwindt.AnanasSlicer"
 echo ""
 if [[ "$FORCE_CLEAN" != true ]]; then
     echo -e "${BLUE}Cache Management:${NC}"

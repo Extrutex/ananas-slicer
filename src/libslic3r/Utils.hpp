@@ -287,12 +287,12 @@ extern bool is_absolute_path_within_root(const boost::filesystem::path &path, co
 // Anything unknown is not safe.
 extern bool is_safe_to_open_file_name(const std::string &file_name);
 
-// Custom protocol support utils. KLIPSLICE owns klipslice:// and does not claim orcaslicer:// or bambustudio://,
+// Custom protocol support utils. ANANAS SLICER owns ananas-slicer:// and does not claim orcaslicer:// or bambustudio://,
 // so it never takes links meant for an installed OrcaSlicer or Bambu Studio.
-inline bool is_klipslice_open(const std::string& url) { return boost::starts_with(url, "klipslice://open"); }
+inline bool is_ananas_slicer_open(const std::string& url) { return boost::starts_with(url, "ananas-slicer://open"); }
 inline bool is_prusaslicer_open(const std::string& url) { return boost::starts_with(url, "prusaslicer://open"); }
 inline bool is_cura_open(const std::string& url) { return boost::starts_with(url, "cura://open"); }
-inline bool is_supported_open_protocol(const std::string& url) { return is_klipslice_open(url) || is_prusaslicer_open(url) || is_cura_open(url); }
+inline bool is_supported_open_protocol(const std::string& url) { return is_ananas_slicer_open(url) || is_prusaslicer_open(url) || is_cura_open(url); }
 inline bool is_printables_link(const std::string& url) {
     const std::regex url_regex("(http|https)://printables.com", std::regex_constants::icase);
     return std::regex_match(url, url_regex);

@@ -1752,7 +1752,7 @@ var LANG_COOKIE_EXPIRESECOND = 365 * 86400;
 
 // Product name shown in the web pages. Strings above carry the {APP_NAME} placeholder,
 // so a rename is this one line (keep in sync with SLIC3R_APP_NAME in version.inc).
-var APP_NAME = "KLIPSLICE";
+var APP_NAME = "ANANAS SLICER";
 
 function TranslatePage() {
   let strLang = GetQueryString("lang");

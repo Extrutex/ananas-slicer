@@ -2,9 +2,9 @@
 ; against state-macros/printer-cancel.cfg. check_cancel.py cancels it while
 ; it runs the loop below.
 
-; A print with klipper_restore_state: _KLIPSLICE_SAVE, then per-feature
+; A print with klipper_restore_state: _ANANAS_SLICER_SAVE, then per-feature
 ; values, heaters and the part cooling fan on.
-_KLIPSLICE_SAVE
+_ANANAS_SLICER_SAVE
 SET_VELOCITY_LIMIT VELOCITY=120 ACCEL=1500 MINIMUM_CRUISE_RATIO=0.2 SQUARE_CORNER_VELOCITY=9
 SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.2 SMOOTH_TIME=0.02
 SET_PRESSURE_ADVANCE EXTRUDER=Belt ADVANCE=0.3 SMOOTH_TIME=0.01

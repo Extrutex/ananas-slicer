@@ -11,7 +11,7 @@ _VP_EXPECT_PA STEPPER=Tail ADVANCE=0.09 SMOOTH_TIME=0.037
 ; A cancelled print: the restore completes. Limits and the pressure advance of
 ; every other extruder stepper come back, including the one after the
 ; skipped names; the two skipped steppers keep the print's values.
-_KLIPSLICE_SAVE
+_ANANAS_SLICER_SAVE
 SET_VELOCITY_LIMIT VELOCITY=120 ACCEL=1500 MINIMUM_CRUISE_RATIO=0.2 SQUARE_CORNER_VELOCITY=9
 SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.2 SMOOTH_TIME=0.02
 SET_PRESSURE_ADVANCE EXTRUDER=Belt ADVANCE=0.3 SMOOTH_TIME=0.01

@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-label="KLIPSLICE: a slicer for Klipper printers, and only for Klipper printers.">
-  <title>KLIPSLICE README hero: the logotype lockup, the tagline, three printer.cfg lines, and the strata wedge signet with layer ticks.</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-label="ANANAS SLICER: a slicer for Klipper printers, and only for Klipper printers.">
+  <title>ANANAS SLICER README hero: the logotype lockup, the tagline, three printer.cfg lines, and the strata wedge signet with layer ticks.</title>
   <!-- ground + 1 px frame -->
   <rect x="0" y="0" width="1200" height="320" fill="#0b0e11"/>
   <rect x="0.5" y="0.5" width="1199" height="319" fill="none" stroke="#262f37" stroke-width="1"/>
 
-  <!-- official lockup, copied verbatim from resources/images/KLIPSLICE_horizontal_dark.svg;
+  <!-- official lockup, copied verbatim from resources/images/AnanasSlicer_horizontal_dark.svg;
        scaled 24 u cap height -> 56 px (x 7/3), symbol left edge at x = 60 -->
   <g transform="translate(50.667 29.333) scale(2.3333)">
     <path fill="#b4c0c9" d="M4 10L9 15H4Z M4 17H11L17 23H4Z M5 25H19L25 31H11Z M13 33H27L28 34V39H19Z M21 41H28V48Z M60 10L55 15H60Z M60 17H53L47 23H60Z M59 25H45L39 31H53Z M51 33H37L36 34V39H45Z M43 41H36V48Z"/>

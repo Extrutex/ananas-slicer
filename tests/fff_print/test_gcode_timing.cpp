@@ -757,7 +757,7 @@ TEST_CASE("The Klipper model gives finite times on G-code it cannot fully model"
     REQUIRE(t >= 0.0);
 }
 
-// Regression gate against upstream Klipper. tests/data/klipper_timing holds real KLIPSLICE slices,
+// Regression gate against upstream Klipper. tests/data/klipper_timing holds real ANANAS SLICER slices,
 // reduced to the commands Klipper executes, and reference.json the print time Klipper v0.13 batch
 // mode reached at every marker command of each file, measured on tests/virtual-printer/printer.cfg
 // by tests/virtual-printer/timing-gate.sh. The estimate has to match Klipper over the whole print

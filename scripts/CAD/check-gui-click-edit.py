@@ -26,7 +26,7 @@ typed, the parsed value equals it, and it differs from the prefill. The last cla
 that matters — a field that is on screen but deaf commits its prefill, and every other signal
 (the field is visible, a constraint is created, the solve succeeds) looks perfectly healthy.
 
-    scripts/CAD/check-gui-click-edit.py --display :10 --bin build/src/Release/klipslice
+    scripts/CAD/check-gui-click-edit.py --display :10 --bin build/src/Release/ananas-slicer
 
 With --attach it drives an already-running app instead of launching one; the app must have been
 started with ORCA_CAD_UXTRACE=1 and its stderr redirected to --trace.
@@ -36,7 +36,7 @@ import argparse, json, os, re, shutil, signal, socket, subprocess, sys, tempfile
 
 AP = argparse.ArgumentParser()
 AP.add_argument("--display", default=os.environ.get("DISPLAY", ":10"))
-AP.add_argument("--bin", default="build/src/Release/klipslice")
+AP.add_argument("--bin", default="build/src/Release/ananas-slicer")
 AP.add_argument("--datadir", default="")
 AP.add_argument("--trace", default="")
 AP.add_argument("--sock", default="/tmp/mcp-uxcheck.sock",
@@ -133,7 +133,7 @@ def seed_datadir(datadir):
     nothing to do with what is being tested. Seed the flag before the first launch.
     """
     os.makedirs(datadir, exist_ok=True)
-    conf = os.path.join(datadir, "KLIPSLICE.conf")
+    conf = os.path.join(datadir, "AnanasSlicer.conf")
     data = {}
     if os.path.exists(A.seed_from):
         try:

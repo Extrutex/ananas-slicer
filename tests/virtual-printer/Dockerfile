@@ -1,4 +1,4 @@
-# Virtual Klipper + Moonraker test rig for KLIPSLICE G-code.
+# Virtual Klipper + Moonraker test rig for ANANAS SLICER G-code.
 #
 # One image serves three roles (see docker-compose.yml):
 #   - Klipper batch mode: klippy.py <printer.cfg> -i <gcode> -o /dev/null -d <dict>

@@ -294,7 +294,7 @@ static wxIcon main_frame_icon(GUI_App::EAppMode app_mode)
     }
     return wxIcon(path, wxBITMAP_TYPE_ICO);
 #else // _WIN32
-    return wxIcon(Slic3r::var("KLIPSLICE_128px.png"), wxBITMAP_TYPE_PNG);
+    return wxIcon(Slic3r::var("AnanasSlicer_128px.png"), wxBITMAP_TYPE_PNG);
 #endif // _WIN32
 }
 
@@ -409,7 +409,7 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
     default:
     case GUI_App::EAppMode::Editor:
         m_taskbar_icon = std::make_unique<OrcaSlicerTaskBarIcon>(wxTBI_DOCK);
-        m_taskbar_icon->SetIcon(wxIcon(Slic3r::var("KLIPSLICE-mac_256px.png"), wxBITMAP_TYPE_PNG), SLIC3R_APP_NAME);
+        m_taskbar_icon->SetIcon(wxIcon(Slic3r::var("AnanasSlicer-mac_256px.png"), wxBITMAP_TYPE_PNG), SLIC3R_APP_NAME);
         break;
     case GUI_App::EAppMode::GCodeViewer:
         break;
@@ -2507,7 +2507,7 @@ wxMenu* MainFrame::generate_help_menu()
         });
 
     // Report a bug
-    //append_menu_item(helpMenu, wxID_ANY, _L("Report Bug(TODO)"), _L("Report a bug of KLIPSLICE"),
+    //append_menu_item(helpMenu, wxID_ANY, _L("Report Bug(TODO)"), _L("Report a bug of ANANAS SLICER"),
     //    [](wxCommandEvent&) {
     //        //TODO
     //    });
@@ -4278,7 +4278,7 @@ SettingsDialog::SettingsDialog(MainFrame* mainframe)
         SetIcon(wxIcon(szExeFileName, wxBITMAP_TYPE_ICO));
     }
 #else
-    SetIcon(wxIcon(var("KLIPSLICE_128px.png"), wxBITMAP_TYPE_PNG));
+    SetIcon(wxIcon(var("AnanasSlicer_128px.png"), wxBITMAP_TYPE_PNG));
 #endif // _WIN32
 
     //just hide the Frame on closing

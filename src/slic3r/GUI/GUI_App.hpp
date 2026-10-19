@@ -367,9 +367,9 @@ public:
     int  FilterEvent(wxEvent& event) override;
     // The Preferences "Default page" choice, stored as its index: 0 Home, 1 Prepare.
     bool starts_on_prepare() const;
-    std::string logo_name() const { return "KLIPSLICE_symbol_dark"; }
+    std::string logo_name() const { return "AnanasSlicer_symbol_dark"; }
     // The product symbol drawn for the current light/dark mode (dialogs, wizard, update prompts).
-    static std::string symbol_name() { return dark_mode() ? "KLIPSLICE_symbol_dark" : "KLIPSLICE_symbol_light"; }
+    static std::string symbol_name() { return dark_mode() ? "AnanasSlicer_symbol_dark" : "AnanasSlicer_symbol_light"; }
 
     bool is_closing() const { return m_is_closing.load(std::memory_order_acquire); }
     void set_closing(bool closing) { m_is_closing.store(closing, std::memory_order_release); }

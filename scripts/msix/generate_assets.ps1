@@ -1,5 +1,5 @@
 # Generates the MSIX package logo assets from the master vector logo
-# (resources\images\KLIPSLICE.svg, the KLIPSLICE app icon). Each PNG is rendered
+# (resources\images\AnanasSlicer.svg, the ANANAS SLICER app icon). Each PNG is rendered
 # from the SVG at its exact target size (true per-size vector rasterization, not
 # downscaled from one bitmap).
 #
@@ -14,7 +14,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$source   = Join-Path $repoRoot 'resources\images\KLIPSLICE.svg'
+$source   = Join-Path $repoRoot 'resources\images\AnanasSlicer.svg'
 $outDir   = Join-Path $PSScriptRoot 'assets'
 New-Item -ItemType Directory -Force $outDir | Out-Null
 

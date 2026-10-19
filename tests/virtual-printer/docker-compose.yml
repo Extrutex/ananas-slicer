@@ -1,12 +1,12 @@
-# KLIPSLICE virtual printer rig. Driven by run.sh; see README.md.
+# ANANAS SLICER virtual printer rig. Driven by run.sh; see README.md.
 #
 # No service publishes a port and the network is internal: nothing here can
 # reach, or be reached from, the LAN or any real printer.
 
-name: klipslice-vp
+name: ananas-slicer-vp
 
 x-rig: &rig
-  image: klipslice-vp:local
+  image: ananas-slicer-vp:local
   build:
     context: .
   init: true
@@ -22,8 +22,8 @@ x-rig: &rig
     # long-running Klippy; run.sh uses it for the live cancel check.
     - ./${VP_PRINTER_CFG:-printer.cfg}:/printer_data/config/printer.cfg:ro
     - ./moonraker.conf:/printer_data/config/moonraker.conf:ro
-    # The Klipper macros KlipSlice ships, included by printer.cfg.
-    - ../../resources/klipper:/klipslice:ro
+    # The Klipper macros ANANAS SLICER ships, included by printer.cfg.
+    - ../../resources/klipper:/ananas-slicer:ro
 
 services:
   # One-shot Klipper batch run (docker compose run --rm klipper-batch ...).

@@ -22,7 +22,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PROJECT="$(sed -n 's/^project(\([A-Za-z_0-9]*\)).*/\1/p' "$REPO/CMakeLists.txt" | head -1)"
 case "$PROJECT" in
     Snapmaker_Orca) PREFIX=snapmaker; BIN=snapmaker-orca ;;
-    OrcaSlicer)     PREFIX=orcacad;  BIN=klipslice      ;;
+    OrcaSlicer)     PREFIX=orcacad;  BIN=ananas-slicer      ;;
     *) echo "FATAL: unrecognised project($PROJECT) in $REPO/CMakeLists.txt" >&2; exit 2 ;;
 esac
 TARGET="$PROJECT"

@@ -22,7 +22,7 @@ OrcaFilamentLibrary, OrcaArena, Qidi, and Snapmaker bundles all arrive at indepe
 
 **How it is used:** at runtime the id is the join key between hardware and profiles.
 When a printer reports what a tray holds (Qidi box, Creality CFS, Klipper, Snapmaker),
-KLIPSLICE matches the reported id against the filament presets
+ANANAS SLICER matches the reported id against the filament presets
 compatible with that printer to select the right profile; other features — tray display
 names, support-material detection, vitrification warnings, multi-nozzle filament grouping —
 look up material properties by id alone. An id that changes is not forwarded anywhere: a

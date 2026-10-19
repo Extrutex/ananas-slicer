@@ -1,5 +1,5 @@
 /* ==========================================================================
-   KLIPSLICE design tokens
+   ANANAS SLICER design tokens
    ==========================================================================
    Dark-mode native. There is no light theme and no media query that switches
    one on: a slicer is read against a dark 3D viewport, and a second theme
@@ -149,7 +149,7 @@
   --ks-motion-base: 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Global baseline every KLIPSLICE web surface (preview, embedded web
+/* Global baseline every ANANAS SLICER web surface (preview, embedded web
    dialogs in resources/web) starts from. */
 html,
 body {

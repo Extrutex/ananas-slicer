@@ -1,6 +1,6 @@
 name: Virtual printer
 
-# End-to-end check of KLIPSLICE G-code against upstream Klipper and Moonraker,
+# End-to-end check of ANANAS SLICER G-code against upstream Klipper and Moonraker,
 # run in local Docker containers (tests/virtual-printer). Nothing is built
 # here: the Linux x86_64 AppImage comes from a successful "Build all" run.
 #
@@ -76,12 +76,12 @@ jobs:
           ref: ${{ steps.build.outputs.sha }}
           lfs: 'false'
 
-      # Push builds name it KLIPSLICE_Linux_ubuntu_2404_V<version>; the aarch64
+      # Push builds name it AnanasSlicer_Linux_ubuntu_2404_V<version>; the aarch64
       # leg's _2404_aarch64_ name does not match.
       - name: Download the Linux AppImage
         uses: actions/download-artifact@v8
         with:
-          pattern: KLIPSLICE_Linux_ubuntu_2404_V*
+          pattern: AnanasSlicer_Linux_ubuntu_2404_V*
           run-id: ${{ steps.build.outputs.run_id }}
           github-token: ${{ github.token }}
           merge-multiple: true
@@ -95,12 +95,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t images < <(find appimage -maxdepth 1 -name 'KLIPSLICE_Linux_AppImage*.AppImage')
+          mapfile -t images < <(find appimage -maxdepth 1 -name 'AnanasSlicer_Linux_AppImage*.AppImage')
           [ "${#images[@]}" -eq 1 ] || { echo "expected one AppImage, found ${#images[@]}" >&2; exit 1; }
           chmod +x "${images[0]}"
           (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/${images[0]}" --appimage-extract > /dev/null)
           test -x "$RUNNER_TEMP/squashfs-root/AppRun"
-          echo "KLIPSLICE_BIN=$RUNNER_TEMP/squashfs-root/AppRun" >> "$GITHUB_ENV"
+          echo "ANANAS_SLICER_BIN=$RUNNER_TEMP/squashfs-root/AppRun" >> "$GITHUB_ENV"
 
       - name: Slice, run through Klipper, print through Moonraker
         shell: bash

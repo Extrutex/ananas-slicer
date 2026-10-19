@@ -117,9 +117,9 @@ if(ORCA_TOOLS)
             MACOSX_BUNDLE_BUNDLE_NAME "OrcaSlicer Profile Validator"
             MACOSX_BUNDLE_BUNDLE_VERSION "${SLIC3R_VERSION}"
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${SLIC3R_VERSION}"
-            MACOSX_BUNDLE_IDENTIFIER "de.3dwindt.KLIPSLICE.profile-validator"
+            MACOSX_BUNDLE_IDENTIFIER "de.3dwindt.AnanasSlicer.profile-validator"
             MACOSX_BUNDLE_COPYRIGHT "© 2026 OrcaSlicer Pte Ltd All Rights Reserved"
-            MACOSX_BUNDLE_GUI_IDENTIFIER "de.3dwindt.KLIPSLICE.profile-validator"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "de.3dwindt.AnanasSlicer.profile-validator"
         )
     else()
         add_executable(OrcaSlicer_profile_validator dev-utils/OrcaSlicer_profile_validator.cpp)
@@ -162,15 +162,15 @@ endif ()
 
 if (NOT WIN32 AND NOT APPLE)
     # Binary name on unix like systems (Linux, Unix)
-    set_target_properties(OrcaSlicer PROPERTIES OUTPUT_NAME "klipslice")
-    set(SLIC3R_APP_CMD "klipslice")
+    set_target_properties(OrcaSlicer PROPERTIES OUTPUT_NAME "ananas-slicer")
+    set(SLIC3R_APP_CMD "ananas-slicer")
     configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dev-utils/platform/unix/build_linux_image.sh.in ${CMAKE_CURRENT_BINARY_DIR}/build_linux_image.sh USE_SOURCE_PERMISSIONS @ONLY)
 endif ()
 
 if (APPLE)
-    # Names the bundle (KLIPSLICE.app) and Contents/MacOS/KLIPSLICE. The target itself stays
+    # Names the bundle (AnanasSlicer.app) and Contents/MacOS/AnanasSlicer. The target itself stays
     # OrcaSlicer so the CI caches keyed on it remain valid.
-    set_target_properties(OrcaSlicer PROPERTIES OUTPUT_NAME "KLIPSLICE")
+    set_target_properties(OrcaSlicer PROPERTIES OUTPUT_NAME "AnanasSlicer")
 endif ()
 
 target_link_libraries(OrcaSlicer libslic3r cereal::cereal)
@@ -224,7 +224,7 @@ if (WIN32)
     target_compile_definitions(OrcaSlicer_app_gui PRIVATE "$<$<NOT:$<CONFIG:RelWithDebInfo>>:SLIC3R_WRAPPER_NOCONSOLE>")
     add_dependencies(OrcaSlicer_app_gui OrcaSlicer)
     set_target_properties(OrcaSlicer_app_gui PROPERTIES
-        OUTPUT_NAME "klipslice"
+        OUTPUT_NAME "ananas-slicer"
         WIN32_EXECUTABLE "$<NOT:$<CONFIG:RelWithDebInfo>>"
     )
     target_link_libraries(OrcaSlicer_app_gui PRIVATE boost_headeronly)
@@ -249,7 +249,7 @@ set(output_dlls_RelWithDebInfo "")
 #   Windows:  <exe dir>/python            <resources>/tools/uv
 #   macOS:    Contents/MacOS/python       Contents/MacOS/tools/uv
 #   AppImage: $APPDIR/lib/python          $APPDIR/resources/tools/uv
-#   Flatpak:  /app/libpython (dep prefix) /app/share/KLIPSLICE/tools/uv
+#   Flatpak:  /app/libpython (dep prefix) /app/share/AnanasSlicer/tools/uv
 # Runtime lookup: PythonInterpreter::initialize() / bundled_uv_path().
 # libpython resolution: rpath on the OrcaSlicer target (above); the dep
 # recipe gives the bundled interpreter a self-relative rpath.
@@ -321,14 +321,14 @@ else ()
     endif ()
     if (CMAKE_MACOSX_BUNDLE)
         if (CMAKE_CONFIGURATION_TYPES)
-            set(BIN_RESOURCES_DIR "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/KLIPSLICE.app/Contents/Resources")
-            set(BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/KLIPSLICE.app/Contents/MacOS")
+            set(BIN_RESOURCES_DIR "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/AnanasSlicer.app/Contents/Resources")
+            set(BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/AnanasSlicer.app/Contents/MacOS")
         else()
-            set(BIN_RESOURCES_DIR "${CMAKE_CURRENT_BINARY_DIR}/KLIPSLICE.app/Contents/Resources")
-            set(BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/KLIPSLICE.app/Contents/MacOS")
+            set(BIN_RESOURCES_DIR "${CMAKE_CURRENT_BINARY_DIR}/AnanasSlicer.app/Contents/Resources")
+            set(BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/AnanasSlicer.app/Contents/MacOS")
         endif()
-        set(MACOSX_BUNDLE_ICON_FILE KLIPSLICE.icns)
-        set(MACOSX_BUNDLE_BUNDLE_NAME "KLIPSLICE")
+        set(MACOSX_BUNDLE_ICON_FILE AnanasSlicer.icns)
+        set(MACOSX_BUNDLE_BUNDLE_NAME "ANANAS SLICER")
         set(MACOSX_BUNDLE_SHORT_VERSION_STRING ${SoftFever_VERSION})
         set(MACOSX_BUNDLE_COPYRIGHT "Copyright(C) 2022-2024 Li Jiang All Rights Reserved")
         if (XCODE)

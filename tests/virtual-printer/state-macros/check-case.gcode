@@ -9,7 +9,7 @@ _VP_EXPECT_PA STEPPER=belt ADVANCE=0.07 SMOOTH_TIME=0.035
 ; A cancelled print: the extruder's own stepper gets its printer.cfg pressure
 ; advance back; the two ambiguous steppers keep the print's values instead of
 ; both getting the one configfile.settings reports.
-_KLIPSLICE_SAVE
+_ANANAS_SLICER_SAVE
 SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.2 SMOOTH_TIME=0.02
 SET_PRESSURE_ADVANCE EXTRUDER=Belt ADVANCE=0.3 SMOOTH_TIME=0.01
 SET_PRESSURE_ADVANCE EXTRUDER=belt ADVANCE=0.4 SMOOTH_TIME=0.015

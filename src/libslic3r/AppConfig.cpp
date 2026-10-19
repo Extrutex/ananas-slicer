@@ -41,9 +41,9 @@ using namespace nlohmann;
 
 namespace Slic3r {
 
-// KLIPSLICE: no update service yet (PURGE_PLAN D5). Empty URLs disable the app version check and the
-// profile OTA, so KLIPSLICE never reports to or pulls vendor profiles from the OrcaSlicer servers.
-// "version_check_url" / "orca_updater_url" in KLIPSLICE.conf still override these explicitly.
+// ANANAS SLICER: no update service yet (PURGE_PLAN D5). Empty URLs disable the app version check and the
+// profile OTA, so ANANAS SLICER never reports to or pulls vendor profiles from the OrcaSlicer servers.
+// "version_check_url" / "orca_updater_url" in AnanasSlicer.conf still override these explicitly.
 static const std::string VERSION_CHECK_URL  = "";
 static const std::string PROFILE_UPDATE_URL = "";
 

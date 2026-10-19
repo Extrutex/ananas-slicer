@@ -1,4 +1,4 @@
-app-id: de._3dwindt.KLIPSLICE
+app-id: de._3dwindt.AnanasSlicer
 runtime: org.gnome.Platform
 runtime-version: "50"
 sdk: org.gnome.Sdk
@@ -6,7 +6,7 @@ sdk-extensions:
   - org.freedesktop.Sdk.Extension.llvm21
 command: entrypoint
 separate-locales: true
-rename-icon: KLIPSLICE
+rename-icon: AnanasSlicer
 build-options:
   append-path: /usr/lib/sdk/llvm21/bin
   prepend-ld-library-path: /usr/lib/sdk/llvm21/lib
@@ -30,9 +30,9 @@ finish-args:
   # https://github.com/flathub/com.orcaslicer.OrcaSlicer/issues/2
   - --filesystem=/mnt
   - --filesystem=/run/spnav.sock:ro
-  # Allow KLIPSLICE to own and talk to instance-check D-Bus names (InstanceCheck.cpp)
-  - --talk-name=de._3dwindt.KLIPSLICE.InstanceCheck.*
-  - --own-name=de._3dwindt.KLIPSLICE.InstanceCheck.*
+  # Allow ANANAS SLICER to own and talk to instance-check D-Bus names (InstanceCheck.cpp)
+  - --talk-name=de._3dwindt.AnanasSlicer.InstanceCheck.*
+  - --own-name=de._3dwindt.AnanasSlicer.InstanceCheck.*
   - --system-talk-name=org.freedesktop.UDisks2
   - --env=SPNAV_SOCKET=/run/spnav.sock
 
@@ -374,7 +374,7 @@ modules:
       # only exists in here, so the swap is a build step instead, against the
       # profiles the install above copied into /app.
       - cmake --build build_flatpak --target generate_system_cache -j$FLATPAK_BUILDER_N_JOBS
-      - ./scripts/build_preset_cache.sh -n -b build_flatpak /app/share/KLIPSLICE/profiles
+      - ./scripts/build_preset_cache.sh -n -b build_flatpak /app/share/AnanasSlicer/profiles
 
     # Built (not run) here when CI injects run-tests, then shipped to a separate
     # test job. Only the test sources compile; nothing installs to /app.
@@ -393,7 +393,7 @@ modules:
     post-install:
 
       - | # Desktop integration files
-        install -Dm644 resources/images/KLIPSLICE.svg /app/share/icons/hicolor/scalable/apps/KLIPSLICE.svg
+        install -Dm644 resources/images/AnanasSlicer.svg /app/share/icons/hicolor/scalable/apps/AnanasSlicer.svg
         install -Dm644 ${FLATPAK_ID}.metainfo.xml /app/share/metainfo/${FLATPAK_ID}.metainfo.xml
         desktop-file-edit --set-key=Exec --set-value="entrypoint %U" /app/share/applications/${FLATPAK_ID}.desktop
         install -Dm755 entrypoint /app/bin
@@ -446,7 +446,7 @@ modules:
 
       # AppData metainfo for GNOME Software & Co.
       - type: file
-        path: de._3dwindt.KLIPSLICE.metainfo.xml
+        path: de._3dwindt.AnanasSlicer.metainfo.xml
 
       # Startup script
       - type: file

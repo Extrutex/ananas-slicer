@@ -26,7 +26,7 @@ wxDEFINE_EVENT(EVT_SECONDARY_CHECK_CANCEL, wxCommandEvent);
 wxDEFINE_EVENT(EVT_UPDATE_NOZZLE, wxCommandEvent);
 
 UpdateVersionDialog::UpdateVersionDialog(wxWindow *parent)
-    : DPIDialog(parent, wxID_ANY, _L("New version of KLIPSLICE"), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxCLOSE_BOX | wxRESIZE_BORDER)
+    : DPIDialog(parent, wxID_ANY, _L("New version of ANANAS SLICER"), wxDefaultPosition, wxDefaultSize, wxCAPTION | wxCLOSE_BOX | wxRESIZE_BORDER)
 {
     SetBackgroundColour(*wxWHITE);
 
@@ -273,7 +273,7 @@ void UpdateVersionDialog::update_version_info(wxString release_note, wxString ve
     //m_simplebook_release_note->SetMaxSize(wxSize(FromDIP(560), FromDIP(430)));
     m_simplebook_release_note->SetSelection(1);
     if (is_running_in_msix())
-        m_text_up_info->SetLabel(wxString::Format(_L("New version available: %s. Please update KLIPSLICE from the Microsoft Store."), version));
+        m_text_up_info->SetLabel(wxString::Format(_L("New version available: %s. Please update ANANAS SLICER from the Microsoft Store."), version));
     else
         m_text_up_info->SetLabel(wxString::Format(_L("Click to download new version in default browser: %s"), version));
     auto data_buf_in = release_note.utf8_str();

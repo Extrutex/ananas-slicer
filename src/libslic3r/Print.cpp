@@ -1786,7 +1786,7 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                  "enable_mixed_color_sublayer");
     }
 
-    // KLIPSLICE: Klipper's [firmware_retraction] keeps one global "retracted" flag. The writer tracks a
+    // ANANAS SLICER: Klipper's [firmware_retraction] keeps one global "retracted" flag. The writer tracks a
     // retraction per nozzle (per filament without single_extruder_multi_material): after a tool change
     // the next nozzle's G10 is dropped while the parked one holds the flag, and its G11 pushes out what
     // the parked nozzle retracted. An automatic filament map is only settled while slicing, so with
@@ -1824,7 +1824,7 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                "so retractions after a tool change can be lost or doubled. Disable firmware retraction for this print."),
              "use_firmware_retraction");
 
-    // KLIPSLICE: SET_RETRACTION carries the slicer's values to Klipper's [firmware_retraction], which
+    // ANANAS SLICER: SET_RETRACTION carries the slicer's values to Klipper's [firmware_retraction], which
     // rejects a negative length, speeds below 1 mm/s and a negative extra restart length. A rejected
     // command aborts the print.
     if (m_config.use_firmware_retraction && !m_config.firmware_owns_retraction) {
@@ -2410,7 +2410,7 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                        if (!warning_key.empty()) {
                             motion_warning.string = L(
                                 "The jerk setting exceeds the printer's maximum jerk (machine_max_jerk_x/machine_max_jerk_y).\n"
-                                "KLIPSLICE will automatically cap the jerk speed to ensure it doesn't surpass the printer's capabilities.\n"
+                                "ANANAS SLICER will automatically cap the jerk speed to ensure it doesn't surpass the printer's capabilities.\n"
                                 "You can adjust the maximum jerk setting in your printer's configuration to get higher speeds.");
                             motion_warning.opt_key = warning_key;
                        }
@@ -2435,7 +2435,7 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                    warning_key = check_motion_ability_object_setting(accel_to_check, max_accel);
                    if (!warning_key.empty()) {
                         motion_warning.string  = L("The acceleration setting exceeds the printer's maximum acceleration "
-                                              "(machine_max_acceleration_extruding).\nKLIPSLICE will "
+                                              "(machine_max_acceleration_extruding).\nANANAS SLICER will "
                                               "automatically cap the acceleration speed to ensure it doesn't surpass the printer's "
                                               "capabilities.\nYou can adjust the "
                                               "machine_max_acceleration_extruding value in your printer's configuration to get higher speeds.");

@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="docs/images/hero.svg" alt="KLIPSLICE: a slicer for Klipper printers, and only for Klipper printers." width="100%">
+  <img src="docs/images/hero.svg" alt="ANANAS SLICER: a slicer for Klipper printers, and only for Klipper printers." width="100%">
 </p>
 
-KLIPSLICE is an open-source 3D printing slicer built exclusively for printers that
+ANANAS SLICER is an open-source 3D printing slicer built exclusively for printers that
 run real [Klipper](https://www.klipper3d.org/). It is a hard fork of OrcaSlicer with
 every path that does not lead to a Klipper machine removed: one G-code flavor, one
 print host, and printer profiles only for machines that verifiably run Klipper.
 
 **Documentation:** <https://extrutex.github.io/KlipSlice-Wiki/> (English and German)
 
-> KLIPSLICE is an independent project and is not affiliated with or
+> ANANAS SLICER is an independent project and is not affiliated with or
 > endorsed by the Klipper project.
 
 ## Why a Klipper-only slicer
@@ -18,7 +18,7 @@ Klipper executes the limits the G-code sets. Since April 2021 `SET_VELOCITY_LIMI
 and `M204` are not clamped to the `max_accel`, `max_velocity` and
 `square_corner_velocity` in `printer.cfg`: whatever the slicer writes is what the
 machine does. The slicer is therefore the last place an envelope violation can be
-caught, and KLIPSLICE treats `printer.cfg` as the datum every emitted value is
+caught, and ANANAS SLICER treats `printer.cfg` as the datum every emitted value is
 checked against.
 
 <p align="center">
@@ -32,10 +32,10 @@ discovery on the LAN all go through Moonraker's own API and its
 `_moonraker._tcp` Bonjour announcement; there are no vendor protocols and no cloud.
 
 <p align="center">
-  <img src="docs/images/pipeline.svg" alt="Data flow from KLIPSLICE through the .gcode file and Moonraker's HTTP API to Klipper and the steppers, with discovery and the planned printer.cfg sync drawn as return paths." width="100%">
+  <img src="docs/images/pipeline.svg" alt="Data flow from ANANAS SLICER through the .gcode file and Moonraker's HTTP API to Klipper and the steppers, with discovery and the planned printer.cfg sync drawn as return paths." width="100%">
 </p>
 
-## What KLIPSLICE is
+## What ANANAS SLICER is
 
 - **Klipper only.** The G-code flavor is always `klipper`. Older projects and
   presets with another flavor are converted when they load.
@@ -48,19 +48,19 @@ discovery on the LAN all go through Moonraker's own API and its
   ship with a system profile, each one backed by per-model evidence (stock
   Klipper, Klipper via an established community mod, or a self-built Klipper
   machine) in
-  [`docs/klipslice/printer-firmware.json`](docs/klipslice/printer-firmware.json).
+  [`docs/ananas-slicer/printer-firmware.json`](docs/ananas-slicer/printer-firmware.json).
 - **Your own printer is first-class.** Self-built and converted machines (for
   example a Marlin printer converted to Klipper) are set up with the
   **Generic Klipper Printer** profile or through the **Create printer** dialog.
   The flavor is always Klipper, the host always Moonraker.
-- **Side by side with OrcaSlicer.** KLIPSLICE uses its own binaries and its own
+- **Side by side with OrcaSlicer.** ANANAS SLICER uses its own binaries and its own
   data directory and never reads or changes an installed OrcaSlicer.
 
-## The kinematics KLIPSLICE knows
+## The kinematics ANANAS SLICER knows
 
 Every machine profile names the Klipper `kinematics` it runs on. The figures show
 what moves, what stands still and which motors share a move; the full notes are in
-[`docs/klipslice/kinematics.md`](docs/klipslice/kinematics.md).
+[`docs/ananas-slicer/kinematics.md`](docs/ananas-slicer/kinematics.md).
 
 <table>
   <tr>
@@ -91,7 +91,7 @@ what moves, what stands still and which motors share a move; the full notes are 
 
 ## Vision
 
-KLIPSLICE aims at machine-aware slicing: a slicer that knows the machine it
+ANANAS SLICER aims at machine-aware slicing: a slicer that knows the machine it
 slices for. The following is **roadmap, not implemented yet**:
 
 - **Machine sync.** Read the live Klipper configuration through Moonraker
@@ -106,7 +106,7 @@ slices for. The following is **roadmap, not implemented yet**:
 ## Status
 
 **Pre-alpha.** There are no releases and no installers yet. Settings, profiles
-and file formats can still change without migration. Do not rely on KLIPSLICE for
+and file formats can still change without migration. Do not rely on ANANAS SLICER for
 prints that matter.
 
 Every push is built and tested automatically for Windows, macOS and Linux.
@@ -131,7 +131,7 @@ build_win.bat -d
 build_win.bat -s
 ```
 
-Output: `build\src\Release\klipslice.exe`
+Output: `build\src\Release\ananas-slicer.exe`
 
 ### macOS
 
@@ -151,28 +151,28 @@ Then build the dependencies and the slicer with the Ninja generator:
 ./build_release_macos.sh -sx
 ```
 
-Output: `build/<arch>/OrcaSlicer/KLIPSLICE.app` (`<arch>` is `arm64` or `x86_64`)
+Output: `build/<arch>/OrcaSlicer/AnanasSlicer.app` (`<arch>` is `arm64` or `x86_64`)
 
 Two environment variables adjust a single-arch build:
 
-- `KLIPSLICE_OSX_SYSROOT` sets the SDK for both the dependency and the slicer
+- `ANANAS_SLICER_OSX_SYSROOT` sets the SDK for both the dependency and the slicer
   configure, as a path (relative paths resolve against the current directory)
   or an SDK name such as `macosx26.5`. Without it, the slicer compiles against
   the same SDK as its dependencies: the deps build records the SDK path and
-  version in `deps/build/<arch>/OrcaSlicer_dep/klipslice-sdk.txt`, and the
+  version in `deps/build/<arch>/OrcaSlicer_dep/ananas-slicer-sdk.txt`, and the
   slicer configure uses that path, or the installed SDK of the same version if
   the path does not exist on this machine. Older deps trees without the record
   fall back to the `CMAKE_OSX_SYSROOT` of `deps/build/<arch>/CMakeCache.txt`.
   A newer SDK declares APIs newer than the deployment target, and
   `-Werror=unguarded-availability-new` then fails the build. If no matching SDK
   is found, CMake picks its default SDK and the script prints a warning.
-- `KLIPSLICE_BUILD_DIR` moves the slicer build tree, including the packaged
+- `ANANAS_SLICER_BUILD_DIR` moves the slicer build tree, including the packaged
   app, from `build/<arch>` to another directory (absolute or relative to the
   repository). It cannot be combined with universal builds, which lipo the
   fixed `build/arm64` and `build/x86_64` trees.
 
 ```bash
-KLIPSLICE_BUILD_DIR=build/arm64-ws ./build_release_macos.sh -sx -a arm64
+ANANAS_SLICER_BUILD_DIR=build/arm64-ws ./build_release_macos.sh -sx -a arm64
 ```
 
 ### Linux
@@ -184,23 +184,23 @@ Requires more than 10 GiB of available memory and free disk space.
 ./build_linux.sh -dsi    # dependencies, slicer and AppImage
 ```
 
-Output: `build/package/bin/klipslice` and `build/KLIPSLICE_Linux_V<version>.AppImage`
+Output: `build/package/bin/ananas-slicer` and `build/AnanasSlicer_Linux_V<version>.AppImage`
 
 ## Contributing
 
-KLIPSLICE has a single maintainer. Bug reports are welcome; code changes are
+ANANAS SLICER has a single maintainer. Bug reports are welcome; code changes are
 accepted only after they were agreed in an issue first. See
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credits and license
 
-KLIPSLICE is based on [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer) by
+ANANAS SLICER is based on [OrcaSlicer](https://github.com/OrcaSlicer/OrcaSlicer) by
 SoftFever and the OrcaSlicer contributors. OrcaSlicer is based on
 [Bambu Studio](https://github.com/bambulab/BambuStudio) by Bambu Lab, which is
 based on [PrusaSlicer](https://github.com/prusa3d/PrusaSlicer) by Prusa Research,
 which comes from [Slic3r](https://github.com/Slic3r/Slic3r) by Alessandro
-Ranellucci and the RepRap community. KLIPSLICE would not exist without their work.
+Ranellucci and the RepRap community. ANANAS SLICER would not exist without their work.
 
-KLIPSLICE is licensed under the **GNU Affero General Public License, version 3**.
-See [LICENSE.txt](LICENSE.txt). Anyone who distributes KLIPSLICE, modified or not,
+ANANAS SLICER is licensed under the **GNU Affero General Public License, version 3**.
+See [LICENSE.txt](LICENSE.txt). Anyone who distributes ANANAS SLICER, modified or not,
 must make the corresponding source code available under the same terms.

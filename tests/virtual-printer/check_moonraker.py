@@ -57,7 +57,7 @@ def request(method, path, query=None, body=None, headers=None):
 
 
 def upload(path, remote_name, start_print=False):
-    boundary = "----klipslice-vp-" + uuid.uuid4().hex
+    boundary = "----ananas-slicer-vp-" + uuid.uuid4().hex
     with open(path, "rb") as f:
         payload = f.read()
     parts = [

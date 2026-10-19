@@ -71,14 +71,14 @@ TEST_CASE("Plugin audit denies app config and token filenames anywhere", "[audit
 
     SECTION("matching is case-insensitive on every platform")
     {
-        CHECK(mgr.is_denied_filename(fs::path("klipslice.conf")));
-        CHECK(mgr.is_denied_filename(fs::path("KlipSlice.CONF")));
+        CHECK(mgr.is_denied_filename(fs::path("ananasslicer.conf")));
+        CHECK(mgr.is_denied_filename(fs::path("ananasSlicer.CONF")));
         CHECK(mgr.is_denied_filename(fs::path("ORCA_REFRESH_TOKEN.SEC")));
     }
 
     SECTION("an unrelated name that merely shares a stem is not denied")
     {
-        // The prefix is the full registered name ("KLIPSLICE.conf"), not the stem "KLIPSLICE",
+        // The prefix is the full registered name ("AnanasSlicer.conf"), not the stem "AnanasSlicer",
         // so a sibling file with a different extension/suffix stays allowed.
         CHECK_FALSE(mgr.is_denied_filename(fs::path(data_dir()) / (SLIC3R_APP_KEY "_other.txt")));
         CHECK_FALSE(mgr.is_denied_filename(fs::path(data_dir()) / (SLIC3R_APP_KEY ".json")));

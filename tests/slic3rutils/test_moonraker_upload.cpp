@@ -13,9 +13,9 @@ TEST_CASE("The Moonraker upload response yields the stored path", "[Moonraker]")
     SECTION("Moonraker's own response has no result envelope") {
         // Recorded from Moonraker v0.11.0 on the virtual printer rig, path in a subdirectory.
         const std::string body = R"({"action":"create_file","item":{"modified":1792056844.82,"size":335653,)"
-                                 R"("permissions":"rw","path":"parts/klipslice cube.gcode","root":"gcodes"},)"
+                                 R"("permissions":"rw","path":"parts/ananas-slicer cube.gcode","root":"gcodes"},)"
                                  R"("print_started":false,"print_queued":false})";
-        CHECK(Moonraker::uploaded_path(body) == "parts/klipslice cube.gcode");
+        CHECK(Moonraker::uploaded_path(body) == "parts/ananas-slicer cube.gcode");
     }
     SECTION("an enveloped response is accepted") {
         CHECK(Moonraker::uploaded_path(R"({"result":{"item":{"path":"a/b.gcode","root":"gcodes"}}})") == "a/b.gcode");

@@ -594,7 +594,7 @@ std::vector<NativeCommand> build_command_catalog()
         wxGetApp().check_new_version_sf(true, 1);
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });
-    add_with_icon("help_about", _u8L("About") + " " SLIC3R_APP_NAME, _u8L("Help"), "KLIPSLICE_symbol_dark", [](const std::string&) {
+    add_with_icon("help_about", _u8L("About") + " " SLIC3R_APP_NAME, _u8L("Help"), "AnanasSlicer_symbol_dark", [](const std::string&) {
         Slic3r::GUI::about();
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });

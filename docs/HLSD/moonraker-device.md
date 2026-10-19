@@ -1,6 +1,6 @@
 # The printer side: Moonraker as the only device
 
-KLIPSLICE talks to a printer through Moonraker and nothing else. There is no device model of
+ANANAS SLICER talks to a printer through Moonraker and nothing else. There is no device model of
 the printer inside the app, no agent that mirrors its state, and no vendor protocol. Three
 pieces touch the printer, each with one job.
 

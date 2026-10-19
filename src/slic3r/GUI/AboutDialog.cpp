@@ -19,7 +19,7 @@ AboutDialogLogo::AboutDialogLogo(wxWindow* parent)
     : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize)
 {
     this->SetBackgroundColour(*wxWHITE);
-    this->logo = ScalableBitmap(this, Slic3r::var("KLIPSLICE_192px.png"), wxBITMAP_TYPE_PNG);
+    this->logo = ScalableBitmap(this, Slic3r::var("AnanasSlicer_192px.png"), wxBITMAP_TYPE_PNG);
     this->SetMinSize(this->logo.GetBmpSize());
 
     this->Bind(wxEVT_PAINT, &AboutDialogLogo::onRepaint, this);
@@ -230,7 +230,7 @@ AboutDialog::AboutDialog()
     main_sizer->Add(m_panel, 1, wxEXPAND | wxALL, 0);
     main_sizer->Add(ver_sizer, 0, wxEXPAND | wxALL, 0);
 
-    // Header: the KLIPSLICE banner (always dark, see docs/design/BRAND.md) with the
+    // Header: the ANANAS SLICER banner (always dark, see docs/design/BRAND.md) with the
     // version and build drawn over its right half in the banner's own colours.
     const wxColour header_bg("#0B0E11");  // carbon-900
     const wxColour header_fg("#B4C0C9");  // alu-200
@@ -238,7 +238,7 @@ AboutDialog::AboutDialog()
     m_panel->SetBackgroundColour(header_bg);
 
     // logo
-    m_logo_bitmap = ScalableBitmap(this, "KLIPSLICE_about", 125);
+    m_logo_bitmap = ScalableBitmap(this, "AnanasSlicer_about", 125);
     m_logo = new wxStaticBitmap(this, wxID_ANY, m_logo_bitmap.bmp(), wxDefaultPosition,wxDefaultSize, 0);
     m_logo->SetSizer(vesizer);
 

@@ -1,6 +1,6 @@
 ; State macro check, Mainsail route (run.sh step 3), run in Klipper batch mode
 ; against state-macros/printer-mainsail.cfg: Mainsail's CANCEL_PRINT with
-; variable_user_cancel_macro: "_KLIPSLICE_RESTORE" in _CLIENT_VARIABLE. Every
+; variable_user_cancel_macro: "_ANANAS_SLICER_RESTORE" in _CLIENT_VARIABLE. Every
 ; _VP_EXPECT_* raises a G-code error, and so fails the check, when Klipper's
 ; state is not the expected one.
 
@@ -8,7 +8,7 @@ _VP_EXPECT_CLIENT_CANCEL
 
 ; A print with klipper_restore_state, cancelled: Mainsail switches the heaters
 ; and the part cooling fan off, the hook restores limits and pressure advance.
-_KLIPSLICE_SAVE
+_ANANAS_SLICER_SAVE
 SET_VELOCITY_LIMIT VELOCITY=120 ACCEL=1500 MINIMUM_CRUISE_RATIO=0.2 SQUARE_CORNER_VELOCITY=9
 SET_PRESSURE_ADVANCE EXTRUDER=extruder ADVANCE=0.2 SMOOTH_TIME=0.02
 SET_PRESSURE_ADVANCE EXTRUDER=Belt ADVANCE=0.3 SMOOTH_TIME=0.01

@@ -3492,7 +3492,7 @@ CreatePresetSuccessfulDialog::CreatePresetSuccessfulDialog(wxWindow *parent, con
     case FILAMENT:
         success_text = new wxStaticText(this, wxID_ANY, _L("Filament Created"));
         wxString prompt_text = _L("Please go to filament settings to edit your presets if you need to.\nPlease note that nozzle temperature, hot bed temperature, and maximum volumetric speed each have a significant impact on printing quality. Please set them carefully.");
-        wxString sync_text = sync_user_preset_need_enabled ? _L("\n\nKLIPSLICE has detected that your user presets synchronization function is not enabled, "
+        wxString sync_text = sync_user_preset_need_enabled ? _L("\n\nANANAS SLICER has detected that your user presets synchronization function is not enabled, "
                                                                 "which may result in unsuccessful Filament settings on the Device page.\n"
                                                                 "Click \"Sync user presets\" to enable the synchronization function.") : "";
         next_step_text = new wxStaticText(this, wxID_ANY, prompt_text + sync_text);

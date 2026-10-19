@@ -738,9 +738,9 @@ static std::vector<Vec2d> get_path_of_change_filament(const Print& print)
     {
         bool acceleration = false;
         bool jerk         = false;
-        // KLIPSLICE: the block sends SET_RETRACTION, replacing the retraction values in Klipper.
+        // ANANAS SLICER: the block sends SET_RETRACTION, replacing the retraction values in Klipper.
         bool firmware_retraction_values = false;
-        // KLIPSLICE: state of Klipper's [firmware_retraction] "retracted" flag after the block, if any
+        // ANANAS SLICER: state of Klipper's [firmware_retraction] "retracted" flag after the block, if any
         // command in it changes the flag: G10 sets it, G11 and SET_RETRACTION clear it.
         std::optional<bool> firmware_retracted;
     };
@@ -4505,7 +4505,7 @@ PlaceholderParserIntegration &ppi = m_placeholder_parser_integration;
             m_writer.invalidate_acceleration();
         if (motion_state_changes.jerk)
             m_writer.invalidate_jerk();
-        // KLIPSLICE: G10/G11/SET_RETRACTION in custom G-code move Klipper's firmware retraction state
+        // ANANAS SLICER: G10/G11/SET_RETRACTION in custom G-code move Klipper's firmware retraction state
         // behind the writer's back. Macros that retract internally cannot be seen here.
         if (motion_state_changes.firmware_retraction_values)
             m_writer.invalidate_firmware_retraction_values();

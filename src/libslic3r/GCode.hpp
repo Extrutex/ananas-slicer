@@ -184,11 +184,11 @@ private:
     std::vector<float>                                           m_compacted_tower_z;
 };
 
-// Klipper macros of resources/klipper/klipslice_state.cfg. With klipper_restore_state the G-code calls
+// Klipper macros of resources/klipper/ananas_slicer_state.cfg. With klipper_restore_state the G-code calls
 // the first before the start G-code and the second before the end G-code, so the motion limits and the
 // pressure advance the print changes do not outlast it.
-inline constexpr const char *KLIPPER_SAVE_STATE_MACRO    = "_KLIPSLICE_SAVE";
-inline constexpr const char *KLIPPER_RESTORE_STATE_MACRO = "_KLIPSLICE_RESTORE";
+inline constexpr const char *KLIPPER_SAVE_STATE_MACRO    = "_ANANAS_SLICER_SAVE";
+inline constexpr const char *KLIPPER_RESTORE_STATE_MACRO = "_ANANAS_SLICER_RESTORE";
 
 class ColorPrintColors
 {

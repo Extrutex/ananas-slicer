@@ -1,14 +1,14 @@
 [Desktop Entry]
-Name=KLIPSLICE
+Name=ANANAS SLICER
 GenericName=3D Printing Software
-Icon=KLIPSLICE
-Exec=klipslice %U
+Icon=AnanasSlicer
+Exec=ananas-slicer %U
 Terminal=false
 Type=Application
 PrefersNonDefaultGPU=true
 X-KDE-RunOnDiscreteGpu=true
-MimeType=model/stl;model/3mf;application/vnd.ms-3mfdocument;application/prs.wavefront-obj;application/x-amf;x-scheme-handler/klipslice;model/step;
+MimeType=model/stl;model/3mf;application/vnd.ms-3mfdocument;application/prs.wavefront-obj;application/x-amf;x-scheme-handler/ananas-slicer;model/step;
 Categories=Graphics;3DGraphics;Engineering;
 Keywords=3D;Printing;Slicer;slice;3D;printer;convert;gcode;stl;obj;amf;SLA
 StartupNotify=false
-StartupWMClass=klipslice
+StartupWMClass=ananas-slicer

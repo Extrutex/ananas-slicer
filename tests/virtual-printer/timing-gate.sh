@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# KLIPSLICE Klipper timing gate: checks the slicer's Klipper time model against
+# ANANAS SLICER Klipper timing gate: checks the slicer's Klipper time model against
 # upstream Klipper batch mode.
 #
 # 1. Slices the timing corpus with the shipped Voron 2.4 350 presets and reduces
@@ -14,10 +14,10 @@
 #
 # usage: tests/virtual-printer/timing-gate.sh [--update]
 #   --update            also replace the committed corpus in tests/data/klipper_timing
-#   KLIPSLICE_BIN       slicer binary (default: as in run.sh)
-#   KLIPSLICE_BUILD_DIR build tree for the default slicer binary and for
+#   ANANAS_SLICER_BIN       slicer binary (default: as in run.sh)
+#   ANANAS_SLICER_BUILD_DIR build tree for the default slicer binary and for
 #                       fff_print_tests (default: build/arm64 on Darwin, build on Linux)
-#   FFF_PRINT_TESTS     fff_print_tests binary (default: from KLIPSLICE_BUILD_DIR)
+#   FFF_PRINT_TESTS     fff_print_tests binary (default: from ANANAS_SLICER_BUILD_DIR)
 #
 # Writes tests/virtual-printer/out/timing/. Exit status: 0 gate passed, 1 failed, 2 usage.
 set -euo pipefail
@@ -64,20 +64,20 @@ case "${1:-}" in
 esac
 
 case "$(uname -s)" in
-    Darwin) BUILD_DIR="${KLIPSLICE_BUILD_DIR:-build/arm64}" ;;
-    Linux) BUILD_DIR="${KLIPSLICE_BUILD_DIR:-build}" ;;
-    *) die "unsupported host $(uname -s); set KLIPSLICE_BIN and FFF_PRINT_TESTS" ;;
+    Darwin) BUILD_DIR="${ANANAS_SLICER_BUILD_DIR:-build/arm64}" ;;
+    Linux) BUILD_DIR="${ANANAS_SLICER_BUILD_DIR:-build}" ;;
+    *) die "unsupported host $(uname -s); set ANANAS_SLICER_BIN and FFF_PRINT_TESTS" ;;
 esac
 case "$BUILD_DIR" in
     /*) ;;
     *) BUILD_DIR="$REPO/$BUILD_DIR" ;;
 esac
-if [ -n "${KLIPSLICE_BIN:-}" ]; then
-    BIN="$KLIPSLICE_BIN"
+if [ -n "${ANANAS_SLICER_BIN:-}" ]; then
+    BIN="$ANANAS_SLICER_BIN"
 else
     case "$(uname -s)" in
-        Darwin) BIN="$BUILD_DIR/src/Release/KLIPSLICE.app/Contents/MacOS/KLIPSLICE" ;;
-        Linux) BIN="$BUILD_DIR/package/bin/klipslice" ;;
+        Darwin) BIN="$BUILD_DIR/src/Release/AnanasSlicer.app/Contents/MacOS/AnanasSlicer" ;;
+        Linux) BIN="$BUILD_DIR/package/bin/ananas-slicer" ;;
     esac
 fi
 if [ -n "${FFF_PRINT_TESTS:-}" ]; then

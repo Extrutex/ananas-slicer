@@ -1022,7 +1022,7 @@ void PrintConfigDef::init_common_params()
 
     def = this->add("use_3mf", coBool);
     def->label = L("Use 3MF instead of G-code");
-    def->tooltip = L("Enable this if the printer accepts a 3MF file as the print job. When enabled, KLIPSLICE "
+    def->tooltip = L("Enable this if the printer accepts a 3MF file as the print job. When enabled, ANANAS SLICER "
                      "sends the sliced file as a .gcode.3mf, instead of a plain .gcode file.");
     def->mode = comAdvanced;
     def->cli = ConfigOptionDef::nocli;
@@ -1040,7 +1040,7 @@ void PrintConfigDef::init_common_params()
 
     def = this->add("print_host", coString);
     def->label = L("Hostname, IP or URL");
-    def->tooltip = L("KLIPSLICE can upload G-code files to a printer host. This field should contain "
+    def->tooltip = L("ANANAS SLICER can upload G-code files to a printer host. This field should contain "
         "the hostname, IP address or URL of the printer host instance. "
         "Print host behind HAProxy with basic auth enabled can be accessed by putting the user name and password into the URL "
         "in the following format: https://username:password@your-octopi-address/");
@@ -1057,7 +1057,7 @@ void PrintConfigDef::init_common_params()
 
     def = this->add("printhost_apikey", coString);
     def->label = L("API Key / Password");
-    def->tooltip = L("KLIPSLICE can upload G-code files to a printer host. This field should contain "
+    def->tooltip = L("ANANAS SLICER can upload G-code files to a printer host. This field should contain "
         "the API Key or the password required for authentication.");
     def->mode = comAdvanced;
     def->cli = ConfigOptionDef::nocli;
@@ -2655,7 +2655,7 @@ void PrintConfigDef::init_fff_params()
     def->tooltip = L(
         "This option sets the min point for the allowed bed mesh area. Due to the probe's XY offset, most printers are unable to probe the "
         "entire bed. To ensure the probe point does not go outside the bed area, the minimum and maximum points of the bed mesh should be "
-        "set appropriately. KLIPSLICE ensures that adaptive_bed_mesh_min/adaptive_bed_mesh_max values do not exceed these min/max "
+        "set appropriately. ANANAS SLICER ensures that adaptive_bed_mesh_min/adaptive_bed_mesh_max values do not exceed these min/max "
         "points. This information can usually be obtained from your printer manufacturer. The default setting is (-99999, -99999), which "
         "means there are no limits, thus allowing probing across the entire bed.");
     def->sidetext = L("mm");	// millimeters, CIS languages need translation
@@ -2667,7 +2667,7 @@ void PrintConfigDef::init_fff_params()
     def->tooltip = L(
         "This option sets the max point for the allowed bed mesh area. Due to the probe's XY offset, most printers are unable to probe the "
         "entire bed. To ensure the probe point does not go outside the bed area, the minimum and maximum points of the bed mesh should be "
-        "set appropriately. KLIPSLICE ensures that adaptive_bed_mesh_min/adaptive_bed_mesh_max values do not exceed these min/max "
+        "set appropriately. ANANAS SLICER ensures that adaptive_bed_mesh_min/adaptive_bed_mesh_max values do not exceed these min/max "
         "points. This information can usually be obtained from your printer manufacturer. The default setting is (99999, 99999), which "
         "means there are no limits, thus allowing probing across the entire bed.");
     def->sidetext = L("mm");	// millimeters, CIS languages need translation
@@ -3199,7 +3199,7 @@ void PrintConfigDef::init_fff_params()
     def->label = L("Minimal purge on wipe tower");
     def->tooltip = L("After a tool change, the exact position of the newly loaded filament inside "
                      "the nozzle may not be known, and the filament pressure is likely not yet stable. "
-                     "Before purging the print head into an infill or a sacrificial object, KLIPSLICE will always prime "
+                     "Before purging the print head into an infill or a sacrificial object, ANANAS SLICER will always prime "
                      "this amount of material into the wipe tower to produce successive infill or sacrificial object extrusions reliably.");
     def->sidetext = L(u8"mm³");	// cubic millimeters, CIS languages need translation
     def->min = 0;
@@ -3674,7 +3674,7 @@ void PrintConfigDef::init_fff_params()
                      "minimum_cruise_ratio from printer.cfg applies. Requires Klipper with MINIMUM_CRUISE_RATIO "
                      "support (v0.13.0 or newer recommended).");
     def->mode = comAdvanced;
-    // KLIPSLICE: Klipper owns the cruise ratio unless a profile hands it to the slicer.
+    // ANANAS SLICER: Klipper owns the cruise ratio unless a profile hands it to the slicer.
     def->set_default_value(new ConfigOptionBool(false));
     
     def = this->add("accel_to_decel_factor", coPercent);
@@ -4356,7 +4356,7 @@ void PrintConfigDef::init_fff_params()
     def->label = L("G-code flavor");
     def->tooltip = L("What kind of G-code the printer is compatible with.");
     def->enum_keys_map = &ConfigOptionEnum<GCodeFlavor>::get_enum_values();
-    // KLIPSLICE targets Klipper only. The GCodeFlavor enum and its key map stay complete so
+    // ANANAS SLICER targets Klipper only. The GCodeFlavor enum and its key map stay complete so
     // every stored name still parses; PrintConfigDef::handle_legacy() rewrites any other
     // flavor to "klipper" on load, which keeps validate()'s enum check satisfied.
     def->enum_values.push_back("klipper");
@@ -4370,7 +4370,7 @@ void PrintConfigDef::init_fff_params()
     def->tooltip = L("Do not write the CONFIG_BLOCK (slicer configuration key/value pairs) into the G-code file. "
                    "This can help with printers whose firmware crashes when parsing these comment lines "
                    "(e.g. Anycubic go-klipper). Note: the G-code file will no longer contain slicer settings, "
-                   "so importing it back into KLIPSLICE will not restore the configuration.");
+                   "so importing it back into ANANAS SLICER will not restore the configuration.");
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionBool(false));
 
@@ -4627,7 +4627,7 @@ void PrintConfigDef::init_fff_params()
     def->category = L("Strength");
     def->tooltip = L("Connect an infill line to an internal perimeter with a short segment of an additional perimeter. "
                      "If expressed as percentage (example: 15%) it is calculated over infill extrusion width. "
-                     "KLIPSLICE tries to connect two close infill lines to a short perimeter segment. If no such perimeter segment "
+                     "ANANAS SLICER tries to connect two close infill lines to a short perimeter segment. If no such perimeter segment "
                      "shorter than infill_anchor_max is found, the infill line is connected to a perimeter segment at just one side "
                      "and the length of the perimeter segment taken is limited to this parameter, but no longer than anchor_length_max.\n"
                      "Set this parameter to zero to disable anchoring perimeters connected to a single infill line.");
@@ -4655,7 +4655,7 @@ void PrintConfigDef::init_fff_params()
     def->category = L("Strength");
     def->tooltip = L("Connect an infill line to an internal perimeter with a short segment of an additional perimeter. "
                      "If expressed as percentage (example: 15%) it is calculated over infill extrusion width. "
-                     "KLIPSLICE tries to connect two close infill lines to a short perimeter segment. If no such perimeter segment "
+                     "ANANAS SLICER tries to connect two close infill lines to a short perimeter segment. If no such perimeter segment "
                      "shorter than this parameter is found, the infill line is connected to a perimeter segment at just one side "
                      "and the length of the perimeter segment taken is limited to infill_anchor, but no longer than this parameter.\n"
                      "If set to 0, the old algorithm for infill connection will be used, it should create the same result as with 1000 & 0.");
@@ -5483,9 +5483,9 @@ void PrintConfigDef::init_fff_params()
 
     def = this->add("host_type", coEnum);
     def->label = L("Host Type");
-    def->tooltip = L("KLIPSLICE uploads G-code files to a Klipper printer through Moonraker. "
+    def->tooltip = L("ANANAS SLICER uploads G-code files to a Klipper printer through Moonraker. "
                    "Projects and presets that name any other host type load as Moonraker.");
-    // KLIPSLICE routes every printer through Moonraker; PrintConfigDef::handle_legacy() rewrites
+    // ANANAS SLICER routes every printer through Moonraker; PrintConfigDef::handle_legacy() rewrites
     // any other stored host to "moonraker".
     def->enum_keys_map = &ConfigOptionEnum<PrintHostType>::get_enum_values();
     def->enum_values.push_back("moonraker");
@@ -5681,7 +5681,7 @@ void PrintConfigDef::init_fff_params()
     def->tooltip = L("If you want to process the output G-code through custom scripts, "
                    "just list their absolute paths here. Separate multiple scripts with a semicolon. "
                    "Scripts will be passed the absolute path to the G-code file as the first argument, "
-                   "and they can access the KLIPSLICE config settings by reading environment variables.");
+                   "and they can access the ANANAS SLICER config settings by reading environment variables.");
     def->gui_flags = "serialized";
     def->multiline = true;
     def->full_width = true;
@@ -6202,10 +6202,10 @@ void PrintConfigDef::init_fff_params()
     def->label = L("Restore Klipper state after the print");
     def->tooltip = L("Klipper keeps the acceleration, square corner velocity, minimum cruise ratio and pressure advance "
                      "the G-code sets until it restarts, so the end G-code and the next print would run with them. "
-                     "Enable this to call _KLIPSLICE_SAVE before the start G-code and _KLIPSLICE_RESTORE before the end "
+                     "Enable this to call _ANANAS_SLICER_SAVE before the start G-code and _ANANAS_SLICER_RESTORE before the end "
                      "G-code. They return the motion limits to their values before the print and the pressure advance to printer.cfg. "
-                     "Both macros must be defined in printer.cfg; KlipSlice ships them in resources/klipper/klipslice_state.cfg. "
-                     "Call _KLIPSLICE_RESTORE from CANCEL_PRINT as well, a cancelled print never reaches the end G-code.");
+                     "Both macros must be defined in printer.cfg; ANANAS SLICER ships them in resources/klipper/ananas_slicer_state.cfg. "
+                     "Call _ANANAS_SLICER_RESTORE from CANCEL_PRINT as well, a cancelled print never reaches the end G-code.");
     def->mode = comAdvanced;
     def->set_default_value(new ConfigOptionBool(false));
 
@@ -6672,8 +6672,8 @@ void PrintConfigDef::init_fff_params()
 
     def = this->add("preheat_time", coFloat);
     def->label = L("Preheat time");
-    def->tooltip = L("To reduce the waiting time after tool change, KLIPSLICE can preheat the next tool while the current tool is still in use. "
-                     "This setting specifies the time in seconds to preheat the next tool. KLIPSLICE will insert a M104 command to preheat the tool in advance.");
+    def->tooltip = L("To reduce the waiting time after tool change, ANANAS SLICER can preheat the next tool while the current tool is still in use. "
+                     "This setting specifies the time in seconds to preheat the next tool. ANANAS SLICER will insert a M104 command to preheat the tool in advance.");
     def->sidetext = L_CONTEXT("s", "second");	// seconds, CIS languages need translation
     def->min = 0;
     def->max = 120;
@@ -6761,7 +6761,7 @@ void PrintConfigDef::init_fff_params()
     def->label = L("Tool change on wipe tower");
     def->tooltip = L("Force the toolhead to travel to the wipe tower before issuing the tool change command (Tx). "
                      "Only relevant for multi-extruder (multi-toolhead) printers using a Type 2 wipe tower. "
-                     "By default KLIPSLICE skips the travel on multi-toolhead machines because the firmware handles the head swap, "
+                     "By default ANANAS SLICER skips the travel on multi-toolhead machines because the firmware handles the head swap, "
                      "which can result in the Tx command being issued above the printed part. "
                      "Enable this option if you want the tool change to always be issued above the wipe tower instead.");
     def->mode = comAdvanced;
@@ -9144,11 +9144,11 @@ void PrintConfigDef::handle_legacy(t_config_option_key &opt_key, std::string &va
     if (opt_key == "curr_bed_type" && value == "SuperTack Plate") {
         value = "Supertack Plate";
     } else if (opt_key == "gcode_flavor" && value != "klipper") {
-        // KLIPSLICE: Klipper is the only flavor. Projects and presets written for any other
+        // ANANAS SLICER: Klipper is the only flavor. Projects and presets written for any other
         // firmware (marlin, marlin2, reprapfirmware, repetier, ...) load as Klipper.
         value = "klipper";
     } else if (opt_key == "host_type" && value != "moonraker") {
-        // KLIPSLICE: Moonraker is the only print host. Physical printers, presets and projects
+        // ANANAS SLICER: Moonraker is the only print host. Physical printers, presets and projects
         // set up for OctoPrint, CrealityPrint, Elegoo Link, Flashforge, ... load as Moonraker.
         value = "moonraker";
     } else if (opt_key == "enable_wipe_tower") {
@@ -9390,9 +9390,9 @@ void PrintConfigDef::handle_legacy(t_config_option_key &opt_key, std::string &va
         "smooth_coefficient", "overhang_totally_speed", "silent_mode",
         "overhang_speed_classic",
         "anisotropic_surfaces", // superseded by top_surface_fill_order / bottom_surface_fill_order
-        "scan_first_layer", "bbl_calib_mark_logo", // KLIPSLICE: Bambu-only options, removed
-        "flashforge_serial_number", // KLIPSLICE: Flashforge host removed
-        "bbl_use_printhost", // KLIPSLICE: Bambu network removed
+        "scan_first_layer", "bbl_calib_mark_logo", // ANANAS SLICER: Bambu-only options, removed
+        "flashforge_serial_number", // ANANAS SLICER: Flashforge host removed
+        "bbl_use_printhost", // ANANAS SLICER: Bambu network removed
     };
 
     if (ignore.find(opt_key) != ignore.end()) {
@@ -12358,8 +12358,8 @@ CLIMiscConfigDef::CLIMiscConfigDef()
 
     def = this->add("config_compatibility", coEnum);
     def->label = L("Forward-compatibility rule when loading configurations from config files and project files (3MF, AMF).");
-    def->tooltip = L("This version of KLIPSLICE may not understand configurations produced by the newest KLIPSLICE versions. "
-                     "For example, newer KLIPSLICE may extend the list of supported firmware flavors. One may decide to "
+    def->tooltip = L("This version of ANANAS SLICER may not understand configurations produced by the newest ANANAS SLICER versions. "
+                     "For example, newer ANANAS SLICER may extend the list of supported firmware flavors. One may decide to "
                      "bail out or to substitute an unknown value with a default silently or verbosely.");
     def->enum_keys_map = &ConfigOptionEnum<ForwardCompatibilitySubstitutionRule>::get_enum_values();
     def->enum_values.push_back("disable");
@@ -12434,8 +12434,8 @@ CLIMiscConfigDef::CLIMiscConfigDef()
 
     def = this->add("single_instance", coBool);
     def->label = L("Single instance mode");
-    def->tooltip = L("If enabled, the command line arguments are sent to an existing instance of GUI KLIPSLICE, "
-                     "or an existing KLIPSLICE window is activated. "
+    def->tooltip = L("If enabled, the command line arguments are sent to an existing instance of GUI ANANAS SLICER, "
+                     "or an existing ANANAS SLICER window is activated. "
                      "Overrides the \"single_instance\" configuration value from application preferences.");*/
 
 /*
@@ -12591,12 +12591,12 @@ ReadWriteSlicingStatesConfigDef::ReadWriteSlicingStatesConfigDef()
     def = this->add("position", coFloats);
     def->label = L("Position");
     def->tooltip = L("Position of the extruder at the beginning of the custom G-code block. If the custom G-code travels somewhere else, "
-                     "it should write to this variable so KLIPSLICE knows where it travels from when it gets control back.");
+                     "it should write to this variable so ANANAS SLICER knows where it travels from when it gets control back.");
 
     def = this->add("e_retracted", coFloats);
     def->label = L("Retraction");
     def->tooltip = L("Retraction state at the beginning of the custom G-code block. If the custom G-code moves the extruder axis, "
-                     "it should write to this variable so KLIPSLICE de-retracts correctly when it gets control back.");
+                     "it should write to this variable so ANANAS SLICER de-retracts correctly when it gets control back.");
 
     def = this->add("e_restart_extra", coFloats);
     def->label = L("Extra de-retraction");

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <title>KLIPSLICE symbol, direction A (Klipper-derived), light background.</title>
+  <title>ANANAS SLICER symbol, direction A (Klipper-derived), light background.</title>
   <!-- Same geometry as the dark version. Body steel-500, trace path-ink #1a86d6
        (signal-path darkened to reach 3.9:1 on white; see docs/brand/README.md). -->
   <path fill="#3d4953" d="M4 10L9 15H4Z M4 17H11L17 23H4Z M5 25H19L25 31H11Z M13 33H27L28 34V39H19Z M21 41H28V48Z M60 10L55 15H60Z M60 17H53L47 23H60Z M59 25H45L39 31H53Z M51 33H37L36 34V39H45Z M43 41H36V48Z"/>

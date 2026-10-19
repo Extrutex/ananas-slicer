@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 360" width="1000" height="360" role="img" aria-label="Data flow from the KlipSlice slicer through a .gcode file, Moonraker and Klipper to the stepper motors, with mDNS discovery and printer.cfg sync drawn as dashed return paths">
-  <title>Where a sliced file goes: KlipSlice writes .gcode, uploads it to Moonraker over HTTP, Moonraker hands it to Klipper over a unix socket, and Klipper drives the steppers with the accelerations the slicer wrote.</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 360" width="1000" height="360" role="img" aria-label="Data flow from the ANANAS SLICER slicer through a .gcode file, Moonraker and Klipper to the stepper motors, with mDNS discovery and printer.cfg sync drawn as dashed return paths">
+  <title>Where a sliced file goes: ANANAS SLICER writes .gcode, uploads it to Moonraker over HTTP, Moonraker hands it to Klipper over a unix socket, and Klipper drives the steppers with the accelerations the slicer wrote.</title>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
       <path d="M0 0 L10 5 L0 10 Z" fill="#d8e0e6"/>
@@ -27,7 +27,7 @@
   <!-- main row: boxes -->
   <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="#eef3f6" text-anchor="middle">
     <rect x="40" y="160" width="120" height="60" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
-    <text x="100" y="180">KLIPSLICE</text>
+    <text x="100" y="180">ANANAS SLICER</text>
 
     <path d="M240 160 H346 L360 174 V220 H240 Z" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
     <path d="M346 160 V174 H360" fill="none" stroke="#3d4953" stroke-width="2"/>
@@ -46,7 +46,7 @@
   <!-- main row: second lines (data font) -->
   <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#8b99a4" text-anchor="middle">
     <text x="100" y="198">slicer</text>
-    <text x="300" y="198">;KLIPSLICE</text>
+    <text x="300" y="198">;ANANAS SLICER</text>
     <text x="300" y="212">M204 S10000</text>
     <text x="500" y="198">HTTP API</text>
     <text x="500" y="212">port 7125</text>

@@ -62,7 +62,7 @@ def fmt(value):
 
 
 def section_slice(lines, facts, args):
-    lines.append("## 1. Slice (KLIPSLICE CLI)")
+    lines.append("## 1. Slice (ANANAS SLICER CLI)")
     lines.append("")
     if facts is None:
         lines.append("**Not run or no G-code produced.**")
@@ -263,7 +263,7 @@ def main():
           and moonraker is not None and moonraker["passed"]
           and cancel is not None and cancel["passed"])
     lines = [
-        "# KLIPSLICE virtual printer report",
+        "# ANANAS SLICER virtual printer report",
         "",
         "Generated %s UTC. Overall: **%s**" % (
             datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),

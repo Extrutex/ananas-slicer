@@ -1,6 +1,6 @@
-# Contributing to KLIPSLICE
+# Contributing to ANANAS SLICER
 
-KLIPSLICE is developed by a single maintainer ([@Extrutex](https://github.com/Extrutex)).
+ANANAS SLICER is developed by a single maintainer ([@Extrutex](https://github.com/Extrutex)).
 The repository is public so that everyone can use, read and build the code, but
 it is not an open-contribution project.
 
@@ -19,10 +19,10 @@ it is not an open-contribution project.
   Moonraker versions.
 - **Evidence for printer firmware** (vendor documentation, firmware sources)
   when a printer is listed wrongly or is missing; see
-  `docs/klipslice/printer-firmware.json`.
+  `docs/ananas-slicer/printer-firmware.json`.
 
 ## Forks
 
-KLIPSLICE is licensed under the AGPL-3.0. You may fork it and develop your fork
-under the terms of that license. A fork is not KLIPSLICE: please give it a
+ANANAS SLICER is licensed under the AGPL-3.0. You may fork it and develop your fork
+under the terms of that license. A fork is not ANANAS SLICER: please give it a
 different name and make clear that it is not the official project.

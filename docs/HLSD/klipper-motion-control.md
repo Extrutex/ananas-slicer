@@ -1,6 +1,6 @@
 # Klipper Motion Control Output
 
-KlipSlice emits `SET_VELOCITY_LIMIT` for Klipper acceleration changes. When the
+ANANAS SLICER emits `SET_VELOCITY_LIMIT` for Klipper acceleration changes. When the
 acceleration-to-deceleration option is enabled, it includes
 `MINIMUM_CRUISE_RATIO`, replacing the removed `ACCEL_TO_DECEL` parameter. The
 same conversion applies to combined acceleration/corner commands and Type1
@@ -27,12 +27,12 @@ until it restarts. Without a restore, the end G-code and the next print's start
 G-code run with the acceleration of the last feature, and with the slicer's
 corner velocity, cruise ratio and pressure advance where the profile sends them.
 
-With `klipper_restore_state` the G-code calls `_KLIPSLICE_SAVE` right before the
-start G-code and `_KLIPSLICE_RESTORE` right before the end G-code, after the
-filament end G-code. The macros ship in `resources/klipper/klipslice_state.cfg`
-and are included from printer.cfg. `_KLIPSLICE_SAVE` records the toolhead's
+With `klipper_restore_state` the G-code calls `_ANANAS_SLICER_SAVE` right before the
+start G-code and `_ANANAS_SLICER_RESTORE` right before the end G-code, after the
+filament end G-code. The macros ship in `resources/klipper/ananas_slicer_state.cfg`
+and are included from printer.cfg. `_ANANAS_SLICER_SAVE` records the toolhead's
 `max_velocity`, `max_accel`, `minimum_cruise_ratio` and
-`square_corner_velocity`; `_KLIPSLICE_RESTORE` sets them back and sets the
+`square_corner_velocity`; `_ANANAS_SLICER_RESTORE` sets them back and sets the
 pressure advance and smooth time of every extruder stepper (the stepper of an
 `[extruder]`/`[extruderN]` that has one, and every `[extruder_stepper]`) to its
 printer.cfg value. The pressure advance comes from printer.cfg rather than from
@@ -44,15 +44,15 @@ the restore leaves their pressure advance alone and says so in the console.
 It does the same for a stepper whose name holds anything but letters, digits,
 `_` and `-`: Klipper splits `SET_PRESSURE_ADVANCE`'s parameters like a POSIX
 shell, so a quote makes the command malformed, which would end the restore
-before the remaining steppers, and a backslash changes the name. The restore does nothing unless `_KLIPSLICE_SAVE` ran
-since the last restore. `_KLIPSLICE_SAVE` in turn records nothing while a
+before the remaining steppers, and a backslash changes the name. The restore does nothing unless `_ANANAS_SLICER_SAVE` ran
+since the last restore. `_ANANAS_SLICER_SAVE` in turn records nothing while a
 snapshot is still unrestored: that snapshot predates a print that ended without
 the restore, and the toolhead still carries that print's feature values. It
 keeps the snapshot and says so in the console. A cancelled print never reaches
-the end G-code, so `CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself:
+the end G-code, so `CANCEL_PRINT` has to call `_ANANAS_SLICER_RESTORE` itself:
 
 - With Mainsail's or Fluidd's macro file (`mainsail.cfg`, `fluidd.cfg`), set
-  `variable_user_cancel_macro: "_KLIPSLICE_RESTORE"` in
+  `variable_user_cancel_macro: "_ANANAS_SLICER_RESTORE"` in
   `[gcode_macro _CLIENT_VARIABLE]` and do not define a `CANCEL_PRINT` of your
   own. Klipper merges sections of the same name and the later `gcode` wins, so
   a second `CANCEL_PRINT` replaces the client's, which also drops its
@@ -66,7 +66,7 @@ the end G-code, so `CANCEL_PRINT` has to call `_KLIPSLICE_RESTORE` itself:
   extruder's `max_extrude_only_distance`. This is the client's behaviour and
   stays unpatched; the `_CLIENT_VARIABLE` values have to fit printer.cfg.
 - Without such a file, `CANCEL_PRINT` renames the original and runs
-  `TURN_OFF_HEATERS`, `M107`, `CANCEL_PRINT_BASE` and then `_KLIPSLICE_RESTORE`
+  `TURN_OFF_HEATERS`, `M107`, `CANCEL_PRINT_BASE` and then `_ANANAS_SLICER_RESTORE`
   as the last command, so a G-code error in the restore cannot keep the heaters
   on or the print running. The virtual printer (`tests/virtual-printer/printer.cfg`)
   uses exactly this macro.

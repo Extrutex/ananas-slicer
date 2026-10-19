@@ -249,7 +249,7 @@ function ShowRecentFileList( pList )
 		//let sShortName=sPath.substring(index+1,sPath.length);
 		
 		let sBadge=sPublished? '<span class="FilePublishedBadge">PUB</span>':'';
-		let sLogoBadge=sPublished? '<img class="FileLogoBadge" src="../../images/KLIPSLICE_symbol_dark.svg" alt="" />':'';
+		let sLogoBadge=sPublished? '<img class="FileLogoBadge" src="../../images/AnanasSlicer_symbol_dark.svg" alt="" />':'';
 
 		let TmpHtml='<div class="FileItem"  fpath="'+sPath+'"  >'+
 				'<a class="FileTip" title="'+sPath+'"></a>'+
