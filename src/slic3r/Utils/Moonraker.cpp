@@ -100,6 +100,19 @@ std::string Moonraker::uploaded_path(const std::string &response_body)
     return {};
 }
 
+bool Moonraker::upload_took_print(const std::string &response_body)
+{
+    // Same shape as for uploaded_path(): top-level on Moonraker itself, enveloped on proxies.
+    std::stringstream ss(response_body);
+    pt::ptree ptree;
+    pt::read_json(ss, ptree);
+    for (const char *prefix : {"", "result."})
+        if (ptree.get<bool>(std::string(prefix) + "print_started", false) ||
+            ptree.get<bool>(std::string(prefix) + "print_queued", false))
+            return true;
+    return false;
+}
+
 const char* Moonraker::get_name() const { return "Moonraker"; }
 
 wxString Moonraker::get_test_ok_msg() const
@@ -298,12 +311,18 @@ bool Moonraker::start_print(const std::string &resolved_ip, wxString &error_msg,
 bool Moonraker::upload_inner(const std::string &resolved_ip, PrintHostUpload upload_data, ProgressFn progress_fn, ErrorFn error_fn, InfoFn info_fn) const
 {
     // POST /server/files/upload as multipart/form-data with:
-    //     file = <gcode file>
-    //     root = <storage root>     (Moonraker default: "gcodes")
+    //     file  = <gcode file>
+    //     root  = <storage root>     (Moonraker default: "gcodes")
+    //     print = true|false         (true for "upload and print")
     // Successful response shape (no "result" envelope on this endpoint):
-    //     { "item": { "path": "<name>.gcode", "root": "<root>" }, "print_started": <bool>, "action": "create_file" }
-    // The print is always started explicitly via /printer/print/start regardless of
-    // `print_started`, so there is a single call site for that state.
+    //     { "item": { "path": "<name>.gcode", "root": "<root>" }, "print_started": <bool>,
+    //       "print_queued": <bool>, "action": "create_file" }
+    // With print=true Moonraker starts the print itself. A separate /printer/print/start right
+    // after the upload fails with HTTP 503 when Moonraker is still bringing Klippy up, for
+    // example after a [power] device switched the printer on for the queued job; Moonraker's
+    // own start waits for Klippy instead. print_started or print_queued means Moonraker owns
+    // the print. Only when it reports neither (no job queue, or a server that ignores `print`)
+    // is the print started explicitly below. (Backport of OrcaSlicer #15032.)
     const char *name = get_name();
     const auto upload_filename = upload_data.upload_path.filename();
     // The storage comes from the upload dialog's root picker (get_storage). When unset, fall
@@ -313,6 +332,8 @@ bool Moonraker::upload_inner(const std::string &resolved_ip, PrintHostUpload upl
     std::string url = make_url("server/files/upload", resolved_ip);
     bool result = true;
     std::string stored_path;
+    const bool want_start = upload_data.post_action == PrintHostPostUploadAction::StartPrint;
+    bool moonraker_took_print = false;
 
     if (!resolved_ip.empty())
         info_fn(L"resolve", boost::nowide::widen(url));
@@ -329,13 +350,14 @@ bool Moonraker::upload_inner(const std::string &resolved_ip, PrintHostUpload upl
         % root
         % upload_filename.string()
         % (plateindex.empty() ? "-" : plateindex)
-        % (upload_data.post_action == PrintHostPostUploadAction::StartPrint ? "true" : "false");
+        % (want_start ? "true" : "false");
 
     auto http = Http::post(url);
     set_auth(http, resolved_ip);
     http.form_add("root", root);
     if (!plateindex.empty())
         http.form_add("plateindex", plateindex);
+    http.form_add("print", want_start ? "true" : "false");
     http.form_add_file("file", upload_data.source_path.string(), upload_filename.string())
         .on_complete([&](std::string body, unsigned status) {
             BOOST_LOG_TRIVIAL(debug) << boost::format("%1%: upload HTTP %2%: %3%") % name % status % body;
@@ -349,6 +371,10 @@ bool Moonraker::upload_inner(const std::string &resolved_ip, PrintHostUpload upl
                         "%1%: upload response has no item.path, falling back to original filename `%2%`")
                         % name % stored_path;
                 }
+                moonraker_took_print = Moonraker::upload_took_print(body);
+                if (want_start)
+                    BOOST_LOG_TRIVIAL(info) << boost::format("%1%: Moonraker %2% the print itself")
+                        % name % (moonraker_took_print ? "started or queued" : "did not start");
             } catch (const std::exception &ex) {
                 BOOST_LOG_TRIVIAL(warning) << boost::format(
                     "%1%: could not parse upload response (%2%); falling back to original filename")
@@ -377,7 +403,9 @@ bool Moonraker::upload_inner(const std::string &resolved_ip, PrintHostUpload upl
     if (!result)
         return false;
 
-    if (upload_data.post_action == PrintHostPostUploadAction::StartPrint && !stored_path.empty()) {
+    // Fallback only when Moonraker neither started nor queued the print. If the printer cannot
+    // start it, the error from this request is what the user sees.
+    if (want_start && !stored_path.empty() && !moonraker_took_print) {
         wxString start_msg;
         if (!start_print(resolved_ip, start_msg, stored_path)) {
             error_fn(std::move(start_msg));

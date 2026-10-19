@@ -28,6 +28,33 @@ TEST_CASE("The Moonraker upload response yields the stored path", "[Moonraker]")
     }
 }
 
+TEST_CASE("The Moonraker upload response tells whether Moonraker took the print", "[Moonraker]")
+{
+    SECTION("an upload with print=true on a ready printer starts the print") {
+        // Shape recorded from Moonraker v0.11.0 on the virtual printer rig.
+        const std::string body = R"({"action":"create_file","item":{"path":"cube.gcode","root":"gcodes"},)"
+                                 R"("print_started":true,"print_queued":false})";
+        CHECK(Moonraker::upload_took_print(body));
+    }
+    SECTION("a job Moonraker queued, as while a power device brings the printer up, counts as taken") {
+        CHECK(Moonraker::upload_took_print(
+            R"({"action":"create_file","item":{"path":"cube.gcode"},"print_started":false,"print_queued":true})"));
+    }
+    SECTION("neither flag set leaves the start to the slicer") {
+        CHECK_FALSE(Moonraker::upload_took_print(
+            R"({"action":"create_file","item":{"path":"cube.gcode"},"print_started":false,"print_queued":false})"));
+    }
+    SECTION("a server that does not report the flags leaves the start to the slicer") {
+        CHECK_FALSE(Moonraker::upload_took_print(R"({"action":"create_file","item":{"path":"cube.gcode"}})"));
+    }
+    SECTION("an enveloped response is accepted") {
+        CHECK(Moonraker::upload_took_print(R"({"result":{"item":{"path":"cube.gcode"},"print_started":true}})"));
+    }
+    SECTION("a body that is not JSON throws") {
+        CHECK_THROWS(Moonraker::upload_took_print("<html>503 Service Unavailable</html>"));
+    }
+}
+
 TEST_CASE("The Moonraker host takes defaults for print host options a config lacks", "[Moonraker]")
 {
     // A full print config carries print_host and printhost_apikey but none of the physical

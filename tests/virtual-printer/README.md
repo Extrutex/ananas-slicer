@@ -63,8 +63,11 @@ take about 30 seconds.
    and still restore the limits and every other stepper, `Tail` included.
 4. **Moonraker.** A long-running Klippy with the same file-output MCU and its
    API socket open, and Moonraker connected to it. The check uploads the file
-   (`/server/files/upload`), reads `/server/files/metadata`, starts the print
-   (`/printer/print/start`) and follows it to the end. Because the MCU is a
+   with `print=true` (`/server/files/upload`), as the slicer's upload and print
+   does, so Moonraker starts the print itself; it calls `/printer/print/start`
+   only when Moonraker reports neither `print_started` nor `print_queued`, and
+   then fails. It reads `/server/files/metadata` and follows the print to the
+   end. Because the MCU is a
    file, the print runs at CPU speed: a 9-minute cube finishes in a few seconds.
 5. **Cancel a running print.** The batch routes of step 3 call `CANCEL_PRINT`
    with no print running, so they cannot tell whether it stops one. The rig
@@ -83,7 +86,8 @@ take about 30 seconds.
   `Unknown command`.
 - State macros: as for Klipper; every expectation in `check.gcode` is a macro
   that raises a G-code error when it does not hold.
-- Moonraker: Klippy ready; upload accepted; metadata has a slicer and a non-zero
+- Moonraker: Klippy ready; upload accepted and the print started or queued by
+  Moonraker; metadata has a slicer and a non-zero
   `estimated_time`; `exclude_object.objects` during the print equals the
   file's `EXCLUDE_OBJECT_DEFINE` names; `print_stats` ends `complete`; no
   error or unknown-command response in the G-code store during the print.

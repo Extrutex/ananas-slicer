@@ -5,11 +5,14 @@ Runs inside the moonraker container against http://127.0.0.1:7125 (loopback is
 Moonraker's only trusted client and no port is published). Steps:
 
 1. /server/info: Klippy must be connected and ready.
-2. POST /server/files/upload: upload the file to the gcodes root.
+2. POST /server/files/upload with print=true, as the slicer's "upload and
+   print" sends it: Moonraker must report print_started or print_queued, so the
+   slicer leaves the start to Moonraker. Only if it reports neither does this
+   script fall back to POST /printer/print/start, as the slicer does, and fail.
+   Klippy runs the file through virtual_sdcard. exclude_object must list the
+   objects the file defines, print_stats must end "complete", and no G-code
+   response may report an error or unknown command.
 3. GET /server/files/metadata: slicer, estimated_time, thumbnails, layers.
-4. POST /printer/print/start: Klippy runs the file through virtual_sdcard.
-   exclude_object must list the objects the file defines, print_stats must end
-   "complete", and no G-code response may report an error or unknown command.
 
 Writes every API response used to a JSON file. Exit status: 0 pass, 1 fail,
 2 usage.
@@ -49,7 +52,7 @@ def request(method, path, query=None, body=None, headers=None):
         raise ApiError("%s %s -> %s" % (method, path, exc.reason)) from exc
 
 
-def upload(path, remote_name):
+def upload(path, remote_name, start_print=False):
     boundary = "----klipslice-vp-" + uuid.uuid4().hex
     with open(path, "rb") as f:
         payload = f.read()
@@ -58,6 +61,10 @@ def upload(path, remote_name):
         b'Content-Disposition: form-data; name="root"',
         b"",
         b"gcodes",
+        b"--" + boundary.encode(),
+        b'Content-Disposition: form-data; name="print"',
+        b"",
+        b"true" if start_print else b"false",
         b"--" + boundary.encode(),
         ('Content-Disposition: form-data; name="file"; filename="%s"' % remote_name).encode(),
         b"Content-Type: application/octet-stream",
@@ -122,29 +129,17 @@ def main():
             raise ApiError("Klippy state is %r, not 'ready'" % info.get("klippy_state"))
 
         responses["printer_info"] = request("GET", "/printer/info")["result"]
-        responses["upload"] = upload(args.gcode, args.remote_name)
-
-        def poll_metadata():
-            try:
-                meta = request("GET", "/server/files/metadata",
-                               {"filename": args.remote_name})["result"]
-            except ApiError:
-                return None
-            return meta if "slicer" in meta or "estimated_time" in meta else None
-
-        meta = wait_for("file metadata", 60, poll_metadata)
-        responses["metadata"] = meta
-        if not meta.get("slicer"):
-            fail("metadata: no slicer detected")
-        if not meta.get("estimated_time"):
-            fail("metadata: estimated_time missing or zero")
-
-        # The print: virtual_sdcard runs the file on the file-output MCU.
         responses["gcode_store_before"] = request(
             "GET", "/server/gcode_store", {"count": 1000})["result"]
         store_before = len(responses["gcode_store_before"]["gcode_store"])
-        responses["print_start"] = request(
-            "POST", "/printer/print/start", {"filename": args.remote_name})
+        # The print: virtual_sdcard runs the file on the file-output MCU. Moonraker's upload
+        # reply carries item, print_started and print_queued at top level (no result envelope).
+        upload_reply = upload(args.gcode, args.remote_name, start_print=True)
+        responses["upload"] = upload_reply
+        if not (upload_reply.get("print_started") or upload_reply.get("print_queued")):
+            fail("upload with print=true: Moonraker reported neither print_started nor print_queued")
+            responses["print_start"] = request(
+                "POST", "/printer/print/start", {"filename": args.remote_name})
         query = {"print_stats": "", "exclude_object": "", "virtual_sdcard": ""}
 
         def poll_objects():
@@ -164,6 +159,21 @@ def main():
         if sorted(reported) != sorted(expected):
             fail("exclude_object objects %s != EXCLUDE_OBJECT_DEFINE names %s"
                  % (reported, expected))
+
+        def poll_metadata():
+            try:
+                meta = request("GET", "/server/files/metadata",
+                               {"filename": args.remote_name})["result"]
+            except ApiError:
+                return None
+            return meta if "slicer" in meta or "estimated_time" in meta else None
+
+        meta = wait_for("file metadata", 60, poll_metadata)
+        responses["metadata"] = meta
+        if not meta.get("slicer"):
+            fail("metadata: no slicer detected")
+        if not meta.get("estimated_time"):
+            fail("metadata: estimated_time missing or zero")
 
         def poll_done():
             status = request("GET", "/printer/objects/query", query)["result"]["status"]

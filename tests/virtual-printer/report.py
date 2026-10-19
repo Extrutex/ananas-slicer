@@ -176,8 +176,9 @@ def section_moonraker(lines, result):
         fmt(info.get("klippy_state"))))
     upload = r.get("upload", {})
     if upload:
-        lines.append("- Upload: action `%s`, item `%s`" % (
-            fmt(upload.get("action")), fmt(upload.get("item", {}).get("path"))))
+        lines.append("- Upload: action `%s`, item `%s`, print_started `%s`, print_queued `%s`" % (
+            fmt(upload.get("action")), fmt(upload.get("item", {}).get("path")),
+            fmt(upload.get("print_started")), fmt(upload.get("print_queued"))))
     meta = r.get("metadata")
     if meta:
         lines.append("- `/server/files/metadata`:")

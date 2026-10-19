@@ -58,6 +58,11 @@ public:
     // Storage-relative path of the uploaded file from a /server/files/upload response body, or
     // empty if the response carries none. Throws if the body is not JSON.
     static std::string uploaded_path(const std::string &response_body);
+    // Whether Moonraker took over the print of an upload sent with print=true: the
+    // /server/files/upload response reports print_started (it began the print) or print_queued
+    // (it put the job in its queue, e.g. while a [power] device brings the printer up).
+    // False for a response with neither flag. Throws if the body is not JSON.
+    static bool upload_took_print(const std::string &response_body);
 
 protected:
     std::string m_host;
