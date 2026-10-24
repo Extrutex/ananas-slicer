@@ -73,13 +73,49 @@ The way from a slice to a machine: connect, slice against the printer's own limi
 
 Nothing here has touched a real printer. The tests run against the virtual printer (below) only.
 
+## Force distribution
+
+The *Kraftverteilung* panel (top bar) puts the engine's `analyze.stress` (see `engine.md`) in front of a part: where does
+it carry a load, and where does it fail first. Its texts are German, like the rest of the interface's newer parts.
+`ui/src/stress` holds the pure logic (materials, setup and request, result field, colours, voxel mesh, face
+selection); `StressPanel.tsx` is the panel, the viewport draws the rest.
+
+- **Setup.** One object (the selected one; a choice when there are several), a material, a voxel size, any number of
+  supports and loads. Material presets PLA, PETG, ABS, ASA and PA-CF are marked as guide values for printed parts
+  loaded in the print plane, not datasheet values; every field is editable, and an edited preset becomes "Eigene
+  Werte". `z_factor` is the layer bond. A number field never clamps: text that is not a number stays marked invalid and
+  changes nothing; ranges are checked once, by `checkSetup`, which also estimates the cell count and warns about a
+  grid that is too coarse (fewer than 4 cells across the thinnest side) or heavy (above 2 million cells). Above the
+  engine's 20 million cells the start is blocked.
+- **Choosing places.** A support or a load is a set of triangles, a box in bed coordinates, or both. *Im Viewport
+  wählen* arms the entry: a click selects the planar face under the pointer (all connected triangles within 8 degrees
+  of the clicked one's normal), a second click on it removes it again; clicking does not select or drag objects while
+  armed. Triangle indices are counted over all parts of the object in the order `model.load` lists them, which is the
+  order the engine expects. The two quick boxes *Unterseite* and *Oberseite* put a zero-thickness box on the bottom or
+  top of the object. Supports hold x, y, z individually; a load is the force vector in N, the resultant on its place.
+  Selected places are drawn blue (supports) and orange (loads, with an arrow in force direction), the box as outline.
+- **Run.** The request carries the object's placement as the viewport shows it, so build orientation is part of the
+  question. The engine reports `analyze.progress`; the panel shows a progress bar, then fetches the grid layer block by
+  layer block (`analyze.chunk`, at most one million cells per request). The engine has no cancel for a running analysis,
+  and the panel says so. A refusal (no support, empty selection, no convergence) is shown as the engine's own message.
+- **Result.** The surface of the voxel model is drawn as it was computed (stepped), one flat colour per cell, with the
+  eleven-bin ramp of the heatmap. Three quantities switch in the legend: von Mises stress (red above the material's
+  yield strength), safety factor (red below 1, bright for critical, dark from 5 up) and displacement. A slider cuts the
+  grid at a layer to show the values inside. The legend lists the three extrema with their positions, the viewport marks
+  the one of the current quantity, and the legend always carries the caveat below.
+- **Staleness.** The result belongs to the object as it stood when it was computed. Moving, rotating or scaling it, or
+  loading another model, marks the result stale: it is not drawn and the panel says so until it is computed again.
+- **Caveat, always shown next to a result.** Infill and walls are not modelled; the part is solid, so the result is an
+  upper bound of the stiffness of a sliced part. Stress, safety factor and displacement are guide values, not a
+  guarantee, and peaks at corners and load points grow with a finer grid (see `engine.md`, "Stress analysis").
+
 ## Running it
 
 ```sh
 cd ui
 npm install
 npm test                    # unit, session and app tests; most of them start the real engine
-npm run e2e                 # the viewer in headless Chrome: page and pixels (needs Chrome; CHROME_BIN picks it)
+npm run e2e                 # the viewer in headless Chrome: page and pixels, also picking faces and the force distribution (needs Chrome; CHROME_BIN picks it)
 cargo test --manifest-path src-tauri/Cargo.toml     # the Rust bridge against the real engine
 
 # the way to the printer, against the virtual printer (real Klipper and Moonraker, reachable on 127.0.0.1 only)

@@ -4,7 +4,11 @@ import { fitsBed } from "./bed.ts";
 import { CLASS_ORDER, FACE_COLORS, type FaceClass } from "./inspect.ts";
 import { OVER_COLOR, QUANTITIES, RAMP, countOver, legendBins, type Quantity } from "./heatmap.ts";
 import { previewScale } from "./preview.ts";
-import { ViewerScene, type CameraPreset } from "./ViewerScene.ts";
+import { ViewerScene, type CameraPreset, type StressView } from "./ViewerScene.ts";
+import { stressResultCurrent } from "../state/session.ts";
+import { STRESS_QUANTITIES, formatValue, stressLegend, stressScale, type StressQuantity, type StressScale } from "../stress/colors.ts";
+import { buildStressMesh } from "../stress/mesh.ts";
+import { INFILL_WARNING } from "../stress/texts.ts";
 
 const BUTTON =
   "h-target rounded border px-2 font-data text-ks-table transition-colors duration-fast";
@@ -158,6 +162,88 @@ function HeatmapLegend({ state, session }: { state: CockpitState; session: Cockp
   );
 }
 
+const MM3 = (value: number): string => value.toFixed(1).replace(".", ",");
+
+/** Legende der Kraftverteilung: Größe, Rampe, Maxima, Schnitt und der Hinweis, wie weit man dem Ergebnis trauen darf. */
+function StressLegend({ state, session, scale }: { state: CockpitState; session: CockpitSession; scale: StressScale }) {
+  const { stress } = state;
+  const result = stress.result!;
+  const quantity = stress.display.quantity;
+  const unit = STRESS_QUANTITIES.find((q) => q.id === quantity)!.unit;
+  const bins = stressLegend(scale);
+  const top = scale.scale.max;
+  const summary = result.summary;
+  const layers = result.field.size[2];
+  const clip = stress.display.clip ?? layers - 1;
+  const rows: { id: StressQuantity; label: string; value: string; at: readonly number[] }[] = [
+    { id: "von-mises", label: "Max. Spannung", value: `${formatValue("von-mises", summary.max_von_mises.value)} MPa`, at: summary.max_von_mises.at },
+    { id: "safety", label: "Min. Sicherheit", value: formatValue("safety", summary.min_safety.value), at: summary.min_safety.at },
+    { id: "displacement", label: "Max. Verformung", value: `${formatValue("displacement", summary.max_displacement.value)} mm`, at: summary.max_displacement.at },
+  ];
+  return (
+    <div className="w-[340px] border border-edge bg-surface-panel/90 p-2 font-data text-ks-table" data-testid="stress-legend">
+      <Segmented
+        label="Größe der Kraftverteilung"
+        value={quantity}
+        options={STRESS_QUANTITIES.map((q) => ({ id: q.id, label: q.label, hint: q.hint }))}
+        onChange={(next: StressQuantity) => session.setStressDisplay({ quantity: next })}
+      />
+      <div className="mt-2 flex h-3 gap-px" role="img" aria-label={`${quantity} von ${formatValue(quantity, scale.scale.min)} bis ${formatValue(quantity, top)} ${unit}`}>
+        {bins.map((bin, index) => (
+          <span key={`${bin.color}-${index}`} className="flex-1" style={{ background: bin.color }} title={`${formatValue(quantity, bin.from)} – ${formatValue(quantity, bin.to)} ${unit}`} />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-ink-secondary">
+        <span>{formatValue(quantity, scale.scale.min)}</span>
+        <span>{formatValue(quantity, (scale.scale.min + top) / 2)}</span>
+        <span>
+          {quantity === "safety" ? "≥ " : ""}
+          {formatValue(quantity, top)} {unit}
+        </span>
+      </div>
+      {quantity !== "displacement" ? (
+        <div className="mt-1.5 flex items-center gap-2 text-ink-muted" data-testid="stress-limit">
+          <span aria-hidden="true" className="inline-block h-2.5 w-4 border border-signal-limit" style={{ background: OVER_COLOR }} />
+          <span>{quantity === "safety" ? "Sicherheit unter 1: Fließen oder Schichtbruch" : `Über der Streckgrenze (${formatValue("von-mises", result.material.yieldStrength)} MPa)`}</span>
+        </div>
+      ) : null}
+      <ul className="m-0 mt-2 list-none p-0" aria-label="Maxima">
+        {rows.map((row) => (
+          <li key={row.id} className={`py-px ${row.id === quantity ? "text-ink-strong" : "text-ink-secondary"}`} data-testid={`stress-max-${row.id}`}>
+            <div className="flex gap-2 whitespace-nowrap">
+              <span aria-hidden="true">{row.id === quantity ? "◉" : "○"}</span>
+              <span>{row.label}</span>
+              <span className="ml-auto">{row.value}</span>
+            </div>
+            <div className="pl-5 text-ks-micro text-ink-muted">
+              bei x {MM3(row.at[0]!)} · y {MM3(row.at[1]!)} · z {MM3(row.at[2]!)} mm
+            </div>
+          </li>
+        ))}
+      </ul>
+      <label className="mt-2 flex items-center gap-2 text-ink-muted">
+        <span className="w-[11ch] whitespace-nowrap">Schnitt</span>
+        <input
+          type="range"
+          aria-label="Schnitt durch das Teil"
+          min={0}
+          max={layers - 1}
+          step={1}
+          value={clip}
+          onChange={(event) => session.setStressDisplay({ clip: Number(event.target.value) >= layers - 1 ? null : Number(event.target.value) })}
+          className="h-1 w-40 accent-[var(--ks-alu-200)]"
+        />
+        <span className="w-[10ch] text-right text-ink-secondary">
+          z {(result.field.origin[2] + (clip + 1) * result.field.voxelSize).toFixed(1).replace(".", ",")} mm
+        </span>
+      </label>
+      <p role="note" className="m-0 mt-2 text-ks-micro text-signal-caution" data-testid="stress-warning">
+        {INFILL_WARNING}
+      </p>
+    </div>
+  );
+}
+
 export function Viewer({ session, state }: { session: CockpitSession; state: CockpitState }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<ViewerScene | null>(null);
@@ -174,6 +260,7 @@ export function Viewer({ session, state }: { session: CockpitSession; state: Coc
         onSelect: (index) => session.selectObject(index),
         onMove: (index, position) => session.moveObject(index, position),
         onMoveEnd: () => void session.commitObject(),
+        onPickFace: (object, part, triangle) => session.pickStressFace(object, part, triangle),
       });
     } catch {
       setWebglFailed(true);
@@ -188,6 +275,45 @@ export function Viewer({ session, state }: { session: CockpitSession; state: Coc
       sceneRef.current = null;
     };
   }, [session]);
+
+  const { stress } = state;
+  const stressCurrent = stressResultCurrent(state);
+  const stressResult = stressCurrent ? stress.result : null;
+  const stressShown = stressResult !== null && stress.display.shown;
+  const scale = useMemo(
+    () => (stressResult ? stressScale(stress.display.quantity, stressResult.summary, stressResult.material.yieldStrength) : null),
+    [stressResult, stress.display.quantity],
+  );
+  const stressMesh = useMemo(
+    () => (stressShown && stressResult && scale ? buildStressMesh(stressResult.field, scale, stress.display.clip) : null),
+    [stressShown, stressResult, scale, stress.display.clip],
+  );
+  const stressView = useMemo<StressView | null>(() => {
+    if (!stress.open && stressMesh === null) return null;
+    const summary = stressResult?.summary;
+    const marker =
+      summary === undefined
+        ? undefined
+        : stress.display.quantity === "von-mises"
+          ? summary.max_von_mises
+          : stress.display.quantity === "safety"
+            ? summary.min_safety
+            : summary.max_displacement;
+    return {
+      object: stress.object,
+      picking: stress.open && stress.armed !== null && stressMesh === null,
+      regions: stress.open
+        ? stress.setup.regions.map((region) => ({ id: region.id, kind: region.kind, triangles: region.triangles, box: region.box, force: region.force, armed: region.id === stress.armed }))
+        : [],
+      mesh: stressMesh,
+      // Das Maximum bleibt nur sichtbar, solange der Schnitt es nicht abgetragen hat.
+      markers:
+        stressMesh !== null && marker !== undefined && stressResult && (stress.display.clip === null || marker.at[2] <= stressResult.field.origin[2] + (stress.display.clip + 1) * stressResult.field.voxelSize + 1e-6)
+          ? [{ at: marker.at, color: "#ffffff" }]
+          : [],
+      markerSize: Math.max(0.8, (stressResult?.field.voxelSize ?? 1) * 0.6),
+    };
+  }, [stress.open, stress.object, stress.armed, stress.setup.regions, stress.display.quantity, stressMesh, stressResult]);
 
   const threshold = Number(resolved?.config.support_threshold_angle);
   const limits = resolved?.limits?.values ?? null;
@@ -215,9 +341,10 @@ export function Viewer({ session, state }: { session: CockpitSession; state: Coc
             }
           : null,
       overhangThreshold: Number.isFinite(threshold) && threshold > 0 ? threshold : 30,
+      stress: stressView,
     });
     setShares(view.mode === "inspect" ? scene.inspectShares(selected ?? 0) : null);
-  }, [bed, objects, selected, view, preview, limits, threshold]);
+  }, [bed, objects, selected, view, preview, limits, threshold, stressView]);
 
   const object = selected !== null ? objects[selected] : objects[0];
   const layers = preview.data?.summary.layers ?? [];
@@ -284,6 +411,7 @@ export function Viewer({ session, state }: { session: CockpitSession; state: Coc
       <div className="pointer-events-auto absolute bottom-3 left-3 flex flex-col gap-2">
         {view.target === "model" && view.mode === "inspect" ? <InspectLegend shares={shares} /> : null}
         {view.target === "gcode" ? <HeatmapLegend state={state} session={session} /> : null}
+        {view.target === "model" && stressShown && scale ? <StressLegend state={state} session={session} scale={scale} /> : null}
       </div>
 
       <div className="pointer-events-auto absolute bottom-3 right-3 flex flex-col gap-1 border border-edge bg-surface-panel/90 p-2">

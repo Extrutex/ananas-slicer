@@ -16,6 +16,10 @@ import type {
   SliceProgress,
   SliceRequest,
   SliceResult,
+  StressChunkJson,
+  StressProgress,
+  StressRequest,
+  StressSummary,
   UploadResult,
 } from "./protocol.ts";
 
@@ -126,5 +130,27 @@ export class EngineClient {
     } finally {
       stop();
     }
+  }
+
+  // --- stress analysis ---
+
+  /** One analysis at a time; `onProgress` receives the engine's `analyze.progress` notifications meanwhile. */
+  async analyzeStress(request: StressRequest, onProgress: (progress: StressProgress) => void): Promise<StressSummary> {
+    const stop = this.#transport.onNotification((notification) => {
+      if (notification.method === "analyze.progress") {
+        const params = notification.params as { percent: number; message: string };
+        onProgress({ percent: params.percent, message: params.message });
+      }
+    });
+    try {
+      return (await this.#transport.call("analyze.stress", request)) as StressSummary;
+    } finally {
+      stop();
+    }
+  }
+
+  /** The cell data of the grid layers `zFrom`..`zTo` (inclusive) of the latest analysis. */
+  async analyzeChunk(id: number, zFrom: number, zTo: number): Promise<StressChunkJson> {
+    return (await this.#transport.call("analyze.chunk", { id, z_from: zFrom, z_to: zTo })) as StressChunkJson;
   }
 }

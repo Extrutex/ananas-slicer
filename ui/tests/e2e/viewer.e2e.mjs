@@ -155,6 +155,49 @@ async function main() {
   const legend = await evaluate(`document.querySelector('[data-testid="heatmap-legend"]').innerText.replace(/\\n/g, ' | ')`);
   check("the legend names the limit", /Over limit/.test(legend), legend);
 
+  // --- Kraftverteilung: Flächen per Klick im Viewport wählen, rechnen, Heatmap ---
+  await click("Model"); await sleep(800);
+  await click("Kraftverteilung"); await sleep(500);
+  check("das Panel Kraftverteilung öffnet sich mit dem Warnhinweis", await waitFor(`!!document.querySelector('[data-testid="stress-panel"]') && document.querySelector('[data-testid="stress-panel-warning"]').innerText.includes('Obergrenze der Steifigkeit')`, 20));
+  const centre = await evaluate(`(() => { const r = document.querySelector('[data-testid="viewer-canvas"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  const clickAt = async ({ x, y }) => {
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+    await sleep(500);
+  };
+  await click("+ Lagerfläche");
+  await click("Under"); await sleep(1200);
+  await clickAt(centre);
+  check("ein Klick auf die Unterseite wählt eine Lagerfläche (2 Dreiecke)", (await evaluate(`document.querySelector('[data-testid="region-1-place"]')?.innerText`)) === "2 Dreiecke");
+  await shot("12-stress-support");
+  await click("+ Last");
+  await click("Top"); await sleep(1200);
+  await clickAt(centre);
+  check("ein Klick auf die Oberseite wählt die Lastfläche (2 Dreiecke)", (await evaluate(`document.querySelector('[data-testid="region-2-place"]')?.innerText`)) === "2 Dreiecke");
+  await setInput('input[aria-label="Last 1 Kraft Z"]', "-1000"); await sleep(300);
+  await shot("13-stress-load");
+  const marked = await pixels();
+  await click("Iso"); await sleep(800);
+  check("Berechnen ist freigegeben", (await evaluate(`[...document.querySelectorAll('[data-testid="stress-panel"] button')].find((b) => b.textContent.trim() === 'Berechnen')?.disabled`)) === false);
+  await clickIn('[data-testid="stress-panel"]', "Berechnen");
+  check("die Heatmap erscheint mit Legende", await waitFor(`!!document.querySelector('[data-testid="stress-legend"]')`, 120));
+  await sleep(1500);
+  await shot("14-stress-vonmises");
+  const vm = await pixels();
+  check("die Heatmap ist gezeichnet", vm.colours > 40 && differs(marked, vm), `${vm.colours} Farben`);
+  const legendText = await evaluate(`document.querySelector('[data-testid="stress-legend"]').innerText.replace(/\\n/g, ' | ')`);
+  check("die Legende nennt Maxima und den Hinweis zu Infill und Wänden", /Max\. Spannung/.test(legendText) && /Min\. Sicherheit/.test(legendText) && /Infill und Wände sind nicht modelliert/.test(legendText) && /Richtwerte, keine Garantie/.test(legendText), legendText.slice(0, 160));
+  await clickIn('[data-testid="stress-legend"]', "Sicherheit"); await sleep(1500);
+  await shot("15-stress-safety");
+  const safety = await pixels();
+  check("Sicherheit färbt anders als Spannung", differs(vm, safety));
+  await clickIn('[data-testid="stress-legend"]', "Verformung"); await sleep(1500);
+  await shot("16-stress-displacement");
+  check("Verformung färbt anders als Sicherheit", differs(safety, await pixels()));
+  await setInput('input[aria-label="Schnitt durch das Teil"]', 4); await sleep(1500);
+  await shot("17-stress-cut");
+  check("der Schnitt legt das Innere frei", differs(await pixels(), safety));
+
   // --- the way to the printer: only against the virtual printer (tests/engine/rig/rig.sh up) ---
   const rig = process.env.ANANAS_RIG_URL;
   if (rig) {

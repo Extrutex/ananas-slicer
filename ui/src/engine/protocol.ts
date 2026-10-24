@@ -249,3 +249,88 @@ export interface PreviewChunkJson {
   kind?: string;
   layer?: string;
 }
+
+// --- stress analysis (docs/HLSD/engine.md, "Stress analysis") ---
+
+export interface StressMaterialJson {
+  /** MPa */
+  youngs_modulus: number;
+  /** MPa */
+  yield_strength: number;
+  poisson_ratio?: number;
+  /** Factor of the stiffness and the tensile strength along z (the layer bond), at least 0.05. */
+  z_factor?: number;
+}
+
+/** A place on the part: triangles (indices over the triangles of all model parts) and/or a box in the bed frame. */
+export interface StressSelectionJson {
+  triangles?: number[];
+  box?: BoxJson;
+}
+
+export interface StressSupportJson extends StressSelectionJson {
+  /** Which displacement components are held at zero; default all three. */
+  axes?: [boolean, boolean, boolean];
+}
+
+export interface StressLoadJson extends StressSelectionJson {
+  /** Resultant force on the selection, N. */
+  force: [number, number, number];
+}
+
+export interface StressRequest {
+  model: string;
+  object?: number;
+  transform?: ObjectTransform;
+  material: StressMaterialJson;
+  /** Edge length of the cubic grid cells, mm. */
+  voxel_size: number;
+  supports: StressSupportJson[];
+  loads: StressLoadJson[];
+  tolerance?: number;
+  max_iterations?: number;
+}
+
+export interface StressExtremum {
+  value: number;
+  /** Position in the bed frame, mm. */
+  at: [number, number, number];
+}
+
+export interface StressSummary {
+  id: number;
+  grid: { size: [number, number, number]; voxel_size: number; origin: [number, number, number] };
+  solid_cells: number;
+  nodes: number;
+  fixed_dofs: number;
+  solver: { iterations: number; residual: number; converged: boolean };
+  max_von_mises: StressExtremum;
+  min_safety: StressExtremum;
+  max_displacement: StressExtremum;
+  applied_force: [number, number, number];
+  reaction: [number, number, number];
+  /** The safety factor is capped at this value. */
+  safety_cap: number;
+}
+
+export interface StressChunkJson {
+  id: number;
+  z_from: number;
+  z_to: number;
+  count: number;
+  /** uint8 per cell */
+  solid: string;
+  /** float32 per cell, MPa */
+  von_mises: string;
+  /** float32 per cell */
+  safety: string;
+  /** float32 per cell, mm */
+  displacement: string;
+  /** float32 x3 per cell, mm */
+  displacement_vec: string;
+}
+
+export interface StressProgress {
+  percent: number;
+  message: string;
+}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AckDialog } from "./AckDialog.tsx";
 import { PrintDialog } from "./PrintDialog.tsx";
 import { PrinterDialog } from "./PrinterDialog.tsx";
+import { StressPanel } from "./StressPanel.tsx";
 import { OBJECT_PREFIX, objectGroup } from "./cockpit/objectParams.ts";
 import { Sidebar } from "./cockpit/Sidebar.tsx";
 import type { SliceResult } from "./engine/protocol.ts";
@@ -172,6 +173,15 @@ export function App({ session, platform = defaultPlatform }: { session: CockpitS
             Use profile limits
           </button>
         ) : null}
+        <button
+          type="button"
+          aria-pressed={state.stress.open}
+          disabled={state.objects.length === 0}
+          onClick={() => (state.stress.open ? session.closeStress() : session.openStress())}
+          className={`h-target rounded border px-2 text-ks-table disabled:cursor-not-allowed disabled:text-ink-disabled ${state.stress.open ? "border-edge-strong bg-carbon-700 text-ink-strong" : "border-edge-strong bg-surface-raised text-ink hover:bg-surface-hover"}`}
+        >
+          Kraftverteilung
+        </button>
         {Object.keys(state.overrides).length > 0 ? (
           <button
             type="button"
@@ -212,7 +222,10 @@ export function App({ session, platform = defaultPlatform }: { session: CockpitS
         />
 
         <main className="flex min-w-0 flex-1 flex-col bg-surface-viewport">
-          <Viewer session={session} state={state} />
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <Viewer session={session} state={state} />
+            <StressPanel session={session} state={state} />
+          </div>
           <section aria-label="Slice" className="border-t border-edge bg-surface-panel px-4 py-3">
             <div className="flex items-center gap-3">
               <label className="flex flex-1 items-center gap-2 text-ks-table text-ink-muted">

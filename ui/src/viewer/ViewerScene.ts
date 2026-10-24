@@ -11,6 +11,8 @@ import {
   Color,
   DirectionalLight,
   EdgesGeometry,
+  ArrowHelper,
+  DoubleSide,
   Group,
   HalfFloatType,
   HemisphereLight,
@@ -32,6 +34,7 @@ import {
   ShapeGeometry,
   Shape,
   Sphere,
+  SphereGeometry,
   Vector2,
   Vector3,
   WebGLRenderer,
@@ -55,6 +58,8 @@ import { OVER_COLOR, RAMP, TRAVEL_COLOR, binOf, type Quantity, type Scale } from
 import { CLASS_ORDER, FACE_COLORS, classifyFaces, type FaceClass, type InspectResult } from "./inspect.ts";
 import { rowMajor, worldMatrix, type SceneObject } from "./objects.ts";
 import type { PreviewData, SegmentSet } from "./preview.ts";
+import type { StressMesh } from "../stress/mesh.ts";
+import { partOffsets } from "../stress/regions.ts";
 
 Object3D.DEFAULT_UP.set(0, 0, 1);
 
@@ -80,6 +85,35 @@ export interface ViewerHandlers {
   /** The selected object is dragged over the bed; `position` is the new centre of its box. */
   onMove(index: number, position: [number, number]): void;
   onMoveEnd(index: number): void;
+  /** Im Wählmodus der Kraftverteilung: Klick auf Dreieck `triangle` von Teil `part` des Objekts `object`. */
+  onPickFace?(object: number, part: number, triangle: number): void;
+}
+
+/** Eine Lager- oder Lastfläche, wie der Viewport sie zeigt. */
+export interface StressRegionView {
+  id: number;
+  kind: "support" | "load";
+  /** Dreiecke über alle Teile des Objekts (wie bei der Engine). */
+  triangles: readonly number[];
+  box: { min: readonly [number, number, number]; max: readonly [number, number, number] } | null;
+  force: readonly [number, number, number];
+  armed: boolean;
+}
+
+export interface StressMarker {
+  at: readonly [number, number, number];
+  color: string;
+}
+
+export interface StressView {
+  object: number;
+  /** Ein Klick wählt Flächen statt das Objekt zu wählen oder zu ziehen. */
+  picking: boolean;
+  regions: readonly StressRegionView[];
+  /** Das Ergebnisnetz; wenn gesetzt, ersetzt es das Modell. */
+  mesh: StressMesh | null;
+  markers: readonly StressMarker[];
+  markerSize: number;
 }
 
 export interface PreviewView {
@@ -103,6 +137,7 @@ export interface ViewerInput {
   preview: PreviewView | null;
   /** Support threshold of the profile, degrees, for the inspection view. */
   overhangThreshold: number;
+  stress: StressView | null;
 }
 
 interface ObjectView {
@@ -127,6 +162,7 @@ export class ViewerScene {
   readonly #bedGroup = new Group();
   readonly #modelGroup = new Group();
   readonly #previewGroup = new Group();
+  readonly #stressGroup = new Group();
   readonly #light: DirectionalLight;
   readonly #raycaster = new Raycaster();
   #plate: Mesh | null = null;
@@ -165,7 +201,7 @@ export class ViewerScene {
     this.#light.shadow.normalBias = 0.4;
     this.#light.shadow.radius = 5;
     this.#scene.add(this.#light, this.#light.target);
-    this.#scene.add(this.#bedGroup, this.#modelGroup, this.#previewGroup);
+    this.#scene.add(this.#bedGroup, this.#modelGroup, this.#previewGroup, this.#stressGroup);
 
     this.#camera.up.set(0, 0, 1);
     this.#controls = new OrbitControls(this.#camera, canvas);
@@ -209,7 +245,11 @@ export class ViewerScene {
     }
     this.#applySelection(input);
     this.#applyExplode(input);
-    this.#modelGroup.visible = input.target === "model" || input.preview === null;
+    const stressMesh = input.stress?.mesh ?? null;
+    this.#modelGroup.visible = (input.target === "model" || input.preview === null) && stressMesh === null;
+    if (previous === null || previous.stress !== input.stress || previous.objects !== input.objects) this.#buildStress(input);
+    this.#stressGroup.visible = input.target === "model" || input.preview === null;
+    this.#canvas.style.cursor = input.stress?.picking ? "crosshair" : "";
     const previewKey = input.preview === null ? "" : [input.preview.quantity, input.preview.scale.min, input.preview.scale.max, input.preview.scale.limit, input.preview.layerMin, input.preview.layerMax, input.preview.showTravel, input.preview.explodeLayers].join("|");
     if (previous === null || previous.preview?.data !== input.preview?.data || this.#previewKey !== previewKey) {
       this.#previewKey = previewKey;
@@ -317,6 +357,7 @@ export class ViewerScene {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.userData.index = index;
+        mesh.userData.part = parts.length;
         const edges = new LineSegments(new EdgesGeometry(geometry, CREASE_DEG), new LineBasicMaterial({ color: COLORS.edge, transparent: true, opacity: 0.8 }));
         edges.name = "edges";
         mesh.add(edges);
@@ -424,6 +465,88 @@ export class ViewerScene {
         part.mesh.position.copy(length < 1e-6 ? new Vector3(0, 0, 0) : direction.multiplyScalar((reach * input.explode * 1.2) / Math.max(radius, length)));
       }
       view.group.updateMatrixWorld(true);
+    }
+  }
+
+  // --- Kraftverteilung ------------------------------------------------------------------------
+
+  #buildStress(input: ViewerInput): void {
+    disposeChildren(this.#stressGroup);
+    const stress = input.stress;
+    if (stress === null) return;
+    const object = input.objects[stress.object];
+
+    if (stress.mesh !== null) {
+      const geometry = new BufferGeometry();
+      geometry.setAttribute("position", new BufferAttribute(stress.mesh.positions, 3));
+      geometry.setAttribute("color", new BufferAttribute(stress.mesh.colors, 3));
+      geometry.setIndex(new BufferAttribute(stress.mesh.indices, 1));
+      // Flach und unlit: die Farben der Legende sind die Farben auf dem Teil.
+      this.#stressGroup.add(new Mesh(geometry, new MeshBasicMaterial({ vertexColors: true, side: DoubleSide })));
+      for (const marker of stress.markers) {
+        const sphere = new Mesh(
+          new SphereGeometry(stress.markerSize, 16, 12),
+          new MeshBasicMaterial({ color: marker.color, depthTest: false, transparent: true, opacity: 0.95 }),
+        );
+        sphere.position.set(marker.at[0], marker.at[1], marker.at[2]);
+        sphere.renderOrder = 20;
+        this.#stressGroup.add(sphere);
+      }
+      return;
+    }
+    if (object === undefined) return;
+
+    // Einrichtung: Lager blau, Lasten orange, die scharf gestellte Fläche kräftiger.
+    const matrix = worldMatrix(object.transform, object.offset);
+    const offsets = partOffsets(object.parts);
+    for (const region of stress.regions) {
+      const color = region.kind === "support" ? "#4db9ff" : "#ffb23e";
+      const lookup = new Set(region.triangles);
+      const points: number[] = [];
+      const centroid = new Vector3();
+      let count = 0;
+      object.parts.forEach((part, p) => {
+        const first = offsets[p]!;
+        for (let t = 0; t < part.indices.length / 3; t += 1) {
+          if (!lookup.has(first + t)) continue;
+          for (let k = 0; k < 3; k += 1) {
+            const v = new Vector3().fromArray(part.positions, part.indices[t * 3 + k]! * 3).applyMatrix4(matrix);
+            points.push(v.x, v.y, v.z);
+            centroid.add(v);
+            count += 1;
+          }
+        }
+      });
+      if (points.length > 0) {
+        const geometry = new BufferGeometry();
+        geometry.setAttribute("position", new BufferAttribute(new Float32Array(points), 3));
+        const overlay = new Mesh(
+          geometry,
+          new MeshBasicMaterial({ color, transparent: true, opacity: region.armed ? 0.85 : 0.6, side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+        );
+        this.#stressGroup.add(overlay);
+        centroid.divideScalar(count);
+      }
+      if (region.box !== null) {
+        const box = new LineSegments(boxEdges(region.box.min, region.box.max), new LineBasicMaterial({ color, depthTest: false, transparent: true }));
+        box.renderOrder = 15;
+        this.#stressGroup.add(box);
+        if (points.length === 0) centroid.set((region.box.min[0] + region.box.max[0]) / 2, (region.box.min[1] + region.box.max[1]) / 2, (region.box.min[2] + region.box.max[2]) / 2);
+      }
+      const hasPlace = points.length > 0 || region.box !== null;
+      const force = new Vector3(...region.force);
+      if (region.kind === "load" && hasPlace && force.length() > 0) {
+        const length = Math.max(12, Math.min(40, sizeOfBox(object.box) * 0.35));
+        const arrow = new ArrowHelper(force.clone().normalize(), centroid, length, color, length * 0.28, length * 0.16);
+        // Der Pfeil zeigt in Kraftrichtung und endet in der Fläche, damit man sieht, wo gedrückt oder gezogen wird.
+        arrow.position.copy(centroid).addScaledVector(force.clone().normalize(), -length);
+        arrow.traverse((node) => {
+          const material = (node as Mesh).material as Material | undefined;
+          if (material) material.depthTest = false;
+          node.renderOrder = 16;
+        });
+        this.#stressGroup.add(arrow);
+      }
     }
   }
 
@@ -557,9 +680,24 @@ export class ViewerScene {
     return hit ? { index: hit.object.userData.index as number, point: hit.point } : null;
   }
 
+  /** Das Dreieck unter dem Zeiger: Objekt, Teil und Index im Teil. */
+  #pickFace(pointer: Vector2): { object: number; part: number; triangle: number } | null {
+    this.#raycaster.setFromCamera(pointer, this.#camera);
+    const meshes = this.#views.flatMap((view) => view.parts.map((part) => part.mesh));
+    const hit = this.#raycaster.intersectObjects(meshes, false)[0];
+    if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) return null;
+    return { object: hit.object.userData.index as number, part: hit.object.userData.part as number, triangle: hit.faceIndex };
+  }
+
   #onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 || this.#input === null || this.#input.target !== "model") return;
     const pointer = this.#pointer(event);
+    if (this.#input.stress?.picking) {
+      // Wählmodus: der Klick wählt eine Fläche, er verschiebt und wählt kein Objekt.
+      const face = this.#pickFace(pointer);
+      if (face !== null) this.#handlers.onPickFace?.(face.object, face.part, face.triangle);
+      return;
+    }
     const hit = this.#pick(pointer);
     if (hit === null) {
       this.#handlers.onSelect(null);
@@ -732,6 +870,10 @@ function boxEdges(min: readonly number[], max: readonly number[]): BufferGeometr
   const geometry = new BufferGeometry();
   geometry.setAttribute("position", new BufferAttribute(new Float32Array(points), 3));
   return geometry;
+}
+
+function sizeOfBox(box: { min: readonly number[]; max: readonly number[] }): number {
+  return Math.max(box.max[0]! - box.min[0]!, box.max[1]! - box.min[1]!, box.max[2]! - box.min[2]!);
 }
 
 function disposeChildren(group: Group): void {

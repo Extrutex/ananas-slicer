@@ -21,6 +21,12 @@ import { axisIndex, parseObjectId } from "../cockpit/objectParams.ts";
 import { buildGroups } from "../cockpit/params.ts";
 import { fitsBed, parseBed, type Bed } from "../viewer/bed.ts";
 import type { Quantity } from "../viewer/heatmap.ts";
+import { DEFAULT_PRESET, type StressMaterial } from "../stress/materials.ts";
+import { allocateField, applyChunk, planChunks, type StressField } from "../stress/field.ts";
+import { globalTriangle, mergeTriangles, planarRegion, subtractTriangles } from "../stress/regions.ts";
+import { buildStressRequest, emptyRegion, type RegionKind, type StressRegion, type StressSetup } from "../stress/setup.ts";
+import type { StressQuantity } from "../stress/colors.ts";
+import type { StressSummary } from "../engine/protocol.ts";
 import { objectsFromModel, toEngineTransform, type SceneObject, type Transform } from "../viewer/objects.ts";
 import { mergeChunks, type PreviewData } from "../viewer/preview.ts";
 
@@ -82,6 +88,40 @@ export interface UploadState {
   error: string | null;
 }
 
+export interface StressRun {
+  status: "idle" | "running" | "done" | "failed";
+  percent: number;
+  message: string;
+  error: string | null;
+}
+
+/** Das Ergebnis der letzten Kraftverteilung samt dem, wofür es gilt. */
+export interface StressResult {
+  summary: StressSummary;
+  field: StressField;
+  /** Material und Platzierung der Rechnung: ändert sich eines davon, ist das Ergebnis veraltet. */
+  material: StressMaterial;
+  model: string;
+  object: number;
+  placement: string;
+}
+
+export interface StressState {
+  /** Das Panel „Kraftverteilung“ ist offen. */
+  open: boolean;
+  /** Das Objekt, das berechnet wird (Index in `objects`). */
+  object: number;
+  setup: StressSetup;
+  nextRegionId: number;
+  /** Die Fläche, die der nächste Klick im Viewport füllt. */
+  armed: number | null;
+  /** Rückmeldung zur letzten Flächenwahl im Viewport. */
+  pickNote: string | null;
+  run: StressRun;
+  result: StressResult | null;
+  display: { shown: boolean; quantity: StressQuantity; /** Höchste gezeichnete Gitterschicht oder null. */ clip: number | null };
+}
+
 export interface CockpitState {
   phase: "loading" | "ready" | "failed";
   error: string | null;
@@ -110,6 +150,39 @@ export interface CockpitState {
   slice: SliceState;
   printer: PrinterConnection;
   upload: UploadState;
+  stress: StressState;
+}
+
+const DEFAULT_VOXEL_SIZE = 2;
+
+const NO_STRESS_RUN: StressRun = { status: "idle", percent: 0, message: "", error: null };
+
+const NO_STRESS: StressState = {
+  open: false,
+  object: 0,
+  setup: {
+    material: { youngsModulus: DEFAULT_PRESET.youngsModulus, yieldStrength: DEFAULT_PRESET.yieldStrength, poissonRatio: DEFAULT_PRESET.poissonRatio, zFactor: DEFAULT_PRESET.zFactor },
+    voxelSize: DEFAULT_VOXEL_SIZE,
+    regions: [],
+  },
+  nextRegionId: 1,
+  armed: null,
+  pickNote: null,
+  run: NO_STRESS_RUN,
+  result: null,
+  display: { shown: false, quantity: "von-mises", clip: null },
+};
+
+/** Wie das Objekt für die Rechnung steht; ändert es sich, passt das Ergebnis nicht mehr zum Bild. */
+export function placementKey(state: Pick<CockpitState, "objects" | "model">, object: number): string {
+  const found = state.objects[object];
+  return found === undefined ? "" : JSON.stringify(toEngineTransform(found.transform));
+}
+
+/** Das Ergebnis gehört zum Objekt, wie es jetzt auf dem Bett steht. */
+export function stressResultCurrent(state: CockpitState): boolean {
+  const result = state.stress.result;
+  return result !== null && result.model === state.model && placementKey(state, result.object) === result.placement;
 }
 
 const DEFAULT_PRINTER = "Voron 2.4 350 0.4 nozzle";
@@ -177,6 +250,7 @@ export class CockpitSession {
     slice: IDLE_SLICE,
     printer: NO_PRINTER,
     upload: NO_UPLOAD,
+    stress: NO_STRESS,
   };
 
   /** The API key of the connected printer. Kept in memory only: it is never put in the state a UI renders or stores. */
@@ -371,7 +445,7 @@ export class CockpitSession {
         const answer = bounds.objects[index];
         return answer ? { ...object, box: answer.bbox, offset: answer.offset } : object;
       });
-      this.#set({ model: path, modelError: null, objects, selected: objects.length === 1 ? 0 : null, preview: NO_PREVIEW, view: { ...this.#state.view, target: "model" } });
+      this.#set({ model: path, modelError: null, objects, selected: objects.length === 1 ? 0 : null, preview: NO_PREVIEW, view: { ...this.#state.view, target: "model" }, stress: this.#freshStress() });
     } catch (error) {
       this.#set({ modelError: message(error), objects: [], selected: null });
     }
@@ -614,6 +688,154 @@ export class CockpitSession {
         await this.#pollPrinter();
       } catch (error) {
         this.#set({ printer: { ...this.#state.printer, error: message(error) } });
+      }
+    });
+  }
+
+  // --- Kraftverteilung ----------------------------------------------------------------------------
+
+  /** Ein leerer Ansatz für ein neu geladenes Modell: Werkstoff, Voxelgröße und Panel bleiben, Flächen und Ergebnis nicht. */
+  #freshStress(): StressState {
+    const { stress } = this.#state;
+    return { ...NO_STRESS, open: stress.open, setup: { ...stress.setup, regions: [] } };
+  }
+
+  #setStress(patch: Partial<StressState>): void {
+    this.#set({ stress: { ...this.#state.stress, ...patch } });
+  }
+
+  #setSetup(patch: Partial<StressSetup>): void {
+    this.#setStress({ setup: { ...this.#state.stress.setup, ...patch } });
+  }
+
+  openStress(): void {
+    const { selected, objects } = this.#state;
+    this.#setStress({ open: true, object: selected ?? Math.min(this.#state.stress.object, Math.max(0, objects.length - 1)) });
+  }
+
+  closeStress(): void {
+    this.#setStress({ open: false, armed: null, pickNote: null });
+  }
+
+  /** Das Objekt wechseln, das berechnet wird. Dreiecksauswahlen gelten nur für ein Objekt und werden verworfen. */
+  setStressObject(object: number): void {
+    const { stress } = this.#state;
+    if (object === stress.object || this.#state.objects[object] === undefined) return;
+    this.#setStress({
+      object,
+      armed: null,
+      pickNote: null,
+      setup: { ...stress.setup, regions: stress.setup.regions.map((region) => ({ ...region, triangles: [] })) },
+    });
+  }
+
+  setStressMaterial(patch: Partial<StressMaterial>): void {
+    const { setup } = this.#state.stress;
+    this.#setSetup({ material: { ...setup.material, ...patch } });
+  }
+
+  setStressVoxelSize(voxelSize: number): void {
+    this.#setSetup({ voxelSize });
+  }
+
+  /** Legt eine Lager- oder Lastfläche an und macht sie zur Fläche, die der nächste Klick im Viewport füllt. */
+  addStressRegion(kind: RegionKind): number {
+    const { stress } = this.#state;
+    const id = stress.nextRegionId;
+    this.#setStress({ nextRegionId: id + 1, armed: id, pickNote: null, setup: { ...stress.setup, regions: [...stress.setup.regions, emptyRegion(id, kind)] } });
+    return id;
+  }
+
+  removeStressRegion(id: number): void {
+    const { stress } = this.#state;
+    this.#setStress({
+      armed: stress.armed === id ? null : stress.armed,
+      setup: { ...stress.setup, regions: stress.setup.regions.filter((region) => region.id !== id) },
+    });
+  }
+
+  updateStressRegion(id: number, patch: Partial<Pick<StressRegion, "box" | "axes" | "force" | "triangles">>): void {
+    const { stress } = this.#state;
+    this.#setStress({ setup: { ...stress.setup, regions: stress.setup.regions.map((region) => (region.id === id ? { ...region, ...patch } : region)) } });
+  }
+
+  /** Schaltet das Wählen im Viewport für eine Fläche ein oder aus (nur eine Fläche zugleich). */
+  armStressRegion(id: number | null): void {
+    this.#setStress({ armed: id, pickNote: null });
+  }
+
+  /**
+   * Ein Klick im Viewport auf Dreieck `triangle` von Teil `part` des Objekts `object`: die ebene Fläche dort wird der
+   * scharf gestellten Lager- oder Lastfläche hinzugefügt; ein Klick auf eine schon gewählte Fläche nimmt sie wieder heraus.
+   */
+  pickStressFace(object: number, part: number, triangle: number): void {
+    const { stress, objects } = this.#state;
+    const region = stress.setup.regions.find((candidate) => candidate.id === stress.armed);
+    if (region === undefined) return;
+    if (object !== stress.object) {
+      this.#setStress({ pickNote: "Diese Fläche gehört nicht zum berechneten Objekt. Objekt im Panel wechseln." });
+      return;
+    }
+    const target = objects[object]?.parts[part];
+    const global = objects[object] === undefined ? null : globalTriangle(objects[object]!.parts, part, triangle);
+    if (target === undefined || global === null) return;
+    const planar = planarRegion(target.positions, target.indices, triangle).map((t) => global - triangle + t);
+    const selected = region.triangles.includes(global);
+    const triangles = selected ? subtractTriangles(region.triangles, planar) : mergeTriangles(region.triangles, planar);
+    this.updateStressRegion(region.id, { triangles });
+    this.#setStress({ pickNote: `${selected ? "Fläche entfernt" : "Fläche gewählt"}: ${planar.length} Dreiecke, insgesamt ${triangles.length}.` });
+  }
+
+  setStressDisplay(patch: Partial<StressState["display"]>): void {
+    const { stress } = this.#state;
+    this.#setStress({ display: { ...stress.display, ...patch } });
+  }
+
+  /** Das Ergebnis wieder aus dem Viewport nehmen (die Einrichtung bleibt). */
+  discardStressResult(): void {
+    this.#setStress({ result: null, run: NO_STRESS_RUN, display: { ...this.#state.stress.display, shown: false, clip: null } });
+  }
+
+  /**
+   * Rechnet die Kraftverteilung des gewählten Objekts und holt das Ergebnisgitter schichtweise ab. Die Engine hat
+   * keinen Abbruch: eine laufende Rechnung wird abgewartet.
+   */
+  runStress(): Promise<void> {
+    return this.#enqueue(async () => {
+      const { stress, objects, model } = this.#state;
+      const object = objects[stress.object];
+      if (object === undefined) {
+        this.#setStress({ run: { ...NO_STRESS_RUN, status: "failed", error: "Kein Objekt auf dem Druckbett." } });
+        return;
+      }
+      let request;
+      try {
+        request = buildStressRequest(model, stress.object, toEngineTransform(object.transform), stress.setup);
+      } catch (error) {
+        this.#setStress({ run: { ...NO_STRESS_RUN, status: "failed", error: message(error) } });
+        return;
+      }
+      const material = { ...stress.setup.material };
+      const placement = placementKey(this.#state, stress.object);
+      this.#setStress({ armed: null, run: { status: "running", percent: 0, message: "Start", error: null }, result: null, display: { ...stress.display, shown: false, clip: null } });
+      try {
+        const summary = await this.#client.analyzeStress(request, (progress) =>
+          this.#setStress({ run: { ...this.#state.stress.run, status: "running", ...progress } }),
+        );
+        if (!summary.solver.converged) throw new Error("Der Löser ist nicht konvergiert: die Lagerung hält das Teil nicht fest genug.");
+        const field = allocateField(summary);
+        const chunks = planChunks(field.size);
+        for (const [index, chunk] of chunks.entries()) {
+          this.#setStress({ run: { status: "running", percent: 100, message: `Ergebnis laden ${index + 1}/${chunks.length}`, error: null } });
+          applyChunk(field, await this.#client.analyzeChunk(summary.id, chunk.from, chunk.to));
+        }
+        this.#setStress({
+          run: { status: "done", percent: 100, message: "Fertig", error: null },
+          result: { summary, field, material, model, object: stress.object, placement },
+          display: { ...this.#state.stress.display, shown: true, clip: null },
+        });
+      } catch (error) {
+        this.#setStress({ run: { ...NO_STRESS_RUN, status: "failed", error: message(error) } });
       }
     });
   }
