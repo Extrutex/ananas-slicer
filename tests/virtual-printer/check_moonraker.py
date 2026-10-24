@@ -172,6 +172,9 @@ def main():
     parser.add_argument("--result", required=True, help="JSON file for the API responses")
     parser.add_argument("--print-timeout", type=int, required=True,
                         help="seconds the virtual print may take")
+    parser.add_argument("--no-thumbnails", action="store_true",
+                        help="the G-code is expected to carry no thumbnail blocks (the headless engine renders none); "
+                             "skip the thumbnail check")
     args = parser.parse_args()
     if not os.path.isfile(args.gcode):
         print("check_moonraker: not a file: %s" % args.gcode, file=sys.stderr)
@@ -246,7 +249,8 @@ def main():
             head = [next(f, "").rstrip("\n") for _ in range(4)]
         if not any(OWN_NAME_LINE.match(l) for l in head):
             fail("G-code header has no '; ANANAS SLICER <version>' line: %s" % head)
-        check_thumbnails(meta, args.remote_name, args.gcode, fail)
+        if not args.no_thumbnails:
+            check_thumbnails(meta, args.remote_name, args.gcode, fail)
 
         def poll_done():
             status = request("GET", "/printer/objects/query", query)["result"]["status"]

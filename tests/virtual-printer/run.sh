@@ -8,6 +8,8 @@
 # printer is ever contacted.
 #
 # usage: tests/virtual-printer/run.sh
+#   ANANAS_ENGINE_BIN   headless engine (ananas-engine): slice through it instead of the app's CLI; the app
+#                   binary is then not needed and no thumbnails are checked
 #   ANANAS_SLICER_BIN   slicer binary; default: the app bundle under
 #                   ANANAS_SLICER_BUILD_DIR on Darwin, its package/bin/ananas-slicer on Linux
 #   ANANAS_SLICER_BUILD_DIR  build tree the default binary is taken from (absolute or
@@ -54,7 +56,14 @@ else
         Linux) BIN="$BUILD_DIR/package/bin/ananas-slicer" ;;
     esac
 fi
-[ -x "$BIN" ] || die "slicer binary not found or not executable: $BIN"
+# With ANANAS_ENGINE_BIN the headless engine slices instead of the app's CLI (step 1 only; the app binary is then not needed).
+ENGINE_BIN="${ANANAS_ENGINE_BIN:-}"
+if [ -n "$ENGINE_BIN" ]; then
+    [ -x "$ENGINE_BIN" ] || die "engine binary not found or not executable: $ENGINE_BIN"
+    command -v python3 > /dev/null 2>&1 || die "python3 not found (needed to drive the engine)"
+else
+    [ -x "$BIN" ] || die "slicer binary not found or not executable: $BIN"
+fi
 for f in "$MODEL" "$PRINTER_PRESET" "$PROCESS_PRESET" "$FILAMENT_PRESET"; do
     [ -f "$f" ] || die "missing input: $f"
 done
@@ -73,17 +82,28 @@ mkdir -p "$OUT/slice"
 trap '[ "${VP_KEEP_RIG:-0}" = "1" ] || compose down -v --remove-orphans > /dev/null 2>&1 || true' EXIT
 
 # --- 1. Slice ---------------------------------------------------------------
-log "slicing $(basename "$MODEL") with $BIN"
 TIMEOUT=()
 if command -v timeout > /dev/null 2>&1; then
     TIMEOUT=(timeout 600)
 fi
 slice_rc=0
-${TIMEOUT[@]+"${TIMEOUT[@]}"} "$BIN" --datadir "$OUT/slice/datadir" \
-    --load-settings "$PRINTER_PRESET;$PROCESS_PRESET" \
-    --load-filaments "$FILAMENT_PRESET" \
-    --slice 0 --outputdir "$OUT/slice" "$MODEL" > "$OUT/slice.log" 2>&1 || slice_rc=$?
-rm -rf "$OUT/slice/datadir"
+THUMBNAIL_ARGS=()
+if [ -n "$ENGINE_BIN" ]; then
+    # The engine renders no thumbnails, so Moonraker has none to extract.
+    THUMBNAIL_ARGS=(--no-thumbnails)
+    log "slicing $(basename "$MODEL") with the engine $ENGINE_BIN"
+    ${TIMEOUT[@]+"${TIMEOUT[@]}"} python3 -I "$REPO/tests/engine/slice_via_engine.py" \
+        --engine "$ENGINE_BIN" --profiles "$PROFILES" --vendor Voron \
+        --printer "Voron 2.4 350 0.4 nozzle" --process "0.20mm Standard @Voron" --filament "Generic PLA @System" \
+        --model "$MODEL" --output "$OUT/slice/plate_1.gcode" > "$OUT/slice.log" 2>&1 || slice_rc=$?
+else
+    log "slicing $(basename "$MODEL") with $BIN"
+    ${TIMEOUT[@]+"${TIMEOUT[@]}"} "$BIN" --datadir "$OUT/slice/datadir" \
+        --load-settings "$PRINTER_PRESET;$PROCESS_PRESET" \
+        --load-filaments "$FILAMENT_PRESET" \
+        --slice 0 --outputdir "$OUT/slice" "$MODEL" > "$OUT/slice.log" 2>&1 || slice_rc=$?
+    rm -rf "$OUT/slice/datadir"
+fi
 if [ "$slice_rc" -ne 0 ] || [ ! -s "$OUT/slice/plate_1.gcode" ]; then
     tail -n 40 "$OUT/slice.log" >&2
     die "slicing failed (exit $slice_rc)"
@@ -145,7 +165,8 @@ if compose up -d --wait --wait-timeout 180 klipper moonraker; then
     log "uploading and printing through Moonraker"
     compose exec -T moonraker /opt/moonraker-env/bin/python /vp/check_moonraker.py \
         --gcode "/out/slice/$GCODE_NAME" --remote-name "$GCODE_NAME" \
-        --result /out/moonraker.json --print-timeout "$PRINT_TIMEOUT" || moonraker_rc=$?
+        --result /out/moonraker.json --print-timeout "$PRINT_TIMEOUT" \
+        ${THUMBNAIL_ARGS[@]+"${THUMBNAIL_ARGS[@]}"} || moonraker_rc=$?
 else
     moonraker_rc=1
     log "rig did not become healthy"
@@ -177,7 +198,7 @@ compose exec -T moonraker cat /printer_data/logs/moonraker.log > "$OUT/moonraker
 
 # --- Report -----------------------------------------------------------------
 compose run --rm --no-deps --entrypoint /opt/klippy-env/bin/python klipper-batch /vp/report.py \
-    --gcode "/out/slice/$GCODE_NAME" --binary "$BIN" --model "tests/data/$(basename "$MODEL")" \
+    --gcode "/out/slice/$GCODE_NAME" --binary "${ENGINE_BIN:-$BIN}" --model "tests/data/$(basename "$MODEL")" \
     --presets "Voron 2.4 350 0.4 nozzle; 0.20mm Standard @Voron; Generic PLA @System" \
     --klipper /out/klipper.json --state-macros /out/state-macros.json /out/state-macros-mainsail.json /out/state-macros-case.json /out/state-macros-names.json \
     --moonraker /out/moonraker.json --cancel /out/cancel.json --out /out/report.md \
