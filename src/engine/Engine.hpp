@@ -23,6 +23,7 @@ enum class ErrorCode : int {
     InvalidParams  = -32602,
     EngineError    = -32000, // the operation was understood but failed (slicing, import)
     NotFound       = -32001, // a named preset does not exist
+    PrinterError   = -32002, // the printer host could not be reached, or refused the request
 };
 
 class EngineError : public std::runtime_error
@@ -62,6 +63,8 @@ private:
     nlohmann::json model_bounds(const nlohmann::json& params);
     nlohmann::json preview_load(const nlohmann::json& params);
     nlohmann::json preview_chunk(const nlohmann::json& params);
+    nlohmann::json moonraker_upload(const nlohmann::json& params) const;
+    nlohmann::json moonraker_start(const nlohmann::json& params) const;
     nlohmann::json slice(const nlohmann::json& params, const nlohmann::json& request_id, const Notify& notify);
 
     // The full config of printer + process + filament, with "overrides" (key -> serialized value) and an

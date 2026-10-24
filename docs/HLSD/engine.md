@@ -40,6 +40,10 @@ invalid parameters, `-32001` a named preset does not exist, `-32000` the operati
 | `model.bounds` | `path`, `transforms` | per object the bounding box and the instance offset after the transform |
 | `preview.load` | `gcode` | the layers (index, z), extent, speed/flow/acceleration ranges, roles, estimated time and segment counts of a G-code file |
 | `preview.chunk` | `gcode`, `layer_from`, `layer_to`, optional `travel` | the segments of a layer range as typed arrays: positions, speed, flow, acceleration, role, kind, layer |
+| `moonraker.connect` | `host`, optional `api_key` | the printer host's state, Klipper's state and the Klipper limits as the running Klipper resolves them (`null` while it is not ready) |
+| `moonraker.upload` | `host`, `gcode`, optional `name`, `print` | stores a G-code on the printer; with `print` the host starts it |
+| `moonraker.start` / `moonraker.cancel` | `host`, `name` / `host` | starts a stored file / cancels the running print |
+| `moonraker.status` | `host` | `state` (standby, printing, paused, complete, cancelled, error), file, progress 0..1, durations, message |
 | `slice` | as `config.resolve`, plus `model` and `output` | the G-code path, estimated time, layer count, filament use, effective limits and violations; `slice.progress` notifications with the request id |
 
 A transform is `{position:[x,y], rotation:[x,y,z], scale:[x,y,z]}`, every key optional: `position` is the centre
@@ -50,6 +54,19 @@ centred on the bed. `preview.*` reads the G-code itself, so it serves any file, 
 `process` and `filament` default to the printer's own. `overrides` maps a setting key to its serialized value.
 `limits` is an object with the Klipper limits and a `source` of `printer_cfg` or `moonraker`; it replaces the
 limits derived from the profile.
+
+## Printer host
+
+The engine talks to a Moonraker-compatible host (Moonraker itself, or FLUXRAKER) with libcurl: one blocking exchange per
+request, a 5 s connect timeout, certificates verified, redirects not followed (a printer that redirects is not the
+one that was asked for). `host` is an http or https address; without a scheme it is http, and credentials in the URL
+are refused: the key goes in `api_key`, is sent as `X-Api-Key` and never logged. A host that cannot be reached, a refused
+key or an HTTP error answers `-32002` with the host's own message. A stored G-code's name is a plain file name, never a
+path. Nothing is sent to a host the front end did not name, and the engine never starts a print on its own.
+
+`tests/engine/rig/rig.sh up` starts the virtual printer (real Klipper and Moonraker, file-output MCU) with its Moonraker
+on `127.0.0.1` only; `test_printer_rig.py` runs the whole path against it: connect, limits, slice, upload (byte for byte),
+print to the end.
 
 ## Overrides are validated, not coerced
 

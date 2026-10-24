@@ -1,6 +1,7 @@
 #include "Engine.hpp"
 
 #include "Limits.hpp"
+#include "Moonraker.hpp"
 #include "Schema.hpp"
 
 #include "libslic3r/Exception.hpp"
@@ -31,6 +32,7 @@ constexpr int PROTOCOL_VERSION = 1;
 
 const char* const METHODS[] = { "engine.info",   "presets.list", "config.schema", "config.resolve", "limits.import",
                                 "limits.check",  "model.load",   "model.bounds",  "preview.load",   "preview.chunk",
+                                "moonraker.connect", "moonraker.upload", "moonraker.start", "moonraker.status", "moonraker.cancel",
                                 "slice" };
 
 const json& param(const json& params, const char* name)
@@ -487,6 +489,44 @@ json Engine::preview_chunk(const json& params)
                            travel.is_boolean() && travel.get<bool>());
 }
 
+namespace {
+
+// The name a G-code is stored under on the printer: a plain file name, never a path.
+std::string remote_name_of(const json& params, const std::string& fallback_path)
+{
+    std::string name = string_param(params, "name", false);
+    if (name.empty())
+        name = fs::path(fallback_path).filename().string();
+    if (name.empty() || name == "." || name == ".." || name.find_first_of("/\\") != std::string::npos ||
+        std::any_of(name.begin(), name.end(), [](unsigned char c) { return c < 0x20; }))
+        throw EngineError(ErrorCode::InvalidParams, "\"name\" must be a plain file name");
+    return name;
+}
+
+} // namespace
+
+json Engine::moonraker_upload(const json& params) const
+{
+    const MoonrakerTarget target = parse_target(params);
+    const std::string     gcode  = string_param(params, "gcode", true);
+    const std::string     name   = remote_name_of(params, gcode);
+    const json&           print  = param(params, "print");
+    const bool            start  = print.is_boolean() && print.get<bool>();
+    const json            answer = Moonraker(target).upload(gcode, name, start);
+    const json            item   = answer.contains("item") ? answer.at("item") : json::object();
+    return { { "name", item.value("path", name) },
+             { "host", target.base_url },
+             { "print_started", answer.value("print_started", false) } };
+}
+
+json Engine::moonraker_start(const json& params) const
+{
+    const MoonrakerTarget target = parse_target(params);
+    const std::string     name   = remote_name_of(params, "");
+    Moonraker(target).post("/printer/print/start", { { "filename", name } });
+    return { { "name", name }, { "host", target.base_url } };
+}
+
 json Engine::slice(const json& params, const json& request_id, const Notify& notify)
 {
     const std::string model_path  = string_param(params, "model", true);
@@ -598,7 +638,19 @@ json Engine::handle(const json& request, const Notify& notify)
             result = preview_load(params);
         else if (method == "preview.chunk")
             result = preview_chunk(params);
-        else if (method == "slice")
+        else if (method == "moonraker.connect")
+            result = moonraker_connect(parse_target(params));
+        else if (method == "moonraker.upload")
+            result = moonraker_upload(params);
+        else if (method == "moonraker.start")
+            result = moonraker_start(params);
+        else if (method == "moonraker.status")
+            result = moonraker_status(parse_target(params));
+        else if (method == "moonraker.cancel") {
+            const MoonrakerTarget target = parse_target(params);
+            Moonraker(target).post("/printer/print/cancel");
+            result = { { "host", target.base_url } };
+        } else if (method == "slice")
             result = slice(params, id, notify);
         else
             throw EngineError(ErrorCode::MethodNotFound, "unknown method: " + method);

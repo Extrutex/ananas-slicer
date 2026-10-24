@@ -5,6 +5,8 @@ add_library(ananas_engine_core STATIC
     Engine.hpp
     Limits.cpp
     Limits.hpp
+    Moonraker.cpp
+    Moonraker.hpp
     ModelData.cpp
     ModelData.hpp
     Preview.cpp

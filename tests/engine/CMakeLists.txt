@@ -23,4 +23,14 @@ if (UNIX AND TARGET ananas-engine AND ANANAS_TEST_PYTHON)
             ANANAS_TEST_DATA_DIR=${TEST_DATA_DIR}
             ${ANANAS_TEST_PYTHON} -I ${CMAKE_CURRENT_SOURCE_DIR}/test_engine_protocol.py)
     set_tests_properties(engine_protocol PROPERTIES LABELS "Engine;RequiresApp" TIMEOUT 300)
+
+    # The printer client against the virtual printer: runs when ANANAS_RIG_URL (read from the environment of ctest)
+    # names a rig started with tests/engine/rig/rig.sh, is skipped otherwise.
+    add_test(NAME engine_printer_rig
+        COMMAND ${CMAKE_COMMAND} -E env
+            ANANAS_ENGINE_BIN=$<TARGET_FILE:ananas-engine>
+            ANANAS_PROFILES_DIR=${PROFILES_DIR}
+            ANANAS_TEST_DATA_DIR=${TEST_DATA_DIR}
+            ${ANANAS_TEST_PYTHON} -I ${CMAKE_CURRENT_SOURCE_DIR}/test_printer_rig.py)
+    set_tests_properties(engine_printer_rig PROPERTIES LABELS "Engine;RequiresApp;Docker" TIMEOUT 400 SKIP_RETURN_CODE 77)
 endif ()
