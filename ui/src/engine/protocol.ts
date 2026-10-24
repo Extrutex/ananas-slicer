@@ -289,6 +289,8 @@ export interface StressRequest {
   loads: StressLoadJson[];
   tolerance?: number;
   max_iterations?: number;
+  /** Rechenzeit in s (Wanduhr der ganzen Analyse), Vorgabe der Engine 600. */
+  max_seconds?: number;
 }
 
 export interface StressExtremum {
@@ -311,6 +313,8 @@ export interface StressSummary {
   reaction: [number, number, number];
   /** The safety factor is capped at this value. */
   safety_cap: number;
+  /** Gründe, dem Ergebnis zu misstrauen (englische Texte der Engine): dünne Wände, ignorierte Negativ-Volumina, Eckkontakt. */
+  warnings: string[];
 }
 
 export interface StressChunkJson {

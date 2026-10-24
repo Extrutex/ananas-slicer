@@ -40,7 +40,7 @@ invalid parameters, `-32001` a named preset does not exist, `-32000` the operati
 | `model.bounds` | `path`, `transforms` | per object the bounding box and the instance offset after the transform |
 | `preview.load` | `gcode` | the layers (index, z), extent, speed/flow/acceleration ranges, roles, estimated time and segment counts of a G-code file |
 | `preview.chunk` | `gcode`, `layer_from`, `layer_to`, optional `travel` | the segments of a layer range as typed arrays: positions, speed, flow, acceleration, role, kind, layer |
-| `analyze.stress` | `model`, optional `object` and `transform`, `material`, `voxel_size`, `supports`, `loads`, optional `tolerance`, `max_iterations` | linear stress analysis of one object: the voxel grid, solver state, maximum von Mises stress, minimum safety factor and maximum displacement with their positions, applied force and support reaction; `analyze.progress` notifications with the request id |
+| `analyze.stress` | `model`, optional `object` and `transform`, `material`, `voxel_size`, `supports`, `loads`, optional `tolerance`, `max_iterations`, `max_seconds` | linear stress analysis of one object: the voxel grid, solver state, maximum von Mises stress, minimum safety factor and maximum displacement with their positions, applied force and support reaction, `warnings`; `analyze.progress` notifications with the request id |
 | `analyze.chunk` | `id`, `z_from`, `z_to` | the cell data of a range of grid layers of the latest analysis as typed arrays: solid, von Mises, safety factor, displacement, displacement vector |
 | `moonraker.connect` | `host`, optional `api_key` | the printer host's state, Klipper's state and the Klipper limits as the running Klipper resolves them (`null` while it is not ready) |
 | `moonraker.upload` | `host`, `gcode`, optional `name`, `print` | stores a G-code on the printer; with `print` the host starts it |
@@ -72,28 +72,57 @@ mm, N and MPa; z is the build direction.
   `z_factor` times the in-plane values. A tensile stress in z may use only `z_factor` times the yield strength
   (the layer bond); the safety factor is the smaller of that and `yield_strength / von Mises`.
 - **Selection.** A support or a load names its place with `triangles` (indices into the triangles of all model parts
-  in the order `model.load` lists them) and/or a `box` `{min, max}`. A box takes the nodes inside it with half a voxel
-  of slack, triangles take the nodes within 0.87 voxel of a triangle. A support holds the displacement components in
-  its `axes` (default all three) at zero. A load has a `force` in N, the resultant on the selection; it is spread over
-  the surface quads of the voxel model whose corners are all selected, as the consistent load of a uniform traction,
-  or equally over the nodes when the selection has no such quad.
+  in the order `model.load` lists them; a triangle listed twice counts once) and/or a `box` `{min, max}`. A box takes the
+  nodes inside it with half a voxel of slack and the surface quads of the voxel model whose four corners are inside.
+  A triangle takes the surface quads that face it (normal within 60 degrees) and whose centre lies within 0.87 voxel of
+  it: only the outer layer of the voxel surface, so a face that lies between two grid planes does not pull in the side
+  faces; a triangle much smaller than a cell, which finds no quad, takes the nodes within 0.87 voxel instead. A support
+  holds the displacement components in its `axes` (default all three) at zero at the nodes of the selected quads (and
+  the box nodes). A load has a `force` in N, the resultant on the selection; it is spread over the selected quads, as
+  the consistent load of a uniform traction, or equally over the nodes when the selection has no quad.
 - **Method.** The closed meshes are voxelized into a cubic grid of `voxel_size` (a cell is solid when its centre is
   inside; a mesh with an open or non-manifold edge, or an odd number of surface crossings along a column, is refused),
   every solid cell becomes a trilinear hexahedron, and `K u = f` is solved matrix-free with a Jacobi-preconditioned
   conjugate gradient (parallel over nodes with TBB) until the relative residual falls below `tolerance`
-  (default 1e-6). No external solver is linked. A piece without any support, or supports that leave the body free to
-  move (the solver does not converge in `max_iterations`, default 20000), answer `-32000`; an empty selection,
-  a missing support or load, or more than 20 million grid cells answer `-32602`.
+  (default 1e-6). The load is scaled to a largest component of 1 for the solve and the displacements are scaled back,
+  so loads from 1e-200 N to 1e12 N neither overflow nor underflow in the sums of squares. No external solver is linked.
+- **Limits.** They are the server's; a request cannot raise them. At most 5 million grid cells (solid or not) and
+  10 million triangles; one grid layer (`nx * ny` cells) must fit into one result chunk of 8 MB at 25 bytes per cell
+  (335 544 cells), otherwise the request is refused before any work with a hint to use a larger `voxel_size`. The
+  estimated memory may not exceed 3 GB: before the voxelization the welding maps of the watertight check and the
+  surface crossings of the voxelization (their number is capped by what the budget leaves, at most 50 million) are
+  counted, afterwards about 330 bytes per cell of a compact body (5 million cells need roughly 1.7 GB); running out of
+  memory anyway answers `-32000`. At most 64 supports and 64 loads, 2 million different triangles per selection, a
+  force of at most 1e12 N per component of each load and of their sum. `max_iterations` is capped at 20000,
+  `max_seconds` (default 600) at 3600. `max_seconds` is the wall clock of the whole analysis from the start of the
+  call: the input check, the watertight check, the voxelization, building the mesh, the selections, the check of the
+  supports and the solver all look at the clock periodically and end with `-32000`; the solver also stops when the best
+  residual falls by less than 1 % in 1000 iterations. A residual that reaches the tolerance in the iteration in which
+  the clock runs out counts as a result. Every vertex must be finite. There is no way to cancel a running analysis; it
+  ends by itself within these limits.
+- **Supports.** Before solving, every piece of the model must be held against all three translations and all three
+  rotations (checked on the held degrees of freedom of each piece, relative to the centre and the spread of its held
+  nodes, so position and size of the model do not matter; three points that are not on a line, held in all axes, are
+  enough); a piece without any hold, supports that leave a motion free
+  (for example a face that is only held along one axis, so a sideways load slides it), or a solver that does not
+  converge, stagnates or runs out of time answer `-32000` with the reason. An empty selection, a missing support or
+  load, a non-finite number or more cells or memory than allowed answer `-32602`.
 - **Result.** Per cell the von Mises stress at the element centre, the safety factor (capped at 1000, 0 outside the
   solid) and the displacement. `analyze.stress` returns the summary and an `id`; the cell arrays come from
-  `analyze.chunk` for a range of grid layers (`z_from`..`z_to`, x fastest), base64 like `preview.chunk`. Only the
-  latest analysis is kept.
+  `analyze.chunk` for a range of grid layers (`z_from`..`z_to`, x fastest), base64 like `preview.chunk`, at most
+  8 MB of raw data (25 bytes per cell) per call; a larger range answers `-32602` with the number of layers that
+  fit. Only the latest analysis is kept.
+- **Warnings.** `warnings` in the summary lists reasons to distrust the numbers: walls or ribs thinner than 4 cells
+  (at least 5 % of the material, or where the stress is highest; bending locks, so the result is too stiff and too low),
+  a voxel volume more than 20 % off the mesh volume (thin parts lost), negative volumes (ignored, so what they cut out
+  is solid), several instances (only the first is analysed), and parts that touch only at an edge or corner (a hinge in
+  the voxel model).
 
 Limits to keep in mind: a voxel model has a stepped surface, stress at a corner or under a point load grows without
 bound as the grid is refined, and trilinear elements are too stiff in bending when only a few cells span the height
 (a cantilever of 4 mm height is 13 % too stiff with 2 cells, 4 % with 4 cells and 1.4 % with 8 cells against beam
 theory). Infill and walls are not modelled: the part is solid, so the result is an upper bound of the stiffness of a
-sliced part. Eigen or CalculiX could replace the solver for larger models; they are not linked.
+sliced part. Eigen or CalculiX could replace the solver for larger models; they are not linked. A mechanism inside the model (parts joined only at a corner) is not found up front; the solver then stops on its own with `-32000`.
 
 ## Printer host
 

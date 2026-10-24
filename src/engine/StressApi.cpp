@@ -43,6 +43,8 @@ StressSelection parse_selection(const json& entry, const std::string& name)
         const json& list = entry.at("triangles");
         if (!list.is_array())
             invalid(name + ".triangles must be an array of triangle indices");
+        if (list.size() > STRESS_MAX_TRIANGLES)
+            invalid(name + ".triangles lists more than " + std::to_string(STRESS_MAX_TRIANGLES) + " triangles");
         for (const json& id : list) {
             if (!id.is_number_unsigned())
                 invalid(name + ".triangles must hold non-negative integers");
@@ -80,9 +82,16 @@ StressInput parse_stress_request(const json& params, Model& model)
     if (index >= model.objects.size())
         invalid("\"object\" is outside 0.." + std::to_string(model.objects.size() - 1));
     ModelObject& object = *model.objects[index];
+    if (object.instances.empty())
+        throw EngineError(ErrorCode::EngineError, "the object has no instance");
+    if (object.instances.size() > 1)
+        input.warnings.push_back("The object has " + std::to_string(object.instances.size()) + " instances; only the first is analysed.");
     apply_transform(object, params.contains("transform") ? parse_transform(params.at("transform")) : ObjectTransform{}, Vec2d::Zero());
     const Transform3d placement = object.instances.front()->get_matrix();
+    size_t negative = 0;
     for (const ModelVolume* volume : object.volumes) {
+        if (volume->is_negative_volume())
+            ++negative;
         if (!volume->is_model_part())
             continue;
         TriangleMesh mesh = volume->mesh();
@@ -90,6 +99,9 @@ StressInput parse_stress_request(const json& params, Model& model)
         mesh.transform(placement);
         input.parts.push_back(mesh.its);
     }
+
+    if (negative > 0)
+        input.warnings.push_back(std::to_string(negative) + " negative volume(s) are ignored: what they cut out of the model is solid in the analysis.");
 
     if (!params.contains("material") || !params.at("material").is_object())
         invalid("missing parameter \"material\" (youngs_modulus, yield_strength, optional poisson_ratio, z_factor)");
@@ -114,6 +126,9 @@ StressInput parse_stress_request(const json& params, Model& model)
             invalid("\"max_iterations\" must be a non-negative integer");
         input.max_iterations = params.at("max_iterations").get<size_t>();
     }
+
+    if (params.contains("max_seconds"))
+        input.max_seconds = number(params.at("max_seconds"), "max_seconds");
 
     const auto list = [&](const char* key) -> const json& {
         static const json empty = json::array();
@@ -167,14 +182,25 @@ json stress_summary_json(size_t id, const StressResult& r)
              { "max_displacement", { { "value", r.max_displacement }, { "at", v3(r.max_displacement_at) } } },
              { "applied_force", v3(r.applied_force) },
              { "reaction", v3(r.reaction) },
-             { "safety_cap", STRESS_SAFETY_CAP } };
+             { "safety_cap", STRESS_SAFETY_CAP },
+             { "warnings", r.warnings } };
 }
 
-json stress_chunk_json(size_t id, const StressResult& r, size_t z_from, size_t z_to)
+json stress_chunk_json(size_t id, const StressResult& r, size_t z_from, size_t z_to, size_t max_bytes)
 {
     if (z_from > z_to || z_to >= r.size[2])
         throw EngineError(ErrorCode::InvalidParams, "layer range is outside 0.." + std::to_string(r.size[2] - 1));
     const size_t layer = r.size[0] * r.size[1], first = z_from * layer, count = (z_to - z_from + 1) * layer;
+    constexpr size_t BYTES_PER_CELL = STRESS_CHUNK_BYTES_PER_CELL;
+    if (count > max_bytes / BYTES_PER_CELL) {
+        const size_t layers = max_bytes / BYTES_PER_CELL / std::max<size_t>(layer, 1);
+        throw EngineError(ErrorCode::InvalidParams,
+                          layers == 0 ? "a single grid layer has " + std::to_string(layer) + " cells, more than one chunk of " +
+                                            std::to_string(max_bytes >> 20) + " MB holds; use a larger voxel_size"
+                                      : "the layer range holds " + std::to_string(z_to - z_from + 1) + " layers, at most " +
+                                            std::to_string(layers) + " fit into one chunk of " + std::to_string(max_bytes >> 20) +
+                                            " MB; ask for a smaller z range");
+    }
     const auto   slice = [&](const auto& values, size_t per_cell) {
         using T = typename std::decay_t<decltype(values)>::value_type;
         return std::vector<T>(values.begin() + first * per_cell, values.begin() + (first + count) * per_cell);

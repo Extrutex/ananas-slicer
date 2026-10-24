@@ -2,8 +2,13 @@
 
 #include "engine/Engine.hpp"
 #include "engine/Stress.hpp"
+#include "engine/StressApi.hpp"
 
+#include <chrono>
 #include <cmath>
+#include <algorithm>
+#include <functional>
+#include <limits>
 #include <cstdio>
 
 using namespace Slic3r;
@@ -290,4 +295,440 @@ TEST_CASE("Stress: selecting by triangles", "[Engine][Stress]")
     std::printf("[stress] selection by triangles: tip %.6f mm, by box: tip %.6f mm\n", a.max_displacement, b.max_displacement);
     CHECK(a.max_displacement == Catch::Approx(b.max_displacement).epsilon(1e-6));
     CHECK(a.fixed_dofs == b.fixed_dofs);
+}
+
+namespace {
+
+std::string message_of(const std::function<void()>& f)
+{
+    try {
+        f();
+    } catch (const EngineError& e) {
+        return e.what();
+    }
+    return {};
+}
+
+bool has_warning(const StressResult& r, const std::string& part)
+{
+    return std::any_of(r.warnings.begin(), r.warnings.end(), [&](const std::string& w) { return w.find(part) != std::string::npos; });
+}
+
+} // namespace
+
+TEST_CASE("Stress: limits on memory, runtime and input", "[Engine][Stress]")
+{
+    SECTION("cell limit, also for sizes that overflow")
+    {
+        StressInput in = cantilever(10., 4., 1., 0.5);
+        in.max_cells   = 100;
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+        in = cantilever(10., 4., 1., 1e-300); // size / voxel_size does not fit a size_t
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+        in = cantilever(10., 4., 1., 1.);
+        in.max_cells = std::numeric_limits<size_t>::max(); // the server limit still holds
+        for (auto& v : in.parts.front().vertices)
+            v *= 1e6f;
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+    }
+    SECTION("memory estimate")
+    {
+        StressInput in = cantilever(20., 4., 1., 0.5);
+        in.max_bytes   = 100000;
+        const std::string text = message_of([&] { solve_stress(in); });
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+        CHECK(text.find("memory") != std::string::npos);
+    }
+    SECTION("supports that hold only some axes end quickly with an error")
+    {
+        StressInput in = cantilever(20., 4., 1., 0.5);
+        in.supports.front().axes = { true, false, false }; // the face can still slide and the bar can rotate about x
+        in.loads.front().force   = Vec3d(0, 0, -5);
+        const auto start = std::chrono::steady_clock::now();
+        std::string text = message_of([&] { solve_stress(in); });
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        std::printf("[stress] partial axes: '%s' after %.3f s\n", text.c_str(), seconds);
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::EngineError);
+        CHECK(text.find("rigid-body") != std::string::npos);
+        CHECK(seconds < 5.);
+    }
+    SECTION("rotation about the held line stays free")
+    {
+        StressInput in = cantilever(10., 4., 1., 1.);
+        in.supports.front().where = box(Vec3d::Zero(), Vec3d(0, 0, 4)); // only the nodes of one edge
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::EngineError);
+    }
+    SECTION("a huge max_iterations is capped, a mechanism ends with an error")
+    {
+        // Two cubes joined only at a corner node, the far one loaded sideways: it can swing about the joint, which the
+        // up-front check of the supports cannot see.
+        StressInput in = cantilever(4., 4., 1., 1.);
+        indexed_triangle_set second = bar(4, 4, 4);
+        for (auto& v : second.vertices)
+            v += Vec3f(4.f, 4.f, 4.f);
+        in.parts.push_back(second);
+        in.loads.front().where = box(Vec3d(8, 4, 4), Vec3d(8, 8, 8));
+        in.loads.front().force = Vec3d(0, 0, 1);
+        in.max_iterations      = std::numeric_limits<size_t>::max();
+        const auto start       = std::chrono::steady_clock::now();
+        const std::string text = message_of([&] { solve_stress(in); });
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        std::printf("[stress] hinged piece: '%s' after %.2f s\n", text.c_str(), seconds);
+        // The cap on the iterations (20000) or the solver's own stop ends it: with the specific message, and soon.
+        CHECK((text.find("did not converge") != std::string::npos || text.find("stagnated") != std::string::npos));
+        CHECK(seconds < 60.);
+        const StressResult ok = solve_stress([&] {
+            StressInput fine = cantilever(10., 4., 1., 1.);
+            fine.max_iterations = std::numeric_limits<size_t>::max();
+            return fine;
+        }());
+        CHECK(ok.converged);
+    }
+    SECTION("wall-clock limit")
+    {
+        StressInput in = cantilever(20., 4., 1., 0.5);
+        in.max_seconds = 1e-9;
+        const std::string text = message_of([&] { solve_stress(in); });
+        CHECK(text.find("time limit") != std::string::npos);
+        in.max_seconds = 0.;
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+    }
+    SECTION("vertices that are not finite")
+    {
+        for (float bad : { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity() }) {
+            StressInput in = cantilever(10., 4., 1., 1.);
+            in.parts.front().vertices[3].y() = bad;
+            CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+        }
+        StressInput in = cantilever(10., 4., 1., 1.);
+        in.parts.front().indices[0][0] = 9999;
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+    }
+    SECTION("chunk size")
+    {
+        const StressResult r = solve_stress(cantilever(10., 4., 1., 1.)); // 10 x 4 x 4 cells
+        CHECK_NOTHROW(stress_chunk_json(1, r, 0, 3));
+        CHECK(error_of([&] { stress_chunk_json(1, r, 0, 3, 25 * 100); }) == ErrorCode::InvalidParams);          // 160 cells
+        CHECK_NOTHROW(stress_chunk_json(1, r, 0, 1, 25 * 100));                                                   // 80 cells
+        CHECK(message_of([&] { stress_chunk_json(1, r, 0, 3, 25 * 100); }).find("at most 2 fit") != std::string::npos);
+        CHECK(error_of([&] { stress_chunk_json(1, r, 0, 0, 25 * 10); }) == ErrorCode::InvalidParams);            // one layer is 40 cells
+    }
+}
+
+TEST_CASE("Stress: warnings", "[Engine][Stress]")
+{
+    SECTION("a solid, thick bar has none")
+    {
+        const StressResult r = solve_stress(cantilever(24., 8., 1., 1.));
+        CHECK(r.warnings.empty());
+    }
+    SECTION("thin walls")
+    {
+        const StressResult r = solve_stress(cantilever(24., 3., 1., 1.));
+        CHECK(has_warning(r, "thinner than 4 cells"));
+    }
+    SECTION("pieces touching at a corner")
+    {
+        StressInput in = cantilever(4., 4., 1., 1.);
+        indexed_triangle_set second = bar(4, 4, 4);
+        for (auto& v : second.vertices)
+            v += Vec3f(4.f, 4.f, 4.f);
+        in.parts.push_back(second);
+        in.loads.front().where = box(Vec3d(0, 0, 4), Vec3d(4, 4, 4)); // the load sits on the first piece
+        in.loads.front().force = Vec3d(0, 0, 1);
+        const StressResult r = solve_stress(in);
+        CHECK(has_warning(r, "edge or corner"));
+    }
+    SECTION("volume lost to the voxel grid")
+    {
+        StressInput in = cantilever(10., 4., 1., 3.); // 4 mm in cells of 3 mm: one cell, 3 of 4 mm
+        in.supports.front().where = box(Vec3d(-1, -1, -1), Vec3d(0, 5, 5));
+        in.loads.front().where    = box(Vec3d(9, -1, -1), Vec3d(11, 5, 5));
+        const StressResult r = solve_stress(in);
+        std::printf("[stress] coarse grid warnings: %zu\n", r.warnings.size());
+        CHECK(has_warning(r, "volume"));
+    }
+}
+
+namespace {
+
+// The bar of tension_bar() with the load given by the triangles of its far end face (x == L) instead of a box.
+StressInput tension_bar_by_triangles(double w, double L, double voxel, double force)
+{
+    StressInput in = tension_bar(0, w, L, voxel, force);
+    StressSelection far_end;
+    const auto&     mesh = in.parts.front();
+    for (size_t t = 0; t < mesh.indices.size(); ++t) {
+        const auto& tri = mesh.indices[t];
+        if (mesh.vertices[tri[0]].x() == float(L) && mesh.vertices[tri[1]].x() == float(L) && mesh.vertices[tri[2]].x() == float(L))
+            far_end.triangles.push_back(t);
+    }
+    in.loads.front().where = far_end;
+    return in;
+}
+
+} // namespace
+
+TEST_CASE("Stress: a grid layer larger than one result chunk is refused before solving", "[Engine][Stress]")
+{
+    // 600 x 600 cells in a layer: 360 000 * 25 bytes = 9 MB, more than the 8 MB of one chunk; 720 000 cells in total, so
+    // the cell limit alone would let it pass.
+    StressInput in = base(bar(600., 600., 2.), 1.);
+    in.supports.push_back({ box(Vec3d(0, 0, 0), Vec3d(0, 600, 2)), { true, true, true } });
+    in.loads.push_back({ box(Vec3d(600, 0, 0), Vec3d(600, 600, 2)), Vec3d(0, 0, -1) });
+    const auto        start = std::chrono::steady_clock::now();
+    const std::string text  = message_of([&] { solve_stress(in); });
+    const double      seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    std::printf("[stress] layer over the chunk limit: '%s' after %.3f s\n", text.c_str(), seconds);
+    CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+    CHECK(text.find("voxel_size") != std::string::npos);
+    CHECK(text.find("layer") != std::string::npos);
+    CHECK(seconds < 5.);
+
+    // 570 x 570 = 324 900 cells * 25 = 8.1 MB fit; checked on the layer arithmetic of the chunk call itself.
+    StressResult r;
+    r.size = { 570, 570, 1 };
+    r.solid.assign(570 * 570, 0);
+    r.von_mises.assign(570 * 570, 0.f);
+    r.safety.assign(570 * 570, 0.f);
+    r.displacement.assign(570 * 570, 0.f);
+    r.displacement_vec.assign(570 * 570 * 3, 0.f);
+    CHECK_NOTHROW(stress_chunk_json(1, r, 0, 0));
+}
+
+TEST_CASE("Stress: huge and tiny forces", "[Engine][Stress]")
+{
+    const StressResult one = solve_stress(cantilever(10., 4., 1., 1.));
+    REQUIRE(one.converged);
+
+    for (double huge : { 1e200, 1e300, 1e13 }) {
+        StressInput in = cantilever(10., 4., huge, 1.);
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+    }
+    SECTION("several loads that add up beyond the limit")
+    {
+        StressInput in = cantilever(10., 4., 6e11, 1.);
+        in.loads.push_back(in.loads.front());
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+        in.loads.back().force = -in.loads.front().force; // opposite loads do not cancel the check
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+    }
+    for (double F : { 1e11, 1e-200 }) {
+        const StressResult r = solve_stress(cantilever(10., 4., F, 1.));
+        std::printf("[stress] force %g N: converged %d, largest displacement %g (per N: %g, one newton: %g), reaction z %g\n", F,
+                    int(r.converged), r.max_displacement, r.max_displacement / F, one.max_displacement, r.reaction.z());
+        REQUIRE(r.converged);
+        CHECK(r.max_displacement / F == Catch::Approx(one.max_displacement).epsilon(1e-3));
+        CHECK(r.reaction.z() / F == Catch::Approx(1.).epsilon(1e-3));
+        CHECK(r.applied_force.z() / F == Catch::Approx(-1.).epsilon(1e-9));
+    }
+}
+
+TEST_CASE("Stress: limits on supports, loads, selections and the work before the solver", "[Engine][Stress]")
+{
+    SECTION("number of supports and loads")
+    {
+        StressInput in = cantilever(10., 4., 1., 1.);
+        const StressSupport support = in.supports.front();
+        in.supports.assign(STRESS_MAX_REGIONS, support);
+        CHECK_NOTHROW(solve_stress(in));
+        in.supports.push_back(support);
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+        in = cantilever(10., 4., 1., 1.);
+        const StressLoad load = in.loads.front();
+        in.loads.assign(STRESS_MAX_REGIONS + 1, load);
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+    }
+    SECTION("selected triangles: duplicates count once, different ones are capped")
+    {
+        const indexed_triangle_set mesh = bar(10., 4., 4.);
+        StressInput                in   = base(mesh, 1.);
+        StressSelection            left, right;
+        for (size_t t = 0; t < mesh.indices.size(); ++t) {
+            const auto& tri = mesh.indices[t];
+            if (mesh.vertices[tri[0]].x() == 0.f && mesh.vertices[tri[1]].x() == 0.f && mesh.vertices[tri[2]].x() == 0.f)
+                left.triangles.push_back(t);
+            if (mesh.vertices[tri[0]].x() == 10.f && mesh.vertices[tri[1]].x() == 10.f && mesh.vertices[tri[2]].x() == 10.f)
+                right.triangles.push_back(t);
+        }
+        REQUIRE(left.triangles.size() == 2);
+        in.supports.push_back({ left, { true, true, true } });
+        in.loads.push_back({ right, Vec3d(0, 0, -5) });
+        const StressResult single = solve_stress(in);
+
+        StressInput repeated = in;
+        for (int copy = 0; copy < 50; ++copy) {
+            repeated.supports.front().where.triangles.insert(repeated.supports.front().where.triangles.end(), left.triangles.begin(), left.triangles.end());
+            repeated.loads.front().where.triangles.insert(repeated.loads.front().where.triangles.end(), right.triangles.begin(), right.triangles.end());
+        }
+        repeated.max_selection_triangles = 2; // two different triangles per selection are allowed, however often listed
+        const StressResult many = solve_stress(repeated);
+        CHECK(many.max_displacement == Catch::Approx(single.max_displacement).epsilon(1e-9));
+        CHECK(many.applied_force.z() == Catch::Approx(-5.).epsilon(1e-9));
+
+        in.max_selection_triangles = 1;
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+    }
+    SECTION("surface crossings are limited by the memory budget")
+    {
+        StressInput in = cantilever(20., 4., 1., 0.5); // 40 x 8 x 8 = 2560 cells, about 640 crossings
+        const double cells = 2560.;
+        in.max_bytes = size_t(49. * cells + 48. * 100.); // room for 100 crossings
+        const std::string text = message_of([&] { solve_stress(in); });
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+        CHECK(text.find("crossings") != std::string::npos);
+        in.max_bytes = size_t(1) << 30;
+        CHECK_NOTHROW(solve_stress(in));
+    }
+    SECTION("the memory estimate counts the work before the voxelization")
+    {
+        const indexed_triangle_set sphere = its_make_sphere(20., 0.05); // many triangles, a coarse grid
+        REQUIRE(sphere.indices.size() > 10000);
+        StressInput in = base(sphere, 10.);
+        in.supports.push_back({ box(Vec3d(-30, -30, -30), Vec3d(30, 30, -19)), { true, true, true } });
+        in.loads.push_back({ box(Vec3d(-30, -30, 19), Vec3d(30, 30, 30)), Vec3d(0, 0, -1) });
+        in.max_bytes = 200000; // far below what welding 10 000+ triangles needs
+        const std::string text = message_of([&] { solve_stress(in); });
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+        CHECK(text.find("memory") != std::string::npos);
+    }
+    SECTION("the time limit also holds before the solver")
+    {
+        StressInput in = cantilever(20., 4., 1., 0.5);
+        in.max_seconds = 1e-9;
+        const std::string text = message_of([&] { solve_stress(in); });
+        std::printf("[stress] time limit at once: '%s'\n", text.c_str());
+        CHECK(text.find("time limit") != std::string::npos);
+        CHECK(text.find("while solving") == std::string::npos); // it ended in the input check, not in the solver
+
+        // A mesh whose checking alone takes far longer than the limit ends in time, not after the whole preparation.
+        const indexed_triangle_set sphere = its_make_sphere(20., 0.004);
+        std::printf("[stress] sphere with %zu triangles\n", sphere.indices.size());
+        StressInput big = base(sphere, 10.);
+        big.supports.push_back({ box(Vec3d(-30, -30, -30), Vec3d(30, 30, -19)), { true, true, true } });
+        big.loads.push_back({ box(Vec3d(-30, -30, 19), Vec3d(30, 30, 30)), Vec3d(0, 0, -1) });
+        for (double limit : { 0.02, 0.3, 0.4, 0.45 }) { // the clock runs out in different phases of the preparation
+            big.max_seconds = limit;
+            const auto        start = std::chrono::steady_clock::now();
+            const std::string late  = message_of([&] { solve_stress(big); });
+            const double      seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+            std::printf("[stress] time limit %.2f s on a big mesh: '%s' after %.3f s\n", limit, late.c_str(), seconds);
+            CHECK((late.empty() || late.find("time limit") != std::string::npos)); // a fast run may finish within the limit
+            CHECK(late.find("while solving") == std::string::npos);
+            CHECK(seconds < limit + 3.);
+            if (limit <= 0.3)
+                CHECK(late.find("time limit") != std::string::npos); // the preparation alone takes longer than this
+        }
+    }
+}
+
+TEST_CASE("Stress: a face between two grid planes loads only the outer layer", "[Engine][Stress]")
+{
+    // The bar is 10.6 long, the grid has cells of 1: the voxel bar ends at x = 11. Nodes of the planes x = 10 and x = 11 are
+    // both within reach of the face at x = 10.6, but only the plane x = 11 is the outer layer; the side faces between x = 10
+    // and x = 11 must not take any of the load.
+    const double w = 4., L = 10.6, F = 100., E = 2000.;
+    const StressResult by_triangles = solve_stress(tension_bar_by_triangles(w, L, 1., F));
+    const StressResult by_box       = solve_stress(tension_bar(0, w, L, 1., F));
+    const double       voxel_length = 11.;
+    const double       sigma = F / (w * w), delta = bar_max_displacement(F * voxel_length / (w * w * E), sigma, w, E, 0.3);
+    std::printf("[stress] face at x=10.6: by triangles %.6f mm, by box %.6f mm, analytic %.6f mm; von Mises %.6f (analytic %.6f); "
+                "reaction %.6f\n",
+                by_triangles.max_displacement, by_box.max_displacement, delta, by_triangles.max_von_mises, sigma, by_triangles.reaction.x());
+    REQUIRE(by_triangles.converged);
+    CHECK(by_triangles.max_displacement == Catch::Approx(delta).epsilon(1e-4));
+    CHECK(by_triangles.max_displacement == Catch::Approx(by_box.max_displacement).epsilon(1e-9));
+    CHECK(by_triangles.max_von_mises == Catch::Approx(sigma).epsilon(1e-4));
+    CHECK(by_triangles.applied_force.x() == Catch::Approx(F).epsilon(1e-9));
+    CHECK(by_triangles.reaction.x() == Catch::Approx(-F).epsilon(1e-4));
+    CHECK(std::abs(by_triangles.reaction.y()) < 1e-6 * F);
+    CHECK(std::abs(by_triangles.reaction.z()) < 1e-6 * F);
+}
+
+TEST_CASE("Stress: rigid-body check is judged per piece and does not depend on position or size", "[Engine][Stress]")
+{
+    SECTION("two small, correctly held pieces far apart")
+    {
+        // Two single cells of 4 mm, 1 000 000 mm apart; each is held on a face. Relative to the whole model's extent the
+        // held nodes of one piece lie within 4e-6, which a global scale would take for a collinear support.
+        StressInput in = base(bar(4., 4., 4.), 4.);
+        indexed_triangle_set second = bar(4., 4., 4.);
+        for (auto& v : second.vertices)
+            v += Vec3f(1000000.f, 0.f, 0.f);
+        in.parts.push_back(second);
+        in.supports.push_back({ box(Vec3d(0, 0, 0), Vec3d(0, 4, 4)), { true, true, true } });
+        in.supports.push_back({ box(Vec3d(1000000, 0, 0), Vec3d(1000000, 4, 4)), { true, true, true } });
+        in.loads.push_back({ box(Vec3d(4, 0, 0), Vec3d(4, 4, 4)), Vec3d(0, 0, -1) });
+        const StressResult r = solve_stress(in);
+        CHECK(r.converged);
+        CHECK(r.reaction.z() == Catch::Approx(1.).epsilon(1e-4));
+    }
+    SECTION("the model scaled by 1000 and by 0.001 gives the same result")
+    {
+        const StressResult reference = solve_stress(cantilever(10., 4., 10., 1.));
+        REQUIRE(reference.converged);
+        for (double s : { 1000., 0.001 }) {
+            const StressResult r = solve_stress(cantilever(10. * s, 4. * s, 10., 1. * s));
+            std::printf("[stress] scale %g: displacement * s %.6f (reference %.6f), von Mises * s^2 %.6f (reference %.6f)\n", s,
+                        r.max_displacement * s, reference.max_displacement, r.max_von_mises * s * s, reference.max_von_mises);
+            REQUIRE(r.converged);
+            CHECK(r.max_displacement * s == Catch::Approx(reference.max_displacement).epsilon(1e-3));
+            CHECK(r.max_von_mises * s * s == Catch::Approx(reference.max_von_mises).epsilon(1e-3));
+        }
+    }
+    SECTION("three single points held in all axes are enough, three on a line are not")
+    {
+        StressInput in = cantilever(10., 4., 1., 1.);
+        in.supports.clear();
+        for (const Vec3d& at : { Vec3d(0, 0, 0), Vec3d(0, 4, 0), Vec3d(0, 0, 4) })
+            in.supports.push_back({ box(at, at), { true, true, true } });
+        const StressResult r = solve_stress(in);
+        CHECK(r.converged);
+        CHECK(r.fixed_dofs == 9);
+
+        in.supports.clear();
+        for (const Vec3d& at : { Vec3d(0, 0, 0), Vec3d(0, 2, 0), Vec3d(0, 4, 0) })
+            in.supports.push_back({ box(at, at), { true, true, true } });
+        const std::string text = message_of([&] { solve_stress(in); });
+        CHECK(text.find("rigid-body") != std::string::npos);
+        CHECK(text.find("1 of 6") != std::string::npos); // the rotation about the line
+    }
+}
+
+TEST_CASE("Stress: closed meshes of every kind never count a ray twice on a shared edge", "[Engine][Stress]")
+{
+    // Cube (its faces are split along diagonals), sphere, cylinder, cone and prism, on grids that put vertices and edges
+    // on and next to grid lines. A ray through a shared edge counted in both or in neither triangle would make the
+    // crossings odd and the mesh look open.
+    struct Shape
+    {
+        const char*         name;
+        indexed_triangle_set mesh;
+    };
+    const Shape shapes[] = { { "cube", its_make_cube(10., 10., 10.) },
+                             { "sphere", its_make_sphere(5., PI / 16.) },
+                             { "cylinder", its_make_cylinder(4., 10., PI / 12.) },
+                             { "cone", its_make_cone(4., 10., PI / 12.) },
+                             { "prism", its_make_prism(8.f, 6.f, 9.f) },
+                             { "pyramid", its_make_pyramid(8.f, 9.f) } };
+    size_t      runs = 0, odd = 0;
+    for (const Shape& shape : shapes) {
+        BoundingBoxf3 bb;
+        for (const Vec3f& v : shape.mesh.vertices)
+            bb.merge(v.cast<double>());
+        for (double voxel : { 0.25, 0.3, 0.5, 0.7, 1., 1.25, 2., 2.5 }) {
+            StressInput in = base(shape.mesh, voxel);
+            in.supports.push_back({ box(bb.min - Vec3d::Constant(1.), Vec3d(bb.max.x() + 1., bb.max.y() + 1., bb.min.z() + 1.)), { true, true, true } });
+            in.loads.push_back({ box(Vec3d(bb.min.x() - 1., bb.min.y() - 1., bb.max.z() - 1.), bb.max + Vec3d::Constant(1.)), Vec3d(0, 0, -1) });
+            in.max_iterations = 5; // only the voxelization is on trial
+            const std::string text = message_of([&] { solve_stress(in); });
+            ++runs;
+            if (text.find("watertight") != std::string::npos) {
+                ++odd;
+                std::printf("[stress] %s voxel %.2f: %s\n", shape.name, voxel, text.c_str());
+            }
+        }
+    }
+    std::printf("[stress] watertight meshes voxelized: %zu runs, %zu reported as open\n", runs, odd);
+    CHECK(odd == 0);
 }

@@ -43,6 +43,23 @@ struct StressLoad
     Vec3d           force{ Vec3d::Zero() }; // N, the resultant on the selection
 };
 
+// Server-side limits; the request cannot raise them. The memory need is about 330 bytes per cell of a compact body
+// (3 dof per node in 7 vectors of 8 bytes, the element and node index arrays, the result arrays), so 5 million cells
+// take roughly 1.7 GB.
+constexpr size_t STRESS_MAX_CELLS      = 5000000;
+constexpr size_t STRESS_MAX_BYTES      = size_t(3) << 30;
+constexpr size_t STRESS_MAX_ITERATIONS = 20000;
+constexpr double STRESS_MAX_SECONDS    = 3600.;
+constexpr size_t STRESS_MAX_TRIANGLES  = 10000000;
+constexpr size_t STRESS_MAX_REGIONS    = 64;      // supports, and loads, each
+constexpr size_t STRESS_MAX_SELECTION_TRIANGLES = 2000000; // different triangles in one selection (duplicates count once)
+constexpr double STRESS_MAX_FORCE      = 1e12;    // N, per component of a load and of the sum of all loads
+// The result is fetched in chunks of whole grid layers, 25 bytes per cell (solid 1, von Mises 4, safety 4,
+// displacement 4, displacement vector 12) and at most STRESS_CHUNK_MAX_BYTES raw bytes per chunk. One layer of the
+// grid must fit into one chunk, which limits nx * ny to 8 MB / 25 = 335 544 cells.
+constexpr size_t STRESS_CHUNK_MAX_BYTES     = size_t(8) << 20;
+constexpr size_t STRESS_CHUNK_BYTES_PER_CELL = 25;
+
 struct StressInput
 {
     std::vector<indexed_triangle_set> parts; // closed meshes in the analysis frame (the bed frame)
@@ -51,8 +68,12 @@ struct StressInput
     std::vector<StressSupport>        supports;
     std::vector<StressLoad>           loads;
     double                            tolerance{ 1e-6 };  // relative residual of the solver
-    size_t                            max_iterations{ 20000 };
-    size_t                            max_cells{ 20000000 }; // cells of the voxel grid (solid or not)
+    size_t                            max_iterations{ STRESS_MAX_ITERATIONS }; // capped at STRESS_MAX_ITERATIONS
+    size_t                            max_cells{ STRESS_MAX_CELLS };               // cells of the voxel grid (solid or not)
+    size_t                            max_bytes{ STRESS_MAX_BYTES };               // estimated memory of the analysis
+    double                            max_seconds{ 600. };                         // wall clock of the whole analysis from the call on (checking, voxelizing, building, solving); capped at STRESS_MAX_SECONDS
+    size_t                            max_selection_triangles{ STRESS_MAX_SELECTION_TRIANGLES }; // capped at the same constant
+    std::vector<std::string>          warnings;                                    // passed on into the result, before the solver's own
 };
 
 // Voxel arrays are cell-indexed, x running fastest: index = i + nx * (j + ny * k).
@@ -83,6 +104,8 @@ struct StressResult
     Vec3d  max_displacement_at{ Vec3d::Zero() };
     Vec3d  applied_force{ Vec3d::Zero() }; // what reached free nodes (a load on a fixed node is dropped)
     Vec3d  reaction{ Vec3d::Zero() };      // sum of the support reactions; equals -applied_force when in equilibrium
+
+    std::vector<std::string> warnings; // things that make the numbers less trustworthy, for the user to read
 };
 
 constexpr double STRESS_SAFETY_CAP = 1000.;
@@ -94,7 +117,12 @@ using StressProgress = std::function<void(int, const std::string&)>;
 // inside), meshes the solid with trilinear hexahedra, and solves K u = f with a matrix-free conjugate
 // gradient (Jacobi preconditioner). Stress is the value at the element centre. Throws EngineError: invalid
 // params for a bad input, engine error for a mesh that is not watertight, a model without volume or a solver
-// that does not converge (typically supports that leave the body free to move).
+// that does not converge (typically supports that leave the body free to move: the supports must hold all three
+// translations and rotations, which is checked up front, per piece). Limits on cells, grid layer size, memory (also
+// of the checks before the voxelization), number of supports, loads and selected triangles, force size, iterations,
+// stagnation and wall-clock time (from the call on, in every long phase) end in an error instead of a runaway;
+// running out of memory is an engine error too. A load is selected by its surface faces: a triangle takes the
+// faces of the voxel surface that face it and lie within reach, a box the faces with all four corners inside.
 StressResult solve_stress(const StressInput& input, const StressProgress& progress = nullptr);
 
 } // namespace Slic3r::engine

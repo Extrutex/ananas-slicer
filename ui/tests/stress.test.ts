@@ -7,7 +7,7 @@ import { CHUNK_CELLS, allocateField, applyChunk, cellAt, cellIndex, planChunks }
 import { CUSTOM_MATERIAL_ID, MATERIAL_PRESETS, materialProblems, presetIdOf, type StressMaterial } from "../src/stress/materials.ts";
 import { buildStressMesh } from "../src/stress/mesh.ts";
 import { globalTriangle, mergeTriangles, partOffsets, planarRegion, subtractTriangles } from "../src/stress/regions.ts";
-import { MAX_CELLS, buildStressRequest, checkSetup, emptyRegion, estimateCells, type StressSetup } from "../src/stress/setup.ts";
+import { CHUNK_BYTES_PER_CELL, CHUNK_MAX_BYTES, DEFAULT_MAX_SECONDS, MAX_CELLS, buildStressRequest, checkSetup, emptyRegion, estimateCells, estimateLayerCells, type StressSetup } from "../src/stress/setup.ts";
 import { OVER_COLOR, RAMP } from "../src/viewer/heatmap.ts";
 
 const PLA = MATERIAL_PRESETS[0]!;
@@ -96,6 +96,35 @@ describe("Einrichtung", () => {
     expect(good.errors).toEqual([]);
     expect(good.hints).toEqual([]);
   });
+
+  it("sperrt den Start, wenn eine Gitterschicht nicht in einen Ergebnisblock passt, auch bei erlaubter Gesamtzahl", () => {
+    // Platte 100 x 100 x 1 mm mit Voxel 0,15: 668 x 668 = 446 224 Zellen je Schicht (> 335 544), gesamt 3,6 Mio. (< 5 Mio.)
+    const plate = { min: [0, 0, 0], max: [100, 100, 1] } as const;
+    const check = checkSetup({ ...validSetup(), voxelSize: 0.15 }, plate);
+    expect(check.cells).toBeLessThan(MAX_CELLS);
+    expect(estimateLayerCells(plate, 0.15) * CHUNK_BYTES_PER_CELL).toBeGreaterThan(CHUNK_MAX_BYTES);
+    expect(check.errors.join(" ")).toMatch(/Gitterschicht/);
+    expect(check.errors.join(" ")).not.toMatch(/Zellen, die Engine rechnet/);
+    // Gröber passt die Schicht: 100 x 100 mm bei Voxel 0,2 sind 501 x 501 = 251 001 Zellen.
+    const ok = checkSetup({ ...validSetup(), voxelSize: 0.2 }, plate);
+    expect(ok.errors).toEqual([]);
+  });
+
+  it("nennt bei schweren Gittern die Laufzeitgrenze und reicht eine eigene mit", () => {
+    const heavy = { min: [0, 0, 0], max: [130, 130, 130] } as const; // Voxel 1: etwa 2,2 Mio. Zellen
+    const hint = checkSetup({ ...validSetup(), voxelSize: 1 }, heavy).hints.join(" ");
+    expect(hint).toContain(`${DEFAULT_MAX_SECONDS} s`);
+    expect(checkSetup({ ...validSetup(), voxelSize: 1, maxSeconds: 120 }, heavy).hints.join(" ")).toContain("120 s");
+    expect(buildStressRequest("/m.stl", 0, {}, { ...validSetup(), maxSeconds: 120 }).max_seconds).toBe(120);
+    expect(buildStressRequest("/m.stl", 0, {}, validSetup())).not.toHaveProperty("max_seconds");
+    expect(checkSetup({ ...validSetup(), maxSeconds: 0 }, null).errors.join(" ")).toMatch(/Rechenzeit/);
+  });
+
+  it("verwirft zu große Kräfte", () => {
+    const setup = validSetup();
+    setup.regions[1]!.force = [0, 0, -2e12];
+    expect(checkSetup(setup, null).errors.join(" ")).toMatch(/größer als/);
+  });
 });
 
 function summary(size: [number, number, number], origin: [number, number, number] = [0, 0, 0]): StressSummary {
@@ -112,6 +141,7 @@ function summary(size: [number, number, number], origin: [number, number, number
     applied_force: [0, 0, -1],
     reaction: [0, 0, 1],
     safety_cap: 1000,
+    warnings: [],
   };
 }
 
@@ -137,8 +167,9 @@ function chunk(zFrom: number, zTo: number, layer: number, fill: (cell: number) =
 describe("Ergebnisfeld", () => {
   it("plant Blöcke, die das Gitter lückenlos und in Größen unter der Grenze abdecken", () => {
     expect(planChunks([10, 10, 10])).toEqual([{ from: 0, to: 9 }]);
-    const big = planChunks([1000, 1000, 5]);
+    const big = planChunks([500, 600, 5]); // 300 000 Zellen je Schicht: eine Schicht je Block, und das passt in 8 MB
     expect(big).toEqual([{ from: 0, to: 0 }, { from: 1, to: 1 }, { from: 2, to: 2 }, { from: 3, to: 3 }, { from: 4, to: 4 }]);
+    expect(big.every((c) => (c.to - c.from + 1) * 500 * 600 * CHUNK_BYTES_PER_CELL <= CHUNK_MAX_BYTES)).toBe(true);
     const mixed = planChunks([100, 100, 250]);
     expect(mixed.every((c) => (c.to - c.from + 1) * 100 * 100 <= CHUNK_CELLS)).toBe(true);
     expect(mixed[0]!.from).toBe(0);

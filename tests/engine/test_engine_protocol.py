@@ -291,6 +291,16 @@ def main():
                "the support reaction balances the load")
         expect(stress["max_von_mises"]["value"] > 20 and stress["min_safety"]["value"] < 2
                and stress["max_von_mises"]["at"][0] < 2, "the highest stress sits at the clamp")
+        expect(isinstance(stress["warnings"], list), f"the summary carries a list of warnings: {stress['warnings']}")
+        response, _ = engine.call("analyze.stress", {**request, "max_iterations": 10**12, "voxel_size": 0.0001})
+        expect(response["error"]["code"] == -32602 and "voxel_size" in response["error"]["message"],
+               "a voxel size that would need too many cells answers -32602 (the cell limit is the server's)")
+        response, _ = engine.call("analyze.stress", {**request, "max_seconds": 0})
+        expect(response["error"]["code"] == -32602, "max_seconds of 0 answers -32602")
+        response, _ = engine.call("analyze.stress", {**request, "supports": [{"box": {"min": [0, 0, 0], "max": [0, 4, 4]}, "axes": [True, False, False]}],
+                                                    "loads": [{"box": {"min": [40, 0, 0], "max": [40, 4, 4]}, "force": [0, 0, -10]}]})
+        expect(response["error"]["code"] == -32000 and "rigid-body" in response["error"]["message"],
+               "supports that hold only one axis answer -32000 up front")
         chunk = engine.result("analyze.chunk", {"id": stress["id"], "z_from": 0, "z_to": 1})
         cells = chunk["count"]
         solid = base64.b64decode(chunk["solid"])

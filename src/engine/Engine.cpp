@@ -16,6 +16,7 @@
 #include <boost/log/trivial.hpp>
 
 #include <algorithm>
+#include <new>
 #include <cmath>
 #include <cstdlib>
 #include <set>
@@ -550,6 +551,8 @@ json Engine::analyze_stress(const json& params, const json& request_id, const No
         return stress_summary_json(++m_stress_id, *result);
     } catch (const EngineError&) {
         throw;
+    } catch (const std::bad_alloc&) {
+        throw EngineError(ErrorCode::EngineError, "stress analysis failed: not enough memory; use a larger voxel_size");
     } catch (const std::exception& ex) {
         throw EngineError(ErrorCode::EngineError, std::string("stress analysis failed: ") + ex.what());
     }

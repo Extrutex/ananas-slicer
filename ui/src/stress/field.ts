@@ -19,8 +19,8 @@ export interface StressField {
   displacement: Float32Array;
 }
 
-/** Pro Anfrage höchstens so viele Zellen: die Antwort ist Base64 in JSON. */
-export const CHUNK_CELLS = 1_000_000;
+/** Pro Anfrage höchstens so viele Zellen: die Antwort ist Base64 in JSON (die Engine erlaubt 8 MB je Block, 335 544 Zellen; setup.ts prüft, dass eine Schicht hineinpasst). */
+export const CHUNK_CELLS = 300_000;
 
 /** Die z-Bereiche (von, bis, inklusive), in denen das Gitter abgeholt wird. */
 export function planChunks(size: readonly [number, number, number]): { from: number; to: number }[] {

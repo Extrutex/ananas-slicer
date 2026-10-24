@@ -311,6 +311,13 @@ export function StressPanel({ session, state }: { session: CockpitSession; state
                 {summary.solid_cells.toLocaleString("de-DE")} {"·"} {summary.solver.iterations} Iterationen
               </dd>
             </dl>
+            {summary.warnings.length > 0 ? (
+              <ul className="m-0 mt-1.5 list-disc pl-4 text-ks-micro text-signal-caution" data-testid="stress-warnings">
+                {summary.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
             <div className="mt-2 flex gap-1.5">
               <button type="button" disabled={stale} onClick={() => session.setStressDisplay({ shown: !stress.display.shown })} className={`${NEUTRAL} disabled:cursor-not-allowed disabled:text-ink-disabled`}>
                 {stress.display.shown && !stale ? "Modell zeigen" : "Heatmap zeigen"}

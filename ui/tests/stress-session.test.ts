@@ -71,7 +71,10 @@ describe("Kraftverteilung am Würfel", () => {
     // Das Maximum der Verformung ist ein Knoten oben; die Zelle eine halbe Zelle nach innen trägt einen Wert nahe daran.
     const half = field.voxelSize / 2;
     const at = summary.max_displacement.at;
-    const top = cellAt(field, [at[0] - half, at[1] - half, at[2] - half])!;
+    // Die Verformung ist am Rand fast gleichmäßig, das Maximum kann an jedem Knoten der Oberseite liegen (auch am Rand
+    // des Gitters): die Zelle liegt deshalb eine halbe Zelle zur Mitte des Gitters hin.
+    const inward = (d: 0 | 1 | 2): number => at[d] + (at[d] < field.origin[d]! + (field.size[d] * field.voxelSize) / 2 ? half : -half);
+    const top = cellAt(field, [inward(0), inward(1), inward(2)])!;
     expect(top).not.toBeNull();
     expect(field.displacement[top]).toBeGreaterThan(summary.max_displacement.value * 0.9);
     expect(stressResultCurrent(state())).toBe(true);

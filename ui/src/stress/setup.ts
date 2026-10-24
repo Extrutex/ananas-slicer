@@ -27,12 +27,22 @@ export interface StressSetup {
   /** Kantenlänge der Voxel in mm. */
   voxelSize: number;
   regions: StressRegion[];
+  /** Obergrenze der Rechenzeit in s (Wanduhr der ganzen Analyse); ohne Angabe gilt die Vorgabe der Engine. */
+  maxSeconds?: number;
 }
 
-/** Die Engine lehnt mehr als 20 Millionen Gitterzellen ab (docs/HLSD/engine.md). */
-export const MAX_CELLS = 20_000_000;
+/** Die Engine lehnt mehr als 5 Millionen Gitterzellen ab (docs/HLSD/engine.md). */
+export const MAX_CELLS = 5_000_000;
 /** Ab dieser Zellzahl dauert die Rechnung und die Darstellung spürbar. */
 export const HEAVY_CELLS = 2_000_000;
+/** Vorgabe der Engine für die Rechenzeit (max_seconds), danach bricht sie mit einer Fehlermeldung ab. */
+export const DEFAULT_MAX_SECONDS = 600;
+/** Ein Ergebnisblock der Engine fasst höchstens 8 MB bei 25 Byte je Zelle; eine ganze Gitterschicht muss hineinpassen. */
+export const CHUNK_MAX_BYTES = 8 * 1024 * 1024;
+export const CHUNK_BYTES_PER_CELL = 25;
+/** Die Engine nimmt höchstens so viele Lager und so viele Lasten an und Lasten bis zu dieser Größe in N je Richtung. */
+export const MAX_REGIONS = 64;
+export const MAX_FORCE = 1e12;
 
 export function emptyRegion(id: number, kind: RegionKind): StressRegion {
   return { id, kind, triangles: [], box: null, axes: [true, true, true], force: [0, 0, 0] };
@@ -48,6 +58,12 @@ export function estimateCells(box: Box, voxelSize: number): number {
   let cells = 1;
   for (let axis = 0; axis < 3; axis += 1) cells *= Math.ceil((box.max[axis]! - box.min[axis]!) / voxelSize) + 1;
   return cells;
+}
+
+/** Die Zellen einer Gitterschicht (x mal y), wie die Engine sie zählt (Obergrenze: eine Zelle Rand je Seite). */
+export function estimateLayerCells(box: Box, voxelSize: number): number {
+  if (!Number.isFinite(voxelSize) || voxelSize <= 0) return 0;
+  return (Math.ceil((box.max[0] - box.min[0]) / voxelSize) + 1) * (Math.ceil((box.max[1] - box.min[1]) / voxelSize) + 1);
 }
 
 /** Wie viele Zellen die dünnste Abmessung des Objekts bekommt. */
@@ -78,17 +94,29 @@ export function checkSetup(setup: StressSetup, objectBox: Box | null): SetupChec
     if (region.kind === "support" && !region.axes.some(Boolean)) errors.push(`${name}: keine Achse festgehalten.`);
     if (region.kind === "load" && !region.force.every(Number.isFinite)) errors.push(`${name}: die Kraft ist keine Zahl.`);
     if (region.kind === "load" && region.force.every((component) => component === 0)) errors.push(`${name}: die Kraft ist 0 N.`);
+    if (region.kind === "load" && region.force.some((component) => Math.abs(component) > MAX_FORCE)) {
+      errors.push(`${name}: die Kraft ist größer als ${formatCount(MAX_FORCE)} N.`);
+    }
     if (region.box !== null && region.box.min.some((value, axis) => value > region.box!.max[axis]!)) {
       errors.push(`${name}: die Box hat ein Minimum über dem Maximum.`);
     }
   }
+  if (supports.length > MAX_REGIONS || loads.length > MAX_REGIONS) errors.push(`Höchstens ${MAX_REGIONS} Lager und ${MAX_REGIONS} Lasten.`);
+  if (setup.maxSeconds !== undefined && !(setup.maxSeconds > 0 && Number.isFinite(setup.maxSeconds))) errors.push("Die Rechenzeit muss größer als 0 s sein.");
   let cells = 0;
   if (objectBox !== null && setup.voxelSize > 0) {
     cells = estimateCells(objectBox, setup.voxelSize);
     if (cells > MAX_CELLS) {
       errors.push(`Das Gitter hätte etwa ${formatCount(cells)} Zellen, die Engine rechnet höchstens ${formatCount(MAX_CELLS)}. Voxel vergrößern.`);
     } else if (cells > HEAVY_CELLS) {
-      hints.push(`Etwa ${formatCount(cells)} Zellen: Rechnung und Darstellung dauern spürbar.`);
+      const limit = setup.maxSeconds ?? DEFAULT_MAX_SECONDS;
+      hints.push(`Etwa ${formatCount(cells)} Zellen: Rechnung und Darstellung dauern spürbar. Die Engine bricht nach ${formatCount(limit)} s Rechenzeit ab (Vorbereitung und Lösen zusammen).`);
+    }
+    const layer = estimateLayerCells(objectBox, setup.voxelSize);
+    if (layer * CHUNK_BYTES_PER_CELL > CHUNK_MAX_BYTES) {
+      errors.push(
+        `Eine Gitterschicht hätte etwa ${formatCount(layer)} Zellen, die Engine liefert höchstens ${formatCount(Math.floor(CHUNK_MAX_BYTES / CHUNK_BYTES_PER_CELL))} je Schicht (ein Ergebnisblock fasst 8 MB). Voxel vergrößern.`,
+      );
     }
     const across = cellsAcrossThinnest(objectBox, setup.voxelSize);
     if (across < 4) {
@@ -131,5 +159,6 @@ export function buildStressRequest(model: string, objectIndex: number, transform
     voxel_size: setup.voxelSize,
     supports,
     loads,
+    ...(setup.maxSeconds !== undefined ? { max_seconds: setup.maxSeconds } : {}),
   };
 }
