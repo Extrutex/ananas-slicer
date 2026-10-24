@@ -62,6 +62,9 @@ add_subdirectory(slic3rutils)
 add_subdirectory(fff_print)
 add_subdirectory(sla_print)
 add_subdirectory(filament_group)
+if (TARGET ananas_engine_core)
+    add_subdirectory(engine)
+endif ()
 
 # End-to-end checks of the orca-slicer binary. Most read result.json, which the CLI writes on Linux
 # only; tests/cli/CMakeLists.txt registers those on Linux alone. src/ is added before tests/, so the
