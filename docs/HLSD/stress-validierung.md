@@ -1,6 +1,6 @@
 # Validierung des Spannungslösers (analyze.stress)
 
-Stand: 24.10.2026, Branch `feat/ui-stage5-kraft`; Stagnationsregel des Lösers geändert (`src/engine/Stress.cpp`, siehe „Befunde am Löser“). Alle Aussagen sind
+Stand: 24.10.2026, Branch `feat/ui-stage6-multigrid`; der Löser rechnet mit einem Multigrid-Vorkonditionierer (Abschnitt „Multigrid-Vorkonditionierer“); die Spalten „Iterationen“ in den Fallabschnitten (a) bis (e) sind die Werte mit **Jacobi** (`preconditioner: "jacobi"`), mit Multigrid stehen sie in der Vorher/Nachher-Tabelle. Alle Aussagen sind
 **Richtwerte, nicht zertifiziert**. Der Löser ist linear-elastisch, rechnet mit trilinearen Hexaeder-Elementen auf
 einem Würfelgitter (Voxel) und gibt die Spannung als Wert im Elementmittelpunkt aus.
 
@@ -165,6 +165,69 @@ daher netzabhängig (2,9 bis 1,2). Er ist **als Warnung zu lesen** („hier ist 
 scharfen Innenecke eine Sicherheit braucht, muss die Ecke ausrunden. Gegenüber der Balkenabschätzung liegt die Größenordnung bei
 0,7- bis 1,75-fach, je nach Auflösung; Faktor 2 Abweichung in beide Richtungen sollte man für scharfe Ecken einplanen.
 
+## Multigrid-Vorkonditionierer
+
+Das CG-Verfahren wird mit einem geometrischen Mehrgitter-V-Zyklus vorkonditioniert (Aufbau und Gründe in `engine.md`, Abschnitt
+„Stress analysis“). Gemessen auf dem Mac mini (M4, 12 Kerne), gleiche Toleranz 1e-6, gleiche Fälle wie oben; Rechenzeit ist die der ganzen
+Analyse (Voxelisierung, Aufbau der Hierarchie, Lösen, Auswertung). Jacobi-Werte sind die Messungen vor der Änderung.
+
+| Fall | Zellen | Jacobi: Iterationen | Jacobi: s | Multigrid: Iterationen | Multigrid: s | Ebenen | Fehler gegen Referenz (unverändert) |
+|---|---|---|---|---|---|---|---|
+| (b) Balken L/h 16, 1,0 mm | 3 456 | 1 184 | 0,12 | 20 | 0,02 | 3 | Durchbiegung −0,9 % |
+| (b) Balken L/h 16, 0,5 mm | 27 648 | 2 458 | 1,34 | 24 | 0,07 | 4 | +0,3 % |
+| (b) Balken L/h 16, 0,3 mm | 128 000 | 4 411 | 10,27 | 27 | 0,26 | 5 | +0,6 % |
+| (b) Balken L/h 16, 0,25 mm | 221 184 | 5 669 | 19,78 | 27 | 0,45 | 5 | +0,6 % |
+| (b) Balken L/h 8, 0,25 mm | 110 592 | 2 348 | 4,24 | 21 | 0,22 | 5 | +4,1 % |
+| (a) Platte mit Bohrung, 0,5 mm | 17 984 | 2 673 | 1,07 | 29 | 0,06 | 4 | Kt −18,0 % |
+| (a) Platte mit Bohrung, 0,25 mm | 143 872 | 5 458 | 16,77 | 38 | 0,38 | 5 | Kt −6,3 % |
+| (a) Platte mit Bohrung, 0,2 mm | 280 840 | 6 822 | 30,66 | 32 | 0,60 | 5 | Kt −3,3 % |
+| (a) Platte 80 × 40 mm, d = 10, 0,25 mm | 399 488 | 11 575 | 80,81 | 38 | 1,09 | 5 | Kt +0,5 % |
+| (c) Rohr, 1,0 / 0,5 / 0,25 mm | 7 584 / 60 160 / 482 688 | 96 / 183 / 340 | 0,02 / 0,21 / 2,89 | 9 / 9 / 9 | 0,03 / 0,08 / 0,48 | 3 bis 5 | u_r +1,9 / −0,3 / +0,7 % |
+| (e) Winkelhalter, 2,0 / 1,0 / 0,5 / 0,25 mm | 800 bis 415 360 | 158 / 309 / 625 / 1 250 | 0,01 / 0,05 / 0,59 / 8,72 | 10 / 10 / 11 / 11 | 0,01 / 0,02 / 0,07 / 0,38 | 2 bis 5 | größte σ_v 13,9 / 19,7 / 26,2 / 34,6 MPa |
+| massiver Würfel 100 mm, 1 mm (Last schräg) | 1 000 000 | 904 | 13,47 | 10 | 0,80 | 6 | — |
+| massiver Würfel 170 mm, 1 mm | 4 913 000 | 1 535 | 122,77 | 10 | 4,15 | 6 | — |
+
+Zeilen (a) bis (e): alle Felder und Spitzenwerte der Validierungsläufe stimmen mit denen von Jacobi überein (die Ausgaben
+der Validierungstests sind bis auf Gleichstände zwischen spiegelbildlichen Zellen, die 7. Stelle der Dehnung und Kt 3,2422 → 3,2421 bei der großen Platte identisch). Die
+Messlatte „Balken 96 × 6 × 6 mm bei 0,25 mm unter 100 Iterationen“ wird mit **27** erreicht (vorher 5 669), die Platte mit Bohrung
+bei 0,25 mm (399 488 Zellen) mit **38** (vorher 11 575). Die Rechenzeit sinkt bei den feinsten Gittern um den Faktor 19 bis 74, bei
+sehr groben bleibt sie gleich (unter 0,05 s ohnehin).
+
+Speicher am massiven Würfel mit 4,9 Millionen Zellen (`/usr/bin/time -l`, größter residenter Satz): **1,67 GB mit Multigrid, 1,57 GB
+mit Jacobi**, also +107 MB (+7 %); die Hierarchie braucht dort 22 Byte je Knoten der feinsten Ebene. In die Speicherschätzung geht sie
+mit 36 Byte je Knoten ein (siehe `engine.md`), weil dünne Körper, bei denen die Knotenzahl je Ebene nur um etwa 1/4 statt 1/8 fällt,
+mehr brauchen.
+
+**Gleichheit mit Jacobi** (Test `Stress: multigrid gives the Jacobi result …`, gleiche Toleranz 1e-6): größte Abweichung eines
+Zellwerts, bezogen auf das Maximum des Felds, bei Verschiebung und Vergleichsspannung höchstens 1,6e-7; Abweichung der größten
+Vergleichsspannung höchstens 1,1e-7 (Forderung des Tests: 1e-4). Fälle: Kragarm 24 × 4 × 4, 33 × 17 × 9 (ungerade, nx ≠ ny ≠ nz),
+30,5 × 7,5 × 5,5 bei 0,5 mm, Stab 200 × 2 × 2 und 101 × 3 × 3, Platte eine Zelle dick, z_factor 0,3, Lager nur an 2 × 2 Zellen,
+drei Punktlager an Knoten mit ungeradem Index, Hohlkasten mit Wand 2 und 1 Zelle, zwei getrennte Balken, L-Form aus zwei Teilen.
+
+| Robustheitsfall | Jacobi: Iterationen | Multigrid: Iterationen |
+|---|---|---|
+| Kragarm 33 × 17 × 9 (ungerade) | 196 | 11 |
+| Stab 200 × 2 × 2 | 2 849 | 11 |
+| **Platte eine Zelle dick, 60 × 40 × 1** | 1 495 | **71** |
+| z_factor 0,3 | 162 | 12 |
+| Lager nur an 2 × 2 Zellen | 532 | 20 |
+| drei Punktlager (ungerade Knoten) | 398 | 16 |
+| Hohlkasten, Wand 2 Zellen | 436 | 22 |
+| **Hohlkasten, Wand 1 Zelle** | 312 | **35** |
+| zwei getrennte Balken | 129 | 11 |
+| L-Form (leere Grobzellen) | 543 | 15 |
+
+Die schwächsten Fälle sind die mit Wänden von einer Zelle: dort ist die Grobgitter-Näherung (Teilfüllung als Steifigkeitsanteil) am
+gröbsten, der V-Zyklus bleibt trotzdem 20- bis 60-mal besser als Jacobi. Die Obergrenze im Test ist 150 Iterationen (großzügig).
+
+**Rückfall:** Scheitert der Aufbau der Hierarchie (zu wenig Speicherbudget, Ebenen werden nicht kleiner) oder wird ein Zyklus
+nicht positiv definit/nicht endlich oder wächst das Residuum auf mehr als das 10 000-fache der Last, rechnet der Löser mit Jacobi
+weiter (vom aktuellen Stand, bei Aufbaufehler von vorn) und meldet das in `warnings`. Getestet über einen Testschalter
+(`fault_for_test`, nicht im Protokoll) und mit einem Speicherbudget, das nur das Jacobi-Gerüst fasst. Bei einer **Stagnation** mit
+Multigrid wird nicht auf Jacobi gewechselt (es wäre langsamer); die Stagnationsregel beendet den Lauf wie zuvor mit einer Meldung.
+Bei der Abstimmung der Glättung (Polynomgrad 1 bis 4, Bereichsverhältnis 3 bis 8) war ein Parameter versehentlich leer
+(Verhältnis 0, der Polynomschritt nicht endlich): der Rückfall griff, der Lauf endete mit Jacobi und dem erwarteten Ergebnis.
+
 ## Befunde am Löser
 
 ### 1. Vorzeitiger Abbruch „stagniert“ (behoben)
@@ -199,16 +262,17 @@ mehr Zeit und Iterationen“ (Iterationsdeckel), „größere voxel_size“ und 
 (Balken 4 411 → 5 669 von 0,3 auf 0,25 mm). Hochrechnung (**Vermutung, nicht gemessen**): eine dünne Platte an der Zellgrenze von
 5 Millionen Zellen bräuchte etwa 22 000 Iterationen und rund 30 Minuten, also über dem Standard von `max_seconds` = 600 und knapp
 über dem Deckel. Deshalb **nicht geändert**: Bei solchen Größen entscheidet das Zeitlimit, und der Deckel schützt vor einem Lauf
-ohne Ende; die Meldung nennt jetzt beide Wege. Ein besserer Vorkonditionierer (Mehrgitter) wäre der richtige Hebel und ist nicht billig;
-ein 3×3-Blockjacobi wurde nicht versucht.
+ohne Ende; die Meldung nennt jetzt beide Wege. Der richtige Hebel war ein besserer Vorkonditionierer: mit dem Multigrid-Vorkonditionierer (Abschnitt oben) braucht
+dieselbe Platte 38 statt 11 575 Iterationen, ein 5-Millionen-Zellen-Körper etwa 10 statt über 1 500; die Hochrechnung gilt nur noch für `preconditioner: "jacobi"`.
+Ein 3×3-Blockjacobi wurde nicht versucht.
 
 Test: `Stress-Validierung: feine schlanke Gitter konvergieren statt mit Stagnation abzubrechen` (nur mit `ANANAS_STRESS_FULL=1`, etwa
-2 Minuten).
+2 Minuten; die Abschnitte „Jacobi“ erzwingen den Jacobi-Vorkonditionierer, damit die Regel weiter geprüft wird, die Abschnitte „Multigrid“ prüfen unter 100 Iterationen).
 
 ### 2. Iterationszahl wächst mit 1/Voxelgröße
 
 Platte 48 × 24 × 2 mm: 2 673 → 5 458 → 6 822 Iterationen bei 0,5 / 0,25 / 0,2 mm. Erwartet für CG mit Jacobi, gehört zur Aussage
-„feines Gitter ist teuer“.
+„feines Gitter ist teuer“; mit Multigrid bleibt die Zahl bei 9 bis 38 (Tabelle oben) und wächst kaum mit der Verfeinerung.
 
 ### 3. Auswertung nach dem Löser ohne Uhr (Doku angepasst)
 

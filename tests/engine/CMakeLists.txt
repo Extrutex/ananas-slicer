@@ -4,6 +4,7 @@ add_executable(${_TEST_NAME}_tests
     ${_TEST_NAME}_tests.cpp
     test_limits.cpp
     test_stress.cpp
+    test_stress_multigrid.cpp
     test_stress_validation.cpp
 )
 

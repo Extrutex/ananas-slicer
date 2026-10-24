@@ -284,6 +284,18 @@ def main():
                f"analyze.progress rises to 100 and carries the request id ({len(progress)} notifications)")
         expect(stress["grid"]["size"] == [40, 4, 4] and stress["solid_cells"] == 640, "the voxel grid is 40 x 4 x 4 cells")
         expect(stress["solver"]["converged"] and stress["solver"]["residual"] < 1e-5, "the solver converged")
+        expect(stress["solver"]["preconditioner"] == "multigrid" and stress["solver"]["levels"] >= 1,
+               f"the solver preconditions with multigrid by default ({stress['solver']})")
+        response, _ = engine.call("analyze.stress", {**request, "preconditioner": "jacobi"})
+        expect("result" in response and response["result"]["solver"]["preconditioner"] == "jacobi"
+               and response["result"]["solver"]["levels"] == 0
+               and abs(response["result"]["max_displacement"]["value"] - stress["max_displacement"]["value"]) < 1e-5,
+               "preconditioner jacobi gives the same displacement")
+        response, _ = engine.call("analyze.stress", request)  # only the latest analysis is kept: make it the default one again
+        stress = response["result"]
+        response, _ = engine.call("analyze.stress", {**request, "preconditioner": "ilu"})
+        expect(response["error"]["code"] == -32602 and "preconditioner" in response["error"]["message"],
+               "an unknown preconditioner answers -32602")
         # Beam theory with shear (Timoshenko): 5.04 mm. Four cells over the height give about 4 % less.
         tip = stress["max_displacement"]["value"]
         expect(4.6 < tip < 5.05, f"the tip deflection is close to beam theory ({tip:.3f} mm against 5.04)")

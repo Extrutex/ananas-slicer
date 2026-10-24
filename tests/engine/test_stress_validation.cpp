@@ -13,9 +13,11 @@
 #include "libslic3r/Triangulation.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <optional>
 #include <vector>
 
 using namespace Slic3r;
@@ -117,6 +119,29 @@ double rel_err(double value, double ref) { return (value - ref) / ref; }
 
 bool full_run() { return std::getenv("ANANAS_STRESS_FULL") != nullptr; }
 
+// Löst und gibt die Rechenzeit der ganzen Analyse aus (für die Vorher/Nachher-Tabelle in stress-validierung.md).
+// ANANAS_STRESS_PRECOND=jacobi rechnet mit dem Jacobi-Vorkonditionierer statt mit Multigrid (Vergleichsläufe).
+StressResult timed_solve(const StressInput& input, std::optional<StressPreconditioner> force = std::nullopt)
+{
+    StressInput in = input;
+    if (force)
+        in.preconditioner = *force;
+    else if (const char* choice = std::getenv("ANANAS_STRESS_PRECOND"))
+        in.preconditioner = std::string(choice) == "jacobi" ? StressPreconditioner::Jacobi : StressPreconditioner::Multigrid;
+    const auto   start = std::chrono::steady_clock::now();
+    StressResult r     = solve_stress(in);
+    std::printf("   Rechenzeit %.2f s, %zu Iterationen, %s (%zu Ebenen)\n", std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count(),
+                r.iterations, r.preconditioner == StressPreconditioner::Multigrid ? "Multigrid" : "Jacobi", r.multigrid_levels);
+    return r;
+}
+
+// Mit Multigrid bleiben die Iterationen klein (gemessen höchstens 33 bis 0,2 mm Voxel; Jacobi braucht bis zu 11 575).
+void check_iterations(const StressResult& r)
+{
+    if (r.preconditioner == StressPreconditioner::Multigrid)
+        CHECK(r.iterations < 150);
+}
+
 void note_warnings(const StressResult& r)
 {
     for (const auto& w : r.warnings)
@@ -141,7 +166,7 @@ struct PlateRun
     double reaction, applied;
 };
 
-PlateRun run_plate(double voxel, double W, double L, double t, double d, double F)
+PlateRun run_plate(double voxel, double W, double L, double t, double d, double F, std::optional<StressPreconditioner> force = std::nullopt)
 {
     ExPolygon ex(polygon_of({ { 0, 0 }, { L, 0 }, { L, W }, { 0, W } }));
     ex.holes.push_back(polygon_of(circle(L / 2, W / 2, d / 2, 240, false)));
@@ -164,7 +189,8 @@ PlateRun run_plate(double voxel, double W, double L, double t, double d, double 
     load.where = box(Vec3d(L, 0, 0), Vec3d(L, W, t));
     load.force = Vec3d(F, 0, 0);
     in.loads.push_back(load);
-    const StressResult r = solve_stress(in);
+    const StressResult r = timed_solve(in, force);
+    check_iterations(r);
     const double sigma = F / (W * t), dw = d / W;
     const double ktn = 3.00 - 3.140 * dw + 3.667 * dw * dw - 1.527 * dw * dw * dw, ktg = ktn / (1. - dw);
     PlateRun out{ voxel, r.max_von_mises, r.max_von_mises / sigma, rel_err(r.max_von_mises / sigma, ktg), r.iterations, r.converged,
@@ -252,9 +278,10 @@ StressInput three_point(const Bend& b, double voxel)
 
 struct BendRun { double deflection_error, stress_error; };
 
-BendRun run_bend(const Bend& b, double voxel)
+BendRun run_bend(const Bend& b, double voxel, std::optional<StressPreconditioner> force = std::nullopt)
 {
-    const StressResult r = solve_stress(three_point(b, voxel));
+    const StressResult r = timed_solve(three_point(b, voxel), force);
+    check_iterations(r);
     REQUIRE(r.converged);
     CHECK(r.reaction.z() == Catch::Approx(b.F).epsilon(1e-4));
     const double ref   = b.timoshenko();
@@ -364,7 +391,8 @@ TubeRun run_tube(double voxel)
     hold(-bo, 0, { false, true, true });
     hold(0, bo, { true, false, true });
     hold(0, -bo, { true, false, true });
-    const StressResult r = solve_stress(in);
+    const StressResult r = timed_solve(in);
+    check_iterations(r);
 
     const double k = p * a * a / (bo * bo - a * a);
     auto u_at  = [&](double rr) { return k * ((1 - nu) * rr + (1 + nu) * bo * bo / rr) / E; };
@@ -532,7 +560,8 @@ BracketRun run_bracket(double voxel, double beam_sigma_corner, double tip_low, d
     load.where = box(Vec3d(Lx, 0, 0), Vec3d(Lx, t, bw));
     load.force = Vec3d(0, -F, 0);
     in.loads.push_back(load);
-    const StressResult r = solve_stress(in);
+    const StressResult r = timed_solve(in);
+    check_iterations(r);
     // Nennspannung im Arm bei x = 3 t (weit von Ecke und Last) gegen die Zellmitten-Balkenspannung
     const double x = 3 * t, sb = 6. * F * (Lx - x) / (bw * t * t) * (1. - voxel / t);
     const double vt = r.von_mises[cell_index(r, Vec3d(x, t - voxel / 2, bw / 2))], vb = r.von_mises[cell_index(r, Vec3d(x, voxel / 2, bw / 2))];
@@ -582,32 +611,50 @@ TEST_CASE("Stress-Validierung: Winkelhalter, Spannungsmaximum an der inneren Eck
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Stagnationsregel des Lösers. Das CG-Residuum liegt bei feinen, schlanken Gittern tausende Iterationen auf einem Plateau,
-// bevor es fällt. Die alte Regel („1 % Verbesserung je 1000 Iterationen“) brach diese Läufe ab, obwohl gröbere Stufen
-// derselben Geometrie konvergierten. Gemessen ohne Regel: Balken 96 x 6 x 6 mm, Voxel 0,25: 5 669 Iterationen (alte Regel:
-// Abbruch bei 2 000, Residuum 0,844); Platte 80 x 40 x 2 mm mit Bohrung d = 10 mm, Voxel 0,25: 11 575 Iterationen (alte Regel:
-// Abbruch bei 3 000, Residuum 0,006). Rechenzeit etwa 30 s bzw. 90 s, daher nur mit ANANAS_STRESS_FULL.
+// Stagnationsregel des Lösers (mit Jacobi-Vorkonditionierer). Das CG-Residuum liegt bei feinen, schlanken Gittern tausende
+// Iterationen auf einem Plateau, bevor es fällt. Die alte Regel („1 % Verbesserung je 1000 Iterationen“) brach diese Läufe ab,
+// obwohl gröbere Stufen derselben Geometrie konvergierten. Gemessen mit Jacobi ohne Regel: Balken 96 x 6 x 6 mm, Voxel 0,25:
+// 5 669 Iterationen (alte Regel: Abbruch bei 2 000, Residuum 0,844); Platte 80 x 40 x 2 mm mit Bohrung d = 10 mm, Voxel 0,25:
+// 11 575 Iterationen (alte Regel: Abbruch bei 3 000, Residuum 0,006). Rechenzeit etwa 20 s bzw. 80 s, daher nur mit
+// ANANAS_STRESS_FULL. Dieselben Fälle mit Multigrid (Standard) stehen darunter: unter 100 Iterationen.
 TEST_CASE("Stress-Validierung: feine schlanke Gitter konvergieren statt mit Stagnation abzubrechen", "[Engine][Stress][Validation]")
 {
     if (!full_run()) {
         SKIP("nur mit ANANAS_STRESS_FULL (Minuten Rechenzeit)");
     }
-    SECTION("Balken 96 x 6 x 6 mm, Voxel 0,25")
+    SECTION("Jacobi: Balken 96 x 6 x 6 mm, Voxel 0,25")
     {
         Bend b;
         b.L = 96.;
         b.F = 50.;
-        const BendRun r = run_bend(b, 0.25); // verlangt Konvergenz
+        const BendRun r = run_bend(b, 0.25, StressPreconditioner::Jacobi); // verlangt Konvergenz
         CHECK(std::abs(r.deflection_error) < 0.02);
         CHECK(r.stress_error < 0.);
         CHECK(r.stress_error > -0.06);
     }
-    SECTION("Platte 80 x 40 x 2 mm mit Bohrung d = 10 mm, Voxel 0,25")
+    SECTION("Jacobi: Platte 80 x 40 x 2 mm mit Bohrung d = 10 mm, Voxel 0,25")
     {
-        const PlateRun r = run_plate(0.25, 40., 80., 2., 10., 800.);
+        const PlateRun r = run_plate(0.25, 40., 80., 2., 10., 800., StressPreconditioner::Jacobi);
         CHECK(r.converged);
         CHECK(r.iterations > 3000); // die alte Regel hätte vorher abgebrochen
         CHECK(r.iterations < 20000);
         CHECK(std::abs(r.error) < 0.03); // gemessen +0,5 %
+    }
+    SECTION("Multigrid: Balken 96 x 6 x 6 mm, Voxel 0,25")
+    {
+        Bend b;
+        b.L = 96.;
+        b.F = 50.;
+        const BendRun r = run_bend(b, 0.25, StressPreconditioner::Multigrid);
+        CHECK(std::abs(r.deflection_error) < 0.02);
+        CHECK(r.stress_error < 0.);
+        CHECK(r.stress_error > -0.06);
+    }
+    SECTION("Multigrid: Platte 80 x 40 x 2 mm mit Bohrung d = 10 mm, Voxel 0,25")
+    {
+        const PlateRun r = run_plate(0.25, 40., 80., 2., 10., 800., StressPreconditioner::Multigrid);
+        CHECK(r.converged);
+        CHECK(r.iterations < 100); // gemessen 33 (Jacobi 11 575)
+        CHECK(std::abs(r.error) < 0.03);
     }
 }

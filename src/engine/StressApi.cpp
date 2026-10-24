@@ -128,6 +128,12 @@ StressInput parse_stress_request(const json& params, Model& model)
     input.voxel_size = number(params.at("voxel_size"), "voxel_size");
     if (params.contains("tolerance"))
         input.tolerance = number(params.at("tolerance"), "tolerance");
+    if (params.contains("preconditioner")) {
+        const json& value = params.at("preconditioner");
+        if (!value.is_string() || (value.get<std::string>() != "multigrid" && value.get<std::string>() != "jacobi"))
+            invalid("\"preconditioner\" must be \"multigrid\" or \"jacobi\"");
+        input.preconditioner = value.get<std::string>() == "jacobi" ? StressPreconditioner::Jacobi : StressPreconditioner::Multigrid;
+    }
     if (params.contains("max_iterations")) {
         if (!params.at("max_iterations").is_number_unsigned())
             invalid("\"max_iterations\" must be a non-negative integer");
@@ -189,7 +195,11 @@ json stress_summary_json(size_t id, const StressResult& r)
              { "solid_cells", r.solid_cells },
              { "nodes", r.nodes },
              { "fixed_dofs", r.fixed_dofs },
-             { "solver", { { "iterations", r.iterations }, { "residual", r.residual }, { "converged", r.converged } } },
+             { "solver", { { "iterations", r.iterations },
+                           { "residual", r.residual },
+                           { "converged", r.converged },
+                           { "preconditioner", r.preconditioner == StressPreconditioner::Multigrid ? "multigrid" : "jacobi" },
+                           { "levels", r.multigrid_levels } } },
              { "max_von_mises", { { "value", r.max_von_mises }, { "at", v3(r.max_von_mises_at) } } },
              { "min_safety", { { "value", r.min_safety }, { "at", v3(r.min_safety_at) } } },
              { "max_displacement", { { "value", r.max_displacement }, { "at", v3(r.max_displacement_at) } } },

@@ -45,7 +45,7 @@ struct StressLoad
 
 // Server-side limits; the request cannot raise them. The memory need is about 330 bytes per cell of a compact body
 // (3 dof per node in 7 vectors of 8 bytes, the element and node index arrays, the result arrays), so 5 million cells
-// take roughly 1.7 GB.
+// take roughly 1.7 GB; the multigrid hierarchy adds about 7 % when it fits (otherwise Jacobi is used).
 constexpr size_t STRESS_MAX_CELLS      = 5000000;
 constexpr size_t STRESS_MAX_BYTES      = size_t(3) << 30;
 constexpr size_t STRESS_MAX_ITERATIONS = 20000;
@@ -61,6 +61,10 @@ constexpr double STRESS_MAX_FORCE      = 1e12;    // N, per component of a load 
 constexpr size_t STRESS_CHUNK_MAX_BYTES     = size_t(8) << 20;
 constexpr size_t STRESS_CHUNK_BYTES_PER_CELL = 25;
 
+// The preconditioner of the conjugate gradient. Multigrid is the default; Jacobi is the fallback (and the reference
+// the multigrid result is compared with).
+enum class StressPreconditioner { Multigrid, Jacobi };
+
 struct StressInput
 {
     std::vector<indexed_triangle_set> parts; // closed meshes in the analysis frame (the bed frame)
@@ -69,6 +73,8 @@ struct StressInput
     std::vector<StressSupport>        supports;
     std::vector<StressLoad>           loads;
     double                            tolerance{ 1e-6 };  // relative residual of the solver
+    StressPreconditioner              preconditioner{ StressPreconditioner::Multigrid };
+    int                               fault_for_test{ 0 }; // 1: the multigrid setup fails, 2: the first cycles give a non-finite result; not part of the protocol
     size_t                            max_iterations{ STRESS_MAX_ITERATIONS }; // capped at STRESS_MAX_ITERATIONS
     size_t                            max_cells{ STRESS_MAX_CELLS };               // cells of the voxel grid (solid or not)
     size_t                            max_bytes{ STRESS_MAX_BYTES };               // estimated memory of the analysis
@@ -97,6 +103,8 @@ struct StressResult
     size_t iterations{ 0 };
     double residual{ 0. }; // final relative residual
     bool   converged{ false };
+    StressPreconditioner preconditioner{ StressPreconditioner::Jacobi }; // what the solver ended up using (multigrid may fall back to Jacobi)
+    size_t multigrid_levels{ 0 };                                         // levels of the hierarchy including the finest, 0 for Jacobi
 
     double max_von_mises{ 0. };
     Vec3d  max_von_mises_at{ Vec3d::Zero() };
@@ -117,7 +125,7 @@ using StressProgress = std::function<void(int, const std::string&)>;
 
 // Linear elastic analysis: voxelizes the closed meshes into a cubic grid (a cell is solid when its centre is
 // inside), meshes the solid with trilinear hexahedra, and solves K u = f with a matrix-free conjugate
-// gradient (Jacobi preconditioner). Stress is the value at the element centre. Throws EngineError: invalid
+// gradient (geometric multigrid V cycle as preconditioner, Jacobi as fallback). Stress is the value at the element centre. Throws EngineError: invalid
 // params for a bad input, engine error for a mesh that is not watertight, a model without volume or a solver
 // that does not converge (the supports must hold all three translations and rotations, which is checked up front, per
 // piece, so a failure to converge afterwards means a fine or slender grid, a joint the check cannot see, or too little

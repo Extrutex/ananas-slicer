@@ -2,6 +2,7 @@
 
 #include "Engine.hpp"
 
+#include <Eigen/Cholesky>
 #include <Eigen/Eigenvalues>
 
 #include <tbb/blocked_range.h>
@@ -524,39 +525,69 @@ void distribute_load(const Selected& selected, const Vec3d& force, std::vector<d
 
 // ---- the solver -----------------------------------------------------------------------------------------
 
+// The stiffness operator of one level, matrix-free: the elements of the level (eight nodes each, `weight` scales an
+// element's stiffness, null for the unscaled finest level) and the elements around each node.
 struct Operator
 {
-    const Body&           body;
-    std::vector<double>   ke;    // 24 x 24, row-major
-    const std::vector<uint8_t>& fixed; // per dof
+    size_t         n_nodes{ 0 };
+    const uint32_t* elem_nodes{ nullptr }; // 8 solver nodes per element, local order x fastest
+    const uint32_t* adjacent{ nullptr };   // 8 per node: the element in which the node has local index k, or NONE
+    const float*   weight{ nullptr };      // per element, or null for 1
+    const double*  ke{ nullptr };          // 24 x 24, row-major
+    const uint8_t* fixed{ nullptr };       // per dof
 
     // y = K x. With `masked`, the fixed dofs of x are taken as zero and those of y are zeroed (the operator of
-    // the free dofs); without, y carries the reactions at the fixed dofs.
-    void apply(const std::vector<double>& x, std::vector<double>& y, bool masked) const
+    // the free dofs); without, y carries the reactions at the fixed dofs. With `subtract`, y -= K x instead
+    // (masked only; the fixed dofs of y stay as they are).
+    void apply(const double* x, double* y, bool masked, bool subtract = false) const
     {
-        const size_t n_nodes = body.node_full.size();
+        if (weight)
+            apply_impl<true>(x, y, masked, subtract);
+        else
+            apply_impl<false>(x, y, masked, subtract);
+    }
+    void apply(const std::vector<double>& x, std::vector<double>& y, bool masked) const { apply(x.data(), y.data(), masked, false); }
+
+private:
+    template<bool Weighted> void apply_impl(const double* x, double* y, bool masked, bool subtract) const
+    {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, n_nodes, 1024), [&](const tbb::blocked_range<size_t>& range) {
             for (size_t n = range.begin(); n != range.end(); ++n) {
                 double acc[3] = { 0., 0., 0. };
                 for (int k = 0; k < 8; ++k) {
-                    const uint32_t e = body.adjacent[n * 8 + k];
+                    const uint32_t e = adjacent[n * 8 + k];
                     if (e == NONE)
                         continue;
-                    const uint32_t* nodes = &body.elem_nodes[size_t(e) * 8];
+                    const uint32_t* nodes = &elem_nodes[size_t(e) * 8];
+                    const double    w     = Weighted ? double(weight[e]) : 1.;
                     for (int j = 0; j < 8; ++j) {
                         const double* xm = &x[3 * size_t(nodes[j])];
                         for (int a = 0; a < 3; ++a) {
                             const double* row = &ke[size_t(3 * k + a) * 24 + 3 * j];
-                            acc[a] += row[0] * xm[0] + row[1] * xm[1] + row[2] * xm[2];
+                            if constexpr (Weighted)
+                                acc[a] += w * (row[0] * xm[0] + row[1] * xm[1] + row[2] * xm[2]);
+                            else
+                                acc[a] += row[0] * xm[0] + row[1] * xm[1] + row[2] * xm[2];
                         }
                     }
                 }
-                for (int a = 0; a < 3; ++a)
-                    y[3 * n + a] = masked && fixed[3 * n + a] ? 0. : acc[a];
+                for (int a = 0; a < 3; ++a) {
+                    const bool held = masked && fixed[3 * n + a];
+                    if (subtract) {
+                        if (!held)
+                            y[3 * n + a] -= acc[a];
+                    } else
+                        y[3 * n + a] = held ? 0. : acc[a];
+                }
             }
         });
     }
 };
+
+Operator fine_operator(const Body& body, const std::vector<double>& ke, const std::vector<uint8_t>& fixed)
+{
+    return { body.node_full.size(), body.elem_nodes.data(), body.adjacent.data(), nullptr, ke.data(), fixed.data() };
+}
 
 double dot(const std::vector<double>& a, const std::vector<double>& b)
 {
@@ -565,6 +596,456 @@ double dot(const std::vector<double>& a, const std::vector<double>& b)
         s += a[i] * b[i];
     return s;
 }
+
+// ---- geometric multigrid ----------------------------------------------------------------------------------
+//
+// One V cycle is the preconditioner of the conjugate gradient. The coarse levels are the voxel grid with 2 x 2 x 2 cells
+// joined (rediscretised, not a Galerkin product, so no matrix is ever stored): a coarse cell is a cube of twice the edge
+// whose stiffness is the share of its eight children that are solid times twice the fine element matrix (the element
+// matrix of a cube grows with its edge). A cell without solid children is empty, a half-filled one is half as stiff, so
+// holes, thin walls and several separate parts keep their coarse stiffness in proportion. Transfer is trilinear
+// (the restriction is its transpose), a coarse node is held where a fine node within one fine cell of it is held, and
+// the coarsest level is solved directly (a small dense system). Smoothing is a Chebyshev polynomial of the Jacobi-scaled
+// operator, the same before and after the coarse correction and started from zero: the cycle is then a symmetric,
+// positive operator, which the conjugate gradient needs.
+
+constexpr size_t MG_COARSEST_DOFS = 1500; // direct solve at or below this many dofs
+constexpr size_t MG_MAX_LEVELS    = 32;
+constexpr double MG_BYTES_PER_NODE = 36.; // estimate of the hierarchy per solver node of the finest level
+constexpr int    MG_POWER_ITERATIONS = 15;
+
+// Smoothing: Chebyshev polynomial of degree 2 over [lambda_max / 4, lambda_max] of D^-1 K (lambda_max from a power
+// iteration, 10 % added). Measured on beams, plates, tubes, brackets, hollow boxes and cubes: degree 1 to 4 and ratios
+// 3 to 8 are within 20 % of each other in time; degree 2 and ratio 4 is the cheapest per cycle that keeps the iterations low.
+struct MgTune
+{
+    int    degree{ 2 };
+    double ratio{ 4. };
+    double lambda_safety{ 1.1 };
+};
+
+struct MgUnavailable : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
+template<class F> void parallel_range(size_t n, F&& f)
+{
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, n, 4096), [&](const tbb::blocked_range<size_t>& r) { f(r.begin(), r.end()); });
+}
+
+// What the transfer between two levels needs to know about a level.
+struct LevelRef
+{
+    size_t          nx{ 0 }, ny{ 0 }, nz{ 0 }; // cells
+    const uint32_t* active{ nullptr };         // full node index -> solver node, NONE when unused
+    const uint32_t* node_full{ nullptr };      // solver node -> full node index
+    size_t          n_nodes{ 0 };
+
+    size_t full_index(size_t i, size_t j, size_t k) const { return i + (nx + 1) * (j + (ny + 1) * k); }
+    void   ijk(size_t node, size_t out[3]) const
+    {
+        const size_t full = node_full[node];
+        out[0]            = full % (nx + 1);
+        out[1]            = (full / (nx + 1)) % (ny + 1);
+        out[2]            = full / ((nx + 1) * (ny + 1));
+    }
+};
+
+struct MgLevel
+{
+    size_t                nx{ 0 }, ny{ 0 }, nz{ 0 };
+    std::vector<uint32_t> active, node_full, elem_nodes, adjacent;
+    std::vector<float>    weight;
+    std::vector<double>   ke, inv_diag, x, b, res, d;
+    std::vector<uint8_t>  fixed;
+    LevelRef ref() const { return { nx, ny, nz, active.data(), node_full.data(), node_full.size() }; }
+    Operator op() const { return { node_full.size(), elem_nodes.data(), adjacent.data(), weight.data(), ke.data(), fixed.data() }; }
+    size_t bytes() const
+    {
+        return active.capacity() * 4 + node_full.capacity() * 4 + elem_nodes.capacity() * 4 + adjacent.capacity() * 4 + weight.capacity() * 4 +
+               (ke.capacity() + inv_diag.capacity() + x.capacity() + b.capacity() + res.capacity() + d.capacity()) * 8 + fixed.capacity();
+    }
+};
+
+// A level as the cycle sees it. The finest level works on the vectors of the conjugate gradient.
+struct MgView
+{
+    Operator       op;
+    LevelRef       ref;
+    const double*  inv_diag{ nullptr };
+    const uint8_t* fixed{ nullptr };
+    size_t         n_elems{ 0 };
+    double         lambda{ 1. }; // upper bound of the spectrum of D^-1 K
+    double *x{ nullptr }, *b{ nullptr }, *res{ nullptr }, *d{ nullptr };
+    size_t n_dofs() const { return 3 * ref.n_nodes; }
+};
+
+// The cells of the next coarser grid: the share of solid children, a cell outside the finer grid counts as empty.
+std::vector<float> coarsen_weights(size_t nx, size_t ny, size_t nz, const std::vector<float>& fine, size_t& cx, size_t& cy, size_t& cz, Deadline& deadline)
+{
+    cx = (nx + 1) / 2;
+    cy = (ny + 1) / 2;
+    cz = (nz + 1) / 2;
+    std::vector<float> out(cx * cy * cz, 0.f);
+    for (size_t K = 0; K < cz; ++K)
+        for (size_t J = 0; J < cy; ++J) {
+            deadline.tick("building the multigrid hierarchy");
+            for (size_t I = 0; I < cx; ++I) {
+                float sum = 0.f;
+                for (size_t c = 2 * K; c < std::min(2 * K + 2, nz); ++c)
+                    for (size_t bb = 2 * J; bb < std::min(2 * J + 2, ny); ++bb)
+                        for (size_t a = 2 * I; a < std::min(2 * I + 2, nx); ++a)
+                            sum += fine[a + nx * (bb + ny * c)];
+                out[I + cx * (J + cy * K)] = sum / 8.f;
+            }
+        }
+    return out;
+}
+
+// Nodes, elements and the element neighbourhood of a level from its cell weights (cells with weight 0 are empty).
+void build_level(MgLevel& L, size_t nx, size_t ny, size_t nz, const std::vector<float>& cw, const std::vector<double>& ke, Deadline& deadline)
+{
+    L.nx = nx;
+    L.ny = ny;
+    L.nz = nz;
+    const size_t node_count = (nx + 1) * (ny + 1) * (nz + 1);
+    const auto   node       = [&](size_t i, size_t j, size_t k) { return i + (nx + 1) * (j + (ny + 1) * k); };
+    std::vector<uint8_t> used(node_count, 0);
+    for (size_t k = 0; k < nz; ++k)
+        for (size_t j = 0; j < ny; ++j) {
+            deadline.tick("building the multigrid hierarchy");
+            for (size_t i = 0; i < nx; ++i)
+                if (cw[i + nx * (j + ny * k)] > 0.f)
+                    for (int n = 0; n < 8; ++n)
+                        used[node(i + (n & 1), j + ((n >> 1) & 1), k + ((n >> 2) & 1))] = 1;
+        }
+    L.active.assign(node_count, NONE);
+    for (size_t n = 0; n < node_count; ++n)
+        if (used[n]) {
+            L.active[n] = uint32_t(L.node_full.size());
+            L.node_full.push_back(uint32_t(n));
+        }
+    for (size_t k = 0; k < nz; ++k)
+        for (size_t j = 0; j < ny; ++j) {
+            deadline.tick("building the multigrid hierarchy");
+            for (size_t i = 0; i < nx; ++i) {
+                const float w = cw[i + nx * (j + ny * k)];
+                if (w > 0.f) {
+                    L.weight.push_back(w);
+                    for (int n = 0; n < 8; ++n)
+                        L.elem_nodes.push_back(L.active[node(i + (n & 1), j + ((n >> 1) & 1), k + ((n >> 2) & 1))]);
+                }
+            }
+        }
+    L.adjacent.assign(L.node_full.size() * 8, NONE);
+    for (size_t e = 0; e < L.weight.size(); ++e)
+        for (int n = 0; n < 8; ++n)
+            L.adjacent[size_t(L.elem_nodes[e * 8 + n]) * 8 + n] = uint32_t(e);
+    L.ke = ke;
+    const size_t dofs = 3 * L.node_full.size();
+    L.fixed.assign(dofs, 0);
+    L.inv_diag.assign(dofs, 1.);
+    L.x.assign(dofs, 0.);
+    L.b.assign(dofs, 0.);
+    L.res.assign(dofs, 0.);
+    L.d.assign(dofs, 0.);
+}
+
+// A coarse node is held (per component) where a fine node within one fine cell of it is held.
+void coarse_fixed(const LevelRef& fine, const uint8_t* fine_fixed, const LevelRef& coarse, uint8_t* out)
+{
+    parallel_range(coarse.n_nodes, [&](size_t begin, size_t end) {
+        for (size_t cn = begin; cn != end; ++cn) {
+            size_t ijk[3];
+            coarse.ijk(cn, ijk);
+            for (int c = -1; c <= 1; ++c)
+                for (int b = -1; b <= 1; ++b)
+                    for (int a = -1; a <= 1; ++a) {
+                        const long fi = 2 * long(ijk[0]) + a, fj = 2 * long(ijk[1]) + b, fk = 2 * long(ijk[2]) + c;
+                        if (fi < 0 || fj < 0 || fk < 0 || fi > long(fine.nx) || fj > long(fine.ny) || fk > long(fine.nz))
+                            continue;
+                        const uint32_t fn = fine.active[fine.full_index(size_t(fi), size_t(fj), size_t(fk))];
+                        if (fn == NONE)
+                            continue;
+                        for (int comp = 0; comp < 3; ++comp)
+                            if (fine_fixed[3 * size_t(fn) + comp])
+                                out[3 * cn + comp] = 1;
+                    }
+        }
+    });
+}
+
+void level_inv_diag(MgLevel& L)
+{
+    parallel_range(L.node_full.size(), [&](size_t begin, size_t end) {
+        for (size_t node = begin; node != end; ++node)
+            for (int a = 0; a < 3; ++a) {
+                double d = 0.;
+                for (int k = 0; k < 8; ++k) {
+                    const uint32_t e = L.adjacent[node * 8 + k];
+                    if (e != NONE)
+                        d += double(L.weight[e]) * L.ke[size_t(3 * k + a) * 24 + 3 * k + a];
+                }
+                L.inv_diag[3 * node + a] = L.fixed[3 * node + a] ? 1. : 1. / d;
+            }
+    });
+}
+
+// r_coarse = R r_fine, with R the transpose of the trilinear interpolation; held coarse dofs get 0.
+void mg_restrict(const LevelRef& fine, const double* rf, const LevelRef& coarse, const uint8_t* coarse_fixed_dofs, double* bc)
+{
+    parallel_range(coarse.n_nodes, [&](size_t begin, size_t end) {
+        for (size_t cn = begin; cn != end; ++cn) {
+            size_t ijk[3];
+            coarse.ijk(cn, ijk);
+            double acc[3] = { 0., 0., 0. };
+            for (int c = -1; c <= 1; ++c)
+                for (int b = -1; b <= 1; ++b)
+                    for (int a = -1; a <= 1; ++a) {
+                        const long fi = 2 * long(ijk[0]) + a, fj = 2 * long(ijk[1]) + b, fk = 2 * long(ijk[2]) + c;
+                        if (fi < 0 || fj < 0 || fk < 0 || fi > long(fine.nx) || fj > long(fine.ny) || fk > long(fine.nz))
+                            continue;
+                        const uint32_t fn = fine.active[fine.full_index(size_t(fi), size_t(fj), size_t(fk))];
+                        if (fn == NONE)
+                            continue;
+                        const double w = (a ? 0.5 : 1.) * (b ? 0.5 : 1.) * (c ? 0.5 : 1.);
+                        for (int comp = 0; comp < 3; ++comp)
+                            acc[comp] += w * rf[3 * size_t(fn) + comp];
+                    }
+            for (int comp = 0; comp < 3; ++comp)
+                bc[3 * cn + comp] = coarse_fixed_dofs[3 * cn + comp] ? 0. : acc[comp];
+        }
+    });
+}
+
+// x_fine += P x_coarse (trilinear); held fine dofs stay as they are.
+void mg_prolong_add(const LevelRef& fine, const uint8_t* fine_fixed, double* xf, const LevelRef& coarse, const double* xc)
+{
+    parallel_range(fine.n_nodes, [&](size_t begin, size_t end) {
+        for (size_t fn = begin; fn != end; ++fn) {
+            size_t ijk[3];
+            fine.ijk(fn, ijk);
+            size_t idx[3][2];
+            double wt[3][2];
+            int    cnt[3];
+            for (int d = 0; d < 3; ++d) {
+                if ((ijk[d] & 1) == 0) {
+                    idx[d][0] = ijk[d] / 2;
+                    wt[d][0]  = 1.;
+                    cnt[d]    = 1;
+                } else {
+                    idx[d][0] = (ijk[d] - 1) / 2;
+                    idx[d][1] = (ijk[d] + 1) / 2;
+                    wt[d][0] = wt[d][1] = 0.5;
+                    cnt[d]              = 2;
+                }
+            }
+            double acc[3] = { 0., 0., 0. };
+            for (int c = 0; c < cnt[2]; ++c)
+                for (int b = 0; b < cnt[1]; ++b)
+                    for (int a = 0; a < cnt[0]; ++a) {
+                        const uint32_t cn = coarse.active[coarse.full_index(idx[0][a], idx[1][b], idx[2][c])];
+                        if (cn == NONE)
+                            continue;
+                        const double w = wt[0][a] * wt[1][b] * wt[2][c];
+                        for (int comp = 0; comp < 3; ++comp)
+                            acc[comp] += w * xc[3 * size_t(cn) + comp];
+                    }
+            for (int comp = 0; comp < 3; ++comp)
+                if (!fine_fixed[3 * fn + comp])
+                    xf[3 * fn + comp] += acc[comp];
+        }
+    });
+}
+
+// Largest eigenvalue of D^-1 K on the free dofs: power iteration with the Rayleigh quotient (a lower bound that is close
+// after a few steps because the top of the spectrum is clustered); v and kv are scratch of the size of the dof vector.
+double mg_lambda_max(const MgView& view, double* v, double* kv)
+{
+    const size_t n = view.n_dofs();
+    for (size_t i = 0; i < n; ++i)
+        v[i] = view.fixed[i] ? 0. : 0.5 + double((uint32_t(i) * 2654435761u) >> 8 & 0xFFFFu) / 65535.;
+    double lambda = 1.;
+    for (int it = 0; it < MG_POWER_ITERATIONS; ++it) {
+        view.op.apply(v, kv, true);
+        double num = 0., den = 0.;
+        for (size_t i = 0; i < n; ++i) {
+            num += v[i] * kv[i];
+            den += v[i] * v[i] / view.inv_diag[i];
+        }
+        if (!(num > 0.) || !(den > 0.))
+            return lambda;
+        lambda = num / den;
+        double norm = 0.;
+        for (size_t i = 0; i < n; ++i) {
+            v[i] = view.inv_diag[i] * kv[i];
+            norm += v[i] * v[i];
+        }
+        norm = std::sqrt(norm);
+        if (!(norm > 0.) || !std::isfinite(norm))
+            return lambda;
+        for (size_t i = 0; i < n; ++i)
+            v[i] /= norm;
+    }
+    return lambda;
+}
+
+// Chebyshev iteration for K x = b on [lambda / ratio, lambda] of D^-1 K, `degree` steps, from x = 0 or from the given x.
+void mg_chebyshev(const MgView& view, const MgTune& tune, bool zero_start)
+{
+    const size_t n = view.n_dofs();
+    double *x = view.x, *res = view.res, *d = view.d;
+    const double *b = view.b, *inv = view.inv_diag;
+    const double hi = view.lambda, lo = view.lambda / tune.ratio;
+    const double theta = 0.5 * (hi + lo), delta = 0.5 * (hi - lo), sigma = theta / delta;
+    if (zero_start) {
+        parallel_range(n, [&](size_t begin, size_t end) {
+            for (size_t i = begin; i != end; ++i) {
+                x[i]   = 0.;
+                res[i] = b[i];
+            }
+        });
+    } else {
+        std::copy(b, b + n, res);
+        view.op.apply(x, res, true, true);
+    }
+    parallel_range(n, [&](size_t begin, size_t end) {
+        for (size_t i = begin; i != end; ++i)
+            d[i] = inv[i] * res[i] / theta;
+    });
+    double rho = 1. / sigma;
+    for (int step = 0; step < tune.degree; ++step) {
+        parallel_range(n, [&](size_t begin, size_t end) {
+            for (size_t i = begin; i != end; ++i)
+                x[i] += d[i];
+        });
+        if (step + 1 == tune.degree)
+            break;
+        view.op.apply(d, res, true, true);
+        const double rho_new = 1. / (2. * sigma - rho);
+        const double c1 = rho_new * rho, c2 = 2. * rho_new / delta;
+        parallel_range(n, [&](size_t begin, size_t end) {
+            for (size_t i = begin; i != end; ++i)
+                d[i] = c1 * d[i] + c2 * inv[i] * res[i];
+        });
+        rho = rho_new;
+    }
+}
+
+struct Multigrid
+{
+    std::vector<MgLevel> levels; // the coarse levels, finest first (reserved up front: the views point into it)
+    std::vector<MgView>  views;  // views[0] is the finest level
+    Eigen::LDLT<Eigen::MatrixXd> coarsest;
+    MgTune  tune;
+    size_t  bytes{ 0 };
+    Deadline* deadline{ nullptr };
+    bool    timed_out{ false };
+    int     fault{ 0 }; // test hook: 1 = pretend the cycle fails
+
+    size_t level_count() const { return views.size(); }
+
+    // Builds the hierarchy under the finest level `fine_view`. `budget` bounds the bytes the hierarchy may take;
+    // MgUnavailable when it does not fit or the levels do not shrink.
+    void build(const Body& body, const std::vector<double>& fine_ke, size_t budget, MgView fine_view, Deadline& dl)
+    {
+        deadline = &dl;
+        levels.reserve(MG_MAX_LEVELS);
+        views.clear();
+        views.push_back(fine_view);
+        std::vector<float> cw(body.solid.begin(), body.solid.end());
+        size_t nx = body.grid.nx, ny = body.grid.ny, nz = body.grid.nz;
+        double scale = 1.;
+        while (views.back().n_dofs() > MG_COARSEST_DOFS) {
+            if (levels.size() + 1 >= MG_MAX_LEVELS)
+                throw MgUnavailable("too many multigrid levels");
+            size_t cx, cy, cz;
+            cw = coarsen_weights(nx, ny, nz, cw, cx, cy, cz, dl);
+            nx = cx;
+            ny = cy;
+            nz = cz;
+            scale *= 2.;
+            std::vector<double> ke(fine_ke);
+            for (double& v : ke)
+                v *= scale;
+            levels.emplace_back();
+            MgLevel& L = levels.back();
+            build_level(L, nx, ny, nz, cw, ke, dl);
+            const MgView& prev = views.back();
+            coarse_fixed(prev.ref, prev.fixed, L.ref(), L.fixed.data());
+            level_inv_diag(L);
+            bytes += L.bytes();
+            if (bytes + cw.capacity() * 4 > budget)
+                throw MgUnavailable("the multigrid hierarchy does not fit into the memory budget");
+            if (L.node_full.size() * 10 > prev.ref.n_nodes * 9)
+                throw MgUnavailable("the multigrid levels do not get smaller");
+            MgView v;
+            v.op       = L.op();
+            v.ref      = L.ref();
+            v.inv_diag = L.inv_diag.data();
+            v.fixed    = L.fixed.data();
+            v.n_elems  = L.weight.size();
+            v.x = L.x.data(); v.b = L.b.data(); v.res = L.res.data(); v.d = L.d.data();
+            views.push_back(v);
+        }
+        // The smoothing range of every level except the coarsest, which is solved directly.
+        for (size_t l = 0; l + 1 < views.size(); ++l) {
+            MgView& v = views[l];
+            v.lambda  = tune.lambda_safety * mg_lambda_max(v, v.x, v.res);
+        }
+        assemble_coarsest(views.back());
+    }
+
+    void assemble_coarsest(const MgView& v)
+    {
+        const size_t n = v.n_dofs();
+        Eigen::MatrixXd M = Eigen::MatrixXd::Zero(n, n);
+        for (size_t e = 0; e < v.n_elems; ++e) {
+            const double w = v.op.weight ? double(v.op.weight[e]) : 1.;
+            for (int i = 0; i < 8; ++i)
+                for (int j = 0; j < 8; ++j)
+                    for (int a = 0; a < 3; ++a)
+                        for (int c = 0; c < 3; ++c)
+                            M(3 * size_t(v.op.elem_nodes[e * 8 + i]) + a, 3 * size_t(v.op.elem_nodes[e * 8 + j]) + c) +=
+                                w * v.op.ke[size_t(3 * i + a) * 24 + 3 * j + c];
+        }
+        for (size_t i = 0; i < n; ++i)
+            if (v.fixed[i]) {
+                M.row(i).setZero();
+                M.col(i).setZero();
+                M(i, i) = 1.;
+            }
+        coarsest.compute(M);
+    }
+
+    // x_l = B_l b_l. Returns false when the clock ran out.
+    bool cycle(size_t l)
+    {
+        MgView& v = views[l];
+        if (l + 1 == views.size()) {
+            const size_t n = v.n_dofs();
+            Eigen::Map<const Eigen::VectorXd> rhs(v.b, long(n));
+            Eigen::Map<Eigen::VectorXd>       sol(v.x, long(n));
+            sol = coarsest.solve(rhs);
+            return true;
+        }
+        if (deadline->expired()) {
+            timed_out = true;
+            return false;
+        }
+        mg_chebyshev(v, tune, true);
+        std::copy(v.b, v.b + v.n_dofs(), v.res);
+        v.op.apply(v.x, v.res, true, true);
+        MgView& c = views[l + 1];
+        mg_restrict(v.ref, v.res, c.ref, c.fixed, c.b);
+        if (!cycle(l + 1))
+            return false;
+        mg_prolong_add(v.ref, v.fixed, v.x, c.ref, c.x);
+        mg_chebyshev(v, tune, false);
+        return true;
+    }
+};
 
 // Number of face-connected groups of solid cells.
 size_t face_components(const Body& body, Deadline& deadline)
@@ -974,7 +1455,7 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
     const Mat6  D  = elasticity(mat);
     const Mat24 Ke = element_stiffness(grid.h, D);
     std::vector<double> ke(Ke.data(), Ke.data() + 576);
-    const Operator op{ b, ke, fixed };
+    const Operator op = fine_operator(b, ke, fixed);
 
     std::vector<double> inv_diag(n_dofs, 1.);
     for (size_t node = 0; node < n_nodes; ++node)
@@ -986,17 +1467,77 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
             inv_diag[3 * node + a] = fixed[3 * node + a] ? 1. : 1. / d;
         }
 
-    report(15, "Solving");
+    // ---- the preconditioner
+    // Multigrid needs the hierarchy (about 32 bytes per solver node on top of the Jacobi footprint, measured with
+    // the share of the levels); when it does not fit into the memory budget or cannot be built, the solver uses Jacobi.
+    // The vectors of the conjugate gradient that are idle while the cycle runs serve as its scratch: q, and f (after the
+    // start of the iteration only its norm is used).
+    Multigrid           mg;
+    bool                use_mg = input.preconditioner == StressPreconditioner::Multigrid;
+    const auto          fall_back = [&](const std::string& why) {
+        use_mg = false;
+        mg     = Multigrid();
+        result.warnings.push_back("The multigrid preconditioner was not used (" + why + "); the solver runs with the Jacobi preconditioner, which needs many more iterations.");
+    };
     std::vector<double> u(n_dofs, 0.), r = f, z(n_dofs), p(n_dofs), q(n_dofs);
-    for (size_t i = 0; i < n_dofs; ++i)
-        z[i] = inv_diag[i] * r[i];
+    if (use_mg) {
+        report(12, "Building the multigrid hierarchy");
+        const double budget = byte_limit - memory_estimate - 4. * double(grid.cells());
+        try {
+            if (input.fault_for_test == 1)
+                throw MgUnavailable("test fault");
+            if (budget <= 0. || double(n_nodes) * MG_BYTES_PER_NODE > budget)
+                throw MgUnavailable("not enough memory budget left for the hierarchy");
+            MgView fine;
+            fine.op       = op;
+            fine.ref      = { grid.nx, grid.ny, grid.nz, b.active.data(), b.node_full.data(), n_nodes };
+            fine.inv_diag = inv_diag.data();
+            fine.fixed    = fixed.data();
+            fine.n_elems  = b.elem_cell.size();
+            fine.x = z.data(); fine.b = r.data(); fine.res = q.data(); fine.d = f.data();
+            mg.build(b, ke, size_t(budget), fine, deadline);
+            mg.fault = input.fault_for_test;
+        } catch (const MgUnavailable& e) {
+            fall_back(e.what());
+        } catch (const std::bad_alloc&) {
+            fall_back("not enough memory for the hierarchy");
+        }
+    }
+    result.preconditioner    = use_mg ? StressPreconditioner::Multigrid : StressPreconditioner::Jacobi;
+    result.multigrid_levels  = use_mg ? mg.level_count() : 0;
+    // z = M^-1 r. False when the clock ran out inside a multigrid cycle.
+    size_t cycles = 0;
+    const auto precondition = [&]() -> bool {
+        if (!use_mg) {
+            for (size_t i = 0; i < n_dofs; ++i)
+                z[i] = inv_diag[i] * r[i];
+            return true;
+        }
+        if (!mg.cycle(0))
+            return false;
+        if (mg.fault == 2 && ++cycles >= 3)
+            z[0] = std::numeric_limits<double>::quiet_NaN();
+        return true;
+    };
+
+    report(15, "Solving");
+    if (!precondition()) {
+        failed("the time limit of " + Deadline::format_seconds(max_seconds) + " s was reached while preparing the solver; use a larger voxel_size or a higher max_seconds");
+    }
     p = z;
     double rz = dot(r, z), r_norm = f_norm;
+    if (use_mg && !(rz > 0. && std::isfinite(rz))) {
+        fall_back("the first cycle did not give a positive definite result");
+        precondition();
+        p  = z;
+        rz = dot(r, z);
+    }
     int    last_percent = 15;
     // Stagnation: the residual of a conjugate gradient run is not monotone and on slender or fine grids it sits on a
-    // plateau for thousands of iterations before it falls again (measured: a 96 x 6 x 6 mm beam at 0.25 mm stays near 1
-    // for 2 500 iterations and converges after 5 669; a plate with a hole at 0.25 mm has its best residual flat for 2 000
-    // iterations at 7 500 to 9 500 and converges after 11 575). A fixed window of 1 000 iterations cut such runs off.
+    // plateau for thousands of iterations before it falls again (measured with Jacobi: a 96 x 6 x 6 mm beam at 0.25 mm
+    // stays near 1 for 2 500 iterations and converges after 5 669; a plate with a hole at 0.25 mm has its best residual
+    // flat for 2 000 iterations at 7 500 to 9 500 and converges after 11 575). A fixed window of 1 000 iterations cut such
+    // runs off.
     // The run counts as stalled only when the best residual has fallen by less than 1 % over a long window: at least
     // STAGNATION_MIN_WINDOW iterations and at least half of all iterations so far, so the window grows with the run.
     // A real mechanism (a residual floor from a load in the null space of the stiffness) is cut off after
@@ -1022,13 +1563,7 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         for (size_t i = 0; i < n_dofs; ++i) {
             u[i] += alpha * p[i];
             r[i] -= alpha * q[i];
-            z[i] = inv_diag[i] * r[i];
         }
-        const double rz_new = dot(r, z);
-        const double beta   = rz_new / rz;
-        rz                  = rz_new;
-        for (size_t i = 0; i < n_dofs; ++i)
-            p[i] = z[i] + beta * p[i];
         r_norm = std::sqrt(dot(r, r));
         ++result.iterations;
         if (!std::isfinite(r_norm)) {
@@ -1036,6 +1571,26 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
             break;
         }
         best = std::min(best, r_norm);
+        if (r_norm <= input.tolerance * f_norm) {
+            result.converged = true;
+            break;
+        }
+        if (!precondition()) {
+            timed_out = true;
+            break;
+        }
+        double rz_new = dot(r, z);
+        // A multigrid cycle that is not positive definite on the residual (or not finite), or a residual that grows by orders
+        // of magnitude, ends the multigrid run: the solver goes on with Jacobi from the current iterate.
+        if (use_mg && (!(rz_new > 0.) || !std::isfinite(rz_new) || r_norm > 1e4 * f_norm)) {
+            fall_back(std::isfinite(rz_new) && rz_new > 0. ? "the residual grew by orders of magnitude" : "the cycle was not positive definite");
+            precondition();
+            rz_new = dot(r, z);
+        }
+        const double beta = rz_new / rz;
+        rz                = rz_new;
+        for (size_t i = 0; i < n_dofs; ++i)
+            p[i] = z[i] + beta * p[i];
         if (result.iterations % STAGNATION_CHECK == 0) {
             best_at_check.push_back(best);
             const size_t window = std::max(STAGNATION_MIN_WINDOW, result.iterations / 2 / STAGNATION_CHECK * STAGNATION_CHECK);
@@ -1050,7 +1605,7 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
             timed_out = true;
             break;
         }
-        if (result.iterations % 25 == 0) {
+        if (result.iterations % (use_mg ? 5 : 25) == 0) {
             const double done = std::log(1. / std::max(r_norm / f_norm, 1e-300)) / std::log(1. / input.tolerance);
             const int percent = 15 + int(std::clamp(done, 0., 1.) * 78.);
             if (percent > last_percent) {
@@ -1059,6 +1614,9 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
             }
         }
     }
+    result.preconditioner   = use_mg ? StressPreconditioner::Multigrid : StressPreconditioner::Jacobi;
+    result.multigrid_levels = use_mg ? mg.level_count() : 0;
+    mg = Multigrid(); // the hierarchy is not needed any more
     result.residual = r_norm / f_norm;
     // A residual that reached the tolerance in the very iteration in which the clock ran out is a result, not a timeout.
     if (!result.converged && std::isfinite(r_norm) && r_norm <= input.tolerance * f_norm)

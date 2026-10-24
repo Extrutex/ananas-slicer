@@ -40,7 +40,7 @@ invalid parameters, `-32001` a named preset does not exist, `-32000` the operati
 | `model.bounds` | `path`, `transforms` | per object the bounding box and the instance offset after the transform |
 | `preview.load` | `gcode` | the layers (index, z), extent, speed/flow/acceleration ranges, roles, estimated time and segment counts of a G-code file |
 | `preview.chunk` | `gcode`, `layer_from`, `layer_to`, optional `travel` | the segments of a layer range as typed arrays: positions, speed, flow, acceleration, role, kind, layer |
-| `analyze.stress` | `model`, optional `object` and `transform`, `material`, `voxel_size`, `supports`, `loads`, optional `tolerance`, `max_iterations`, `max_seconds` | linear stress analysis of one object: the voxel grid, solver state, maximum von Mises stress, minimum safety factor and maximum displacement with their positions, applied force and support reaction, `warnings`; `analyze.progress` notifications with the request id |
+| `analyze.stress` | `model`, optional `object` and `transform`, `material`, `voxel_size`, `supports`, `loads`, optional `tolerance`, `preconditioner`, `max_iterations`, `max_seconds` | linear stress analysis of one object: the voxel grid, solver state (`solver`: iterations, residual, converged, `preconditioner` actually used, `levels` of the multigrid hierarchy), maximum von Mises stress, minimum safety factor and maximum displacement with their positions, applied force and support reaction, `warnings`; `analyze.progress` notifications with the request id |
 | `analyze.chunk` | `id`, `z_from`, `z_to` | the cell data of a range of grid layers of the latest analysis as typed arrays: solid, von Mises, safety factor, displacement, displacement vector |
 | `moonraker.connect` | `host`, optional `api_key` | the printer host's state, Klipper's state and the Klipper limits as the running Klipper resolves them (`null` while it is not ready) |
 | `moonraker.upload` | `host`, `gcode`, optional `name`, `print` | stores a G-code on the printer; with `print` the host starts it |
@@ -86,16 +86,36 @@ mm, N and MPa; z is the build direction.
   the consistent load of a uniform traction, or equally over the nodes when the selection has no quad.
 - **Method.** The closed meshes are voxelized into a cubic grid of `voxel_size` (a cell is solid when its centre is
   inside; a mesh with an open or non-manifold edge, or an odd number of surface crossings along a column, is refused),
-  every solid cell becomes a trilinear hexahedron, and `K u = f` is solved matrix-free with a Jacobi-preconditioned
-  conjugate gradient (parallel over nodes with TBB) until the relative residual falls below `tolerance`
+  every solid cell becomes a trilinear hexahedron, and `K u = f` is solved matrix-free with a preconditioned conjugate
+  gradient (parallel over nodes with TBB) until the relative residual falls below `tolerance`
   (default 1e-6). The load is scaled to a largest component of 1 for the solve and the displacements are scaled back,
   so loads from 1e-200 N to 1e12 N neither overflow nor underflow in the sums of squares. No external solver is linked.
+- **Preconditioner.** `preconditioner` is `"multigrid"` (default) or `"jacobi"`. Multigrid applies one geometric V cycle per
+  iteration. The coarse levels join 2 x 2 x 2 cells of the level below; a coarse cell is a cube of twice the edge whose
+  stiffness is the share of its eight children that are solid times twice the fine element matrix (rediscretised with
+  filling weights, not a Galerkin product: no coarse matrix is stored, the levels stay matrix-free, and a hole, a thin wall or
+  a second separate part keeps its coarse stiffness in proportion to its volume; cells outside an odd grid count as empty, a
+  cell without solid children is empty and has no nodes). Prolongation is trilinear and the restriction its transpose; a coarse
+  node is held where a fine node within one fine cell of it is held, so supports on odd nodes or on a few nodes survive on
+  every level. Smoothing is a Chebyshev polynomial of degree 2 of the Jacobi-scaled operator over [lambda_max / 4, lambda_max]
+  (lambda_max from a power iteration per level, plus 10 %), the same before and after the coarse correction and started from
+  zero before it, so the cycle is a symmetric positive operator and the conjugate gradient stays valid. Levels are added until
+  at most 1 500 degrees of freedom are left; that level is solved directly (dense LDL^T, built once). Measured: 9 to 38
+  iterations for all validation cases, 10 for 4.9 million cells, against 100 to 11 575 and 1 535 with Jacobi (see
+  `stress-validierung.md`). The answer agrees with Jacobi to about 1e-7 of the field maximum at the same tolerance.
+  If the hierarchy cannot be built (it does not fit into the memory budget, or a level does not shrink), a cycle is not
+  positive definite or not finite, or the residual grows by four orders of magnitude, the solver continues with Jacobi
+  (from the current iterate) and adds a warning; `solver.preconditioner` then says `jacobi`. A stagnating multigrid run ends
+  like a stagnating Jacobi run. The clock is checked in every cycle at every level. The hierarchy costs about 22 bytes per
+  solver node of the finest level (measured, 4.9 million cells: 1.67 GB against 1.57 GB peak with Jacobi) and is counted with
+  36 bytes per node against the memory limit; when the Jacobi footprint fits but the hierarchy does not, Jacobi is used and
+  the warning says so.
 - **Limits.** They are the server's; a request cannot raise them. At most 5 million grid cells (solid or not) and
   10 million triangles; one grid layer (`nx * ny` cells) must fit into one result chunk of 8 MB at 25 bytes per cell
   (335 544 cells), otherwise the request is refused before any work with a hint to use a larger `voxel_size`. The
   estimated memory may not exceed 3 GB: before the voxelization the welding maps of the watertight check and the
   surface crossings of the voxelization (their number is capped by what the budget leaves, at most 50 million) are
-  counted, afterwards about 330 bytes per cell of a compact body (5 million cells need roughly 1.7 GB); running out of
+  counted, afterwards about 330 bytes per cell of a compact body (5 million cells need roughly 1.7 GB; the multigrid hierarchy comes on top, measured +7 %, and is only built when it fits into what the limit leaves, see Preconditioner); running out of
   memory anyway answers `-32000`. At most 64 supports and 64 loads, 2 million different triangles per selection and
   20 million listed triangle indices over all supports and loads together (all checked while the request is read,
   before a list is copied; one list is also bounded by the 10 million triangles), a
@@ -104,10 +124,10 @@ mm, N and MPa; z is the build direction.
   call: the input check, the watertight check, the voxelization, building the mesh, the selections, the check of the
   supports and the solver all look at the clock periodically and end with `-32000`; the solver also stops when the best
   residual has fallen by less than 1 % over a window of at least 3000 iterations and at least half of all iterations so
-  far (the residual of a conjugate gradient run sits on plateaus of thousands of iterations on fine, slender grids; a
+  far (with Jacobi the residual of a conjugate gradient run sits on plateaus of thousands of iterations on fine, slender grids; a
   fixed 1000-iteration window cut off runs that converged later, see `stress-validierung.md`). The evaluation after the
   solver (reaction, stress per cell, extrema) is linear in the number of cells and not part of the clock: measured
-  0.1 s for 4.9 million solid cells, against about 0.07 s per solver iteration there. A residual that reaches the tolerance in the iteration in which
+  0.1 s for 4.9 million solid cells, against about 0.07 s per Jacobi iteration there. A residual that reaches the tolerance in the iteration in which
   the clock runs out counts as a result. Every vertex must be finite. There is no way to cancel a running analysis; it
   ends by itself within these limits.
 - **Supports.** Before solving, every piece of the model must be held against all three translations and all three
