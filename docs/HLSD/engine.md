@@ -98,17 +98,16 @@ mm, N and MPa; z is the build direction.
   cell without solid children is empty and has no nodes). Prolongation is trilinear and the restriction its transpose; a coarse
   node is held where a fine node within one fine cell of it is held, so supports on odd nodes or on a few nodes survive on
   every level. Smoothing is a Chebyshev polynomial of degree 2 of the Jacobi-scaled operator over [lambda_max / 4, lambda_max]
-  (lambda_max from a power iteration per level, plus 10 %), the same before and after the coarse correction and started from
-  zero before it, so the cycle is a symmetric positive operator and the conjugate gradient stays valid. Levels are added until
+  (lambda_max per level: largest Ritz value of a Lanczos run, 5 % added, capped by the Gershgorin bound), the same before and after the coarse correction and started from
+  zero before it, so the cycle is a symmetric positive operator and the conjugate gradient stays valid. That holds only while the true lambda_max is below about 1.3 times the value used, so a finished hierarchy is tested before the solver relies on it: with fixed pseudo-random vectors x, y the cycle must give <Mx,x> > 0, <My,y> > 0 and <Mx,y> = <x,My>; the dense factorisation of the coarsest level must have pivots above 1e-12 of the largest and reproduce a test solve (supports close together can make it nearly singular). A failed test means Jacobi with a warning. Levels are added until
   at most 1 500 degrees of freedom are left; that level is solved directly (dense LDL^T, built once). Measured: 9 to 38
   iterations for all validation cases, 10 for 4.9 million cells, against 100 to 11 575 and 1 535 with Jacobi (see
   `stress-validierung.md`). The answer agrees with Jacobi to about 1e-7 of the field maximum at the same tolerance.
   If the hierarchy cannot be built (it does not fit into the memory budget, or a level does not shrink), a cycle is not
   positive definite or not finite, or the residual grows by four orders of magnitude, the solver continues with Jacobi
-  (from the current iterate) and adds a warning; `solver.preconditioner` then says `jacobi`. A stagnating multigrid run ends
-  like a stagnating Jacobi run. The clock is checked in every cycle at every level. The hierarchy costs about 22 bytes per
-  solver node of the finest level (measured, 4.9 million cells: 1.67 GB against 1.57 GB peak with Jacobi) and is counted with
-  36 bytes per node against the memory limit; when the Jacobi footprint fits but the hierarchy does not, Jacobi is used and
+  (from the current iterate, with the conjugate gradient restarted: new direction p = z, rz = <r,z>) and adds a warning; `solver.preconditioner` then says `jacobi`. A stagnating multigrid run ends
+  like a stagnating Jacobi run. The clock is checked in every phase: per level and Lanczos step while building, around the dense factorisation and in every cycle at every level (before the pre-smoothing and before the post-smoothing). The hierarchy costs about 22 bytes per
+  solver node of the finest level for a compact body (measured, 4.9 million cells: 1.67 GB against 1.57 GB peak with Jacobi); plates and rods lose fewer nodes per level, so the estimate follows the grid dimensions (about 200 bytes per node and level plus the dense coarsest matrix) and every level is checked against the memory limit before it is allocated; when the Jacobi footprint fits but the hierarchy does not, Jacobi is used and
   the warning says so.
 - **Limits.** They are the server's; a request cannot raise them. At most 5 million grid cells (solid or not) and
   10 million triangles; one grid layer (`nx * ny` cells) must fit into one result chunk of 8 MB at 25 bytes per cell

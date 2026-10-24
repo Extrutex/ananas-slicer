@@ -194,9 +194,23 @@ bei 0,25 mm (399 488 Zellen) mit **38** (vorher 11 575). Die Rechenzeit sinkt be
 sehr groben bleibt sie gleich (unter 0,05 s ohnehin).
 
 Speicher am massiven Würfel mit 4,9 Millionen Zellen (`/usr/bin/time -l`, größter residenter Satz): **1,67 GB mit Multigrid, 1,57 GB
-mit Jacobi**, also +107 MB (+7 %); die Hierarchie braucht dort 22 Byte je Knoten der feinsten Ebene. In die Speicherschätzung geht sie
-mit 36 Byte je Knoten ein (siehe `engine.md`), weil dünne Körper, bei denen die Knotenzahl je Ebene nur um etwa 1/4 statt 1/8 fällt,
-mehr brauchen.
+mit Jacobi**, also +107 MB (+7 %); die Hierarchie braucht dort 22 Byte je Knoten der feinsten Ebene. Dünne Körper brauchen je Feinknoten mehr, weil
+die Knotenzahl je Ebene nur um 1/4 (Platte) oder 1/2 (Stab mit einer Zelle Querschnitt) statt 1/8 fällt; die Schätzung vor dem Aufbau folgt deshalb den
+Gitterabmessungen (Test `Stress: the memory estimate of the hierarchy follows the shape of the body`, gemessene Hierarchie gegen Schätzung): Würfel 48 mm
+(117 649 Knoten) 11,6 MB gegen 19,8 MB, Platte 120 × 120 × 2 mm bei 0,5 mm (290 405 Knoten) 11,6 gegen 14,2 MB, Stab 200 × 4 × 4 mm bei 0,25 mm 10,2 gegen 13,3 MB,
+Stab 300 × 6 × 6 mm bei 0,5 mm 5,2 gegen 6,9 MB, Stab 400 × 1 × 1 mm 11,4 gegen 22,7 MB (dort überwiegt die dichte gröbste Matrix, die Schätzung zählt ihre zwei
+Kopien während der Faktorisierung). Jede Ebene wird vor der Allokation gegen das Budget geprüft, ebenso die dichte Matrix samt Faktorkopie. Der
+Spitzenspeicher der ganzen Stress-Suite (`/usr/bin/time -l`, mit `ANANAS_STRESS_FULL=1`) liegt bei 1,70 GB gegenüber 1,93 GB vor der Änderung (Messrauschen der Läufe).
+
+**Spektrumschätzung und Prüfung des Zyklus.** Die Glättung braucht λ_max von D⁻¹K. Eine Potenziteration (15 oder 40 Schritte) liegt bis zu 8 % bzw. 5 % darunter;
+jetzt liefert ein Lanczos-Lauf (8 bis 30 Schritte) den größten Ritz-Wert (höchstens 2,3 % unter dem wahren Wert, gemessen an 23 Ebenen), gedeckelt durch die
+Gershgorin-Grenze (das 1,7-Fache des wahren Werts, als alleinige Schätzung kostet sie 3 bis 5 Iterationen mehr). Ein Sicherheitsfaktor kostet Iterationen, ohne den Zyklus sicherer zu machen
+(Regressionsfälle, Iterationen bei Faktor 1,0 / 1,1 / 1,3: Platte 70 / 72 / 72, Kragarm 24 × 4 × 4 8 / 9 / 10, Hohlkasten 16 35 / 36 / 38); der Zyklus bleibt positiv definit, solange
+der wahre Wert unter etwa dem 1,3-Fachen des verwendeten liegt (Test mit künstlich verkleinertem λ: Faktor 0,9 und 0,8 laufen mit weniger Iterationen, ab 0,7 ist der Zyklus in allen 15
+Fällen nicht mehr positiv definit). Deshalb ist der Faktor 1 und die Absicherung die **Laufzeitprüfung** nach dem Aufbau: mit festen Zufallsvektoren x, y müssen ⟨Mx,x⟩ > 0, ⟨My,y⟩ > 0
+und ⟨Mx,y⟩ = ⟨x,My⟩ gelten (Zufallsvektoren enthalten alle Frequenzen, gerade die oberen, die ein zu kleines λ verstärkt); sonst Jacobi mit Warnung. Die Prüfung kostet vier Zyklen.
+Gemessen an den 18 Fällen des Operatortests (Regressionsfälle, Lager, nur gröbste Ebene): Asymmetrie höchstens 4,4e-14, ⟨Mx,x⟩/⟨x,x⟩ immer positiv (kleinster Wert 4,8e-4),
+|⟨Pu,v⟩ − ⟨u,Rv⟩| / (|Pu||v|) höchstens 1,3e-16 an Rand und Lagern, kleinster/größter Pivot der gröbsten Matrix mindestens 8,2e-7 (Schwelle 1e-12).
 
 **Gleichheit mit Jacobi** (Test `Stress: multigrid gives the Jacobi result …`, gleiche Toleranz 1e-6): größte Abweichung eines
 Zellwerts, bezogen auf das Maximum des Felds, bei Verschiebung und Vergleichsspannung höchstens 1,6e-7; Abweichung der größten
@@ -222,7 +236,12 @@ gröbsten, der V-Zyklus bleibt trotzdem 20- bis 60-mal besser als Jacobi. Die Ob
 
 **Rückfall:** Scheitert der Aufbau der Hierarchie (zu wenig Speicherbudget, Ebenen werden nicht kleiner) oder wird ein Zyklus
 nicht positiv definit/nicht endlich oder wächst das Residuum auf mehr als das 10 000-fache der Last, rechnet der Löser mit Jacobi
-weiter (vom aktuellen Stand, bei Aufbaufehler von vorn) und meldet das in `warnings`. Getestet über einen Testschalter
+weiter (vom aktuellen Stand, bei Aufbaufehler von vorn) und meldet das in `warnings`. Mitten im Lauf wird das CG dabei **neu gestartet** (r bleibt, z mit Jacobi neu, p = z, rz = ⟨r,z⟩):
+die alte Fortführung bildete beta = rz_Jacobi / rz_Multigrid aus Skalaren zweier Vorkonditionierer. Gemessen (Ausfall ab dem 3. bzw. 110 − 100 = 10. Zyklus), Iterationen gesamt neu gegenüber alt:
+Platte 60 × 40 × 1 mm 1 760 / 1 767 gegenüber 5 060 / 5 035 (Jacobi allein 1 495), Balken 96 × 6 × 6 mm bei 0,5 mm 1 334 / 940 gegenüber 6 116 / 948 (allein 730), Hohlkasten 322 / 291 gegenüber 712 / 345 (allein 312).
+Die Zeit wird in jeder Phase geprüft (Spektrumschätzung je Schritt, Aufbau je Ebene und um die Faktorisierung, vor Vor- und Nachglättung); ein bereits konvergiertes Ergebnis wird nie verworfen.
+Eine fast singuläre oder nicht positive gröbste Matrix (Pivots unter 1e-12 des größten, fehlerhafte Probelösung) führt ebenfalls zu Jacobi mit Warnung; die Testfälle mit Rollenlagern und drei dicht
+beieinander liegenden Punktlagern waren nicht singulär (Pivotverhältnis ≥ 6,6e-5), die Ablehnung ist daher mit dem Testschalter geprüft. Getestet über einen Testschalter
 (`fault_for_test`, nicht im Protokoll) und mit einem Speicherbudget, das nur das Jacobi-Gerüst fasst. Bei einer **Stagnation** mit
 Multigrid wird nicht auf Jacobi gewechselt (es wäre langsamer); die Stagnationsregel beendet den Lauf wie zuvor mit einer Meldung.
 Bei der Abstimmung der Glättung (Polynomgrad 1 bis 4, Bereichsverhältnis 3 bis 8) war ein Parameter versehentlich leer

@@ -45,7 +45,7 @@ struct StressLoad
 
 // Server-side limits; the request cannot raise them. The memory need is about 330 bytes per cell of a compact body
 // (3 dof per node in 7 vectors of 8 bytes, the element and node index arrays, the result arrays), so 5 million cells
-// take roughly 1.7 GB; the multigrid hierarchy adds about 7 % when it fits (otherwise Jacobi is used).
+// take roughly 1.7 GB; the multigrid hierarchy adds about 7 % for a compact body (more for plates and rods) when it fits (otherwise Jacobi is used).
 constexpr size_t STRESS_MAX_CELLS      = 5000000;
 constexpr size_t STRESS_MAX_BYTES      = size_t(3) << 30;
 constexpr size_t STRESS_MAX_ITERATIONS = 20000;
@@ -74,7 +74,10 @@ struct StressInput
     std::vector<StressLoad>           loads;
     double                            tolerance{ 1e-6 };  // relative residual of the solver
     StressPreconditioner              preconditioner{ StressPreconditioner::Multigrid };
-    int                               fault_for_test{ 0 }; // 1: the multigrid setup fails, 2: the first cycles give a non-finite result; not part of the protocol
+    // Test hook, not part of the protocol. 1: the multigrid setup fails; 2: from the third cycle on the result is not finite (100 + k: from the k-th cycle on);
+    // 4: the spectrum estimate of the smoother is far too small (the cycle then is not positive definite); 6 / 7: the clock
+    // runs out in the first / third cycle of the solver (after the coarse correction); 5: the clock runs out in the setup of the hierarchy; 8: the matrix of the coarsest level is singular.
+    int                               fault_for_test{ 0 };
     size_t                            max_iterations{ STRESS_MAX_ITERATIONS }; // capped at STRESS_MAX_ITERATIONS
     size_t                            max_cells{ STRESS_MAX_CELLS };               // cells of the voxel grid (solid or not)
     size_t                            max_bytes{ STRESS_MAX_BYTES };               // estimated memory of the analysis
@@ -105,6 +108,7 @@ struct StressResult
     bool   converged{ false };
     StressPreconditioner preconditioner{ StressPreconditioner::Jacobi }; // what the solver ended up using (multigrid may fall back to Jacobi)
     size_t multigrid_levels{ 0 };                                         // levels of the hierarchy including the finest, 0 for Jacobi
+    size_t cg_restarts{ 0 };                                              // diagnostic: times the conjugate gradient was restarted after a fall back to Jacobi in the middle of the run
 
     double max_von_mises{ 0. };
     Vec3d  max_von_mises_at{ Vec3d::Zero() };
@@ -135,5 +139,23 @@ using StressProgress = std::function<void(int, const std::string&)>;
 // running out of memory is an engine error too. A load is selected by its surface faces: a triangle takes the
 // faces of the voxel surface that face it and lie within reach, a box the faces with all four corners inside.
 StressResult solve_stress(const StressInput& input, const StressProgress& progress = nullptr);
+
+// Test access (not part of the protocol, not used by the application): what the multigrid preconditioner of `input` does as
+// an operator, measured with fixed pseudo-random vectors on the finished hierarchy. It runs the setup of solve_stress (grid,
+// supports, loads, hierarchy) and stops before the solver. `built` is false when the hierarchy was refused or failed its own
+// check (then `why` has the warning text and the other numbers are 0).
+struct StressMultigridProbe
+{
+    bool        built{ false };
+    std::string why;
+    size_t      levels{ 0 };
+    double      min_rayleigh{ 0. };       // smallest <Mx,x> / <x,x> of the cycle M (must be above 0)
+    double      symmetry_defect{ 0. };    // largest |<Mx,y> - <x,My>| / sqrt(<Mx,x><My,y>) (must be near rounding error)
+    double      transfer_defect{ 0. };    // largest |<Pu,v> - <u,Rv>| / (|Pu||v|): the restriction is the transpose of the prolongation
+    double      coarse_pivot_ratio{ 0. }; // smallest / largest pivot of the dense factorisation of the coarsest level
+    size_t      hierarchy_bytes{ 0 };     // what the finished hierarchy holds (the levels and the factorised coarsest matrix)
+    size_t      estimated_bytes{ 0 };     // what the solver estimated before building it (the check against the memory budget)
+};
+StressMultigridProbe probe_multigrid_for_test(const StressInput& input);
 
 } // namespace Slic3r::engine

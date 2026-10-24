@@ -7,12 +7,14 @@
 
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
 
 #include <algorithm>
 #include <cfloat>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <map>
 #include <memory>
@@ -47,6 +49,13 @@ struct Deadline
     uint32_t                              counter{ 0 };
 
     bool expired() const { return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() > seconds; }
+    // Reads the clock every time (tick() only every 256th call); for places that are reached rarely but may take long.
+    void check(const char* phase)
+    {
+        if (expired())
+            failed(std::string("the time limit of ") + format_seconds(seconds) + " s was reached while " + phase +
+                   "; use a larger voxel_size or a higher max_seconds");
+    }
     void tick(const char* phase)
     {
         if ((counter++ & 0xFFu) == 0 && expired())
@@ -611,17 +620,32 @@ double dot(const std::vector<double>& a, const std::vector<double>& b)
 
 constexpr size_t MG_COARSEST_DOFS = 1500; // direct solve at or below this many dofs
 constexpr size_t MG_MAX_LEVELS    = 32;
-constexpr double MG_BYTES_PER_NODE = 36.; // estimate of the hierarchy per solver node of the finest level
-constexpr int    MG_POWER_ITERATIONS = 15;
+// Memory of one level per solver node of that level: node_full 4, adjacent 32, elem_nodes 32, weight 4 (an element per node
+// in a compact body), the five dof vectors inv_diag, x, b, res, d 120, fixed 3 = 195, rounded up. A level costs this times its
+// nodes. Compact 3D bodies lose a factor 8 per level, so the whole hierarchy is about 1/7 of that per fine node (about 28 B);
+// plates lose 4 per level (about 66 B per fine node) and rods 2 per level (about 195 B per fine node), which is why the
+// estimate below follows the grid dimensions instead of assuming one value per node.
+constexpr double MG_BYTES_PER_LEVEL_NODE = 200.;
+constexpr double MG_KE_BYTES             = 576. * 8.; // the element matrix every level carries
+constexpr double MG_COARSE_PIVOT_TOL     = 1e-12;     // smallest pivot of the dense factorisation relative to the largest
+constexpr int    MG_LANCZOS_MIN = 8; // Lanczos run for the spectrum: at least / at most this many steps
+constexpr int    MG_LANCZOS_MAX = 30;
 
-// Smoothing: Chebyshev polynomial of degree 2 over [lambda_max / 4, lambda_max] of D^-1 K (lambda_max from a power
-// iteration, 10 % added). Measured on beams, plates, tubes, brackets, hollow boxes and cubes: degree 1 to 4 and ratios
-// 3 to 8 are within 20 % of each other in time; degree 2 and ratio 4 is the cheapest per cycle that keeps the iterations low.
+// Smoothing: Chebyshev polynomial of degree 2 over [lambda_max / 4, lambda_max] of D^-1 K. Measured on beams, plates, tubes,
+// brackets, hollow boxes and cubes: degree 1 to 4 and ratios 3 to 8 are within 20 % of each other in time; degree 2 and
+// ratio 4 is the cheapest per cycle that keeps the iterations low.
+// lambda_max is the largest Ritz value of a Lanczos run times lambda_safety, capped by the Gershgorin bound. The Ritz value is
+// a lower bound, within 2.3 % of the true value in every measured case (a power iteration of 40 steps is 5 % low). The cycle
+// (the same smoother before and after the correction) is positive definite only while the true lambda_max stays below about
+// 1.3 times the value used (measured: used values 20 % too small still work, 30 % too small fail the check in every case), so
+// the remaining 2 % are far inside the margin. A margin on top costs iterations (1.05: +1 on three validation cases, 1.3: +1 to
+// +3 on most) without making the cycle safer, so the safety is 1; what protects the solver is the check of the finished cycle
+// (Multigrid::check) and the Gershgorin cap.
 struct MgTune
 {
     int    degree{ 2 };
     double ratio{ 4. };
-    double lambda_safety{ 1.1 };
+    double lambda_safety{ 1. };
 };
 
 struct MgUnavailable : std::runtime_error
@@ -859,36 +883,93 @@ void mg_prolong_add(const LevelRef& fine, const uint8_t* fine_fixed, double* xf,
     });
 }
 
-// Largest eigenvalue of D^-1 K on the free dofs: power iteration with the Rayleigh quotient (a lower bound that is close
-// after a few steps because the top of the spectrum is clustered); v and kv are scratch of the size of the dof vector.
-double mg_lambda_max(const MgView& view, double* v, double* kv)
+// Gershgorin bound of D^-1 K on the free dofs: the largest row sum of |K| over the diagonal. It is a safe upper bound of
+// the spectrum (the columns of held dofs only add to the sum), but pessimistic (about 2 to 3 times the true value on
+// hexahedra), so it only caps the estimate below.
+double mg_gershgorin(const MgView& view)
+{
+    const Operator& op = view.op;
+    return tbb::parallel_reduce(
+        tbb::blocked_range<size_t>(0, op.n_nodes, 1024), 0.,
+        [&](const tbb::blocked_range<size_t>& range, double best) {
+            for (size_t n = range.begin(); n != range.end(); ++n)
+                for (int a = 0; a < 3; ++a) {
+                    if (op.fixed[3 * n + a])
+                        continue;
+                    double sum = 0.;
+                    for (int k = 0; k < 8; ++k) {
+                        const uint32_t e = op.adjacent[n * 8 + k];
+                        if (e == NONE)
+                            continue;
+                        double row = 0.;
+                        for (int j = 0; j < 24; ++j)
+                            row += std::abs(op.ke[size_t(3 * k + a) * 24 + j]);
+                        sum += (op.weight ? double(op.weight[e]) : 1.) * row;
+                    }
+                    best = std::max(best, sum * view.inv_diag[3 * n + a]);
+                }
+            return best;
+        },
+        [](double l, double r) { return std::max(l, r); });
+}
+
+// Largest eigenvalue of D^-1 K on the free dofs from the Ritz values of a Lanczos run (D^-1 K is self-adjoint in the
+// D inner product; v.x, v.res and v.d are the three work vectors). The largest Ritz value approaches the eigenvalue from
+// below and much faster than a power iteration (measured: within 1 % after about 12 steps where 40 power steps are still
+// 5 % low), which is why the caller adds a margin, caps the value with the Gershgorin bound and checks the finished cycle
+// for positive definiteness. The run stops when the Ritz value moves by less than 0.02 % (at least MG_LANCZOS_MIN steps).
+// The clock is read per step.
+double mg_lambda_max(const MgView& view, Deadline& deadline)
 {
     const size_t n = view.n_dofs();
-    for (size_t i = 0; i < n; ++i)
-        v[i] = view.fixed[i] ? 0. : 0.5 + double((uint32_t(i) * 2654435761u) >> 8 & 0xFFFFu) / 65535.;
-    double lambda = 1.;
-    for (int it = 0; it < MG_POWER_ITERATIONS; ++it) {
-        view.op.apply(v, kv, true);
-        double num = 0., den = 0.;
-        for (size_t i = 0; i < n; ++i) {
-            num += v[i] * kv[i];
-            den += v[i] * v[i] / view.inv_diag[i];
-        }
-        if (!(num > 0.) || !(den > 0.))
-            return lambda;
-        lambda = num / den;
-        double norm = 0.;
-        for (size_t i = 0; i < n; ++i) {
-            v[i] = view.inv_diag[i] * kv[i];
-            norm += v[i] * v[i];
-        }
-        norm = std::sqrt(norm);
-        if (!(norm > 0.) || !std::isfinite(norm))
-            return lambda;
-        for (size_t i = 0; i < n; ++i)
-            v[i] /= norm;
+    double *q = view.x, *qp = view.d, *w = view.res;
+    const double* inv = view.inv_diag;
+    double        norm = 0.;
+    for (size_t i = 0; i < n; ++i) {
+        q[i] = view.fixed[i] ? 0. : 0.5 + double((uint32_t(i) * 2654435761u) >> 8 & 0xFFFFu) / 65535.;
+        qp[i] = 0.;
+        norm += q[i] * q[i] / inv[i];
     }
-    return lambda;
+    norm = std::sqrt(norm);
+    if (!(norm > 0.) || !std::isfinite(norm))
+        return 1.;
+    for (size_t i = 0; i < n; ++i)
+        q[i] /= norm;
+    std::vector<double> alpha, beta;
+    double              beta_prev = 0., ritz = 1., last = 0.;
+    for (int step = 0; step < MG_LANCZOS_MAX; ++step) {
+        deadline.check("estimating the spectrum for the multigrid hierarchy");
+        view.op.apply(q, w, true);
+        double a = 0.;
+        for (size_t i = 0; i < n; ++i)
+            a += q[i] * w[i];
+        double b2 = 0.;
+        for (size_t i = 0; i < n; ++i) {
+            w[i] = inv[i] * w[i] - a * q[i] - beta_prev * qp[i];
+            b2 += w[i] * w[i] / inv[i];
+        }
+        alpha.push_back(a);
+        const size_t    m = alpha.size();
+        Eigen::MatrixXd T = Eigen::MatrixXd::Zero(long(m), long(m));
+        for (size_t i = 0; i < m; ++i) {
+            T(long(i), long(i)) = alpha[i];
+            if (i + 1 < m)
+                T(long(i), long(i + 1)) = T(long(i + 1), long(i)) = beta[i];
+        }
+        const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigen(T, Eigen::EigenvaluesOnly);
+        ritz = eigen.eigenvalues()(long(m) - 1);
+        const double b = std::sqrt(b2);
+        if (!std::isfinite(ritz) || !(b > 1e-12 * std::abs(a)) || (step + 1 >= MG_LANCZOS_MIN && std::abs(ritz - last) <= 2e-4 * ritz))
+            break;
+        last = ritz;
+        beta.push_back(b);
+        for (size_t i = 0; i < n; ++i) {
+            qp[i] = q[i];
+            q[i]  = w[i] / b;
+        }
+        beta_prev = b;
+    }
+    return std::isfinite(ritz) && ritz > 0. ? ritz : 1.;
 }
 
 // Chebyshev iteration for K x = b on [lambda / ratio, lambda] of D^-1 K, `degree` steps, from x = 0 or from the given x.
@@ -933,6 +1014,42 @@ void mg_chebyshev(const MgView& view, const MgTune& tune, bool zero_start)
     }
 }
 
+// Bytes the hierarchy is expected to take for a body of nx x ny x nz cells with `fine_nodes` solver nodes: every level
+// follows the grid dimensions (a dimension of one cell does not shrink), and the dense factorisation of the coarsest
+// level (the matrix and its copy) comes on top.
+double estimate_hierarchy_bytes(size_t nx, size_t ny, size_t nz, size_t fine_nodes)
+{
+    double total = 0., nodes = double(fine_nodes), full = double(nx + 1) * double(ny + 1) * double(nz + 1);
+    for (size_t level = 0; level < MG_MAX_LEVELS && 3. * nodes > double(MG_COARSEST_DOFS); ++level) {
+        nx                  = (nx + 1) / 2;
+        ny                  = (ny + 1) / 2;
+        nz                  = (nz + 1) / 2;
+        const double coarse = double(nx + 1) * double(ny + 1) * double(nz + 1);
+        nodes *= coarse / full;
+        full = coarse;
+        total += nodes * MG_BYTES_PER_LEVEL_NODE + full * 5. + MG_KE_BYTES; // 5: the index into the full grid and the build's flag
+    }
+    const double dofs = std::min(3. * nodes, double(MG_COARSEST_DOFS));
+    return total + 2. * dofs * dofs * 8. + 32. * dofs;
+}
+
+// Upper bound of the bytes a level takes (before it is built) from the size of its grid and its non-empty cells.
+double level_bytes_bound(size_t cx, size_t cy, size_t cz, size_t solid_cells)
+{
+    const double full  = double(cx + 1) * double(cy + 1) * double(cz + 1);
+    const double nodes = std::min(full, 8. * double(solid_cells));
+    // The index arrays grow by push_back (up to twice their size), hence the larger factors for node_full and elem_nodes.
+    return full * 5. + nodes * (8. + 32. + 120. + 3.) + double(solid_cells) * (64. + 4.) + MG_KE_BYTES;
+}
+
+// What a check of the finished cycle found.
+struct MgCheck
+{
+    bool   ok{ false };
+    double min_rayleigh{ 0. };    // smallest <Mx,x> / <x,x> over the probe vectors (must be above 0)
+    double symmetry_defect{ 0. }; // largest |<Mx,y> - <x,My>| / sqrt(<Mx,x> <My,y>) (must be about rounding error)
+};
+
 struct Multigrid
 {
     std::vector<MgLevel> levels; // the coarse levels, finest first (reserved up front: the views point into it)
@@ -940,17 +1057,23 @@ struct Multigrid
     Eigen::LDLT<Eigen::MatrixXd> coarsest;
     MgTune  tune;
     size_t  bytes{ 0 };
+    size_t  budget{ 0 };
+    double  coarse_pivot_ratio{ 0. }; // smallest / largest pivot of the dense factorisation
     Deadline* deadline{ nullptr };
     bool    timed_out{ false };
-    int     fault{ 0 }; // test hook: 1 = pretend the cycle fails
+    int     fault{ 0 };      // test hook, see StressInput::fault_for_test (4: the spectrum is estimated too small, 5: the clock runs out before the spectrum estimate, 6 / 7: in the 1st / 3rd cycle)
+    int     top_cycles{ 0 }; // cycles run on the finest level since the check (for the test hook)
+    bool    hooks_armed{ false };
 
     size_t level_count() const { return views.size(); }
 
-    // Builds the hierarchy under the finest level `fine_view`. `budget` bounds the bytes the hierarchy may take;
-    // MgUnavailable when it does not fit or the levels do not shrink.
-    void build(const Body& body, const std::vector<double>& fine_ke, size_t budget, MgView fine_view, Deadline& dl)
+    // Builds the hierarchy under the finest level `fine_view`. `memory_budget` bounds the bytes the hierarchy may take (every
+    // level is checked before it is allocated); MgUnavailable when it does not fit, the levels do not shrink or the
+    // coarsest matrix is not safely positive definite. The clock is checked in every phase.
+    void build(const Body& body, const std::vector<double>& fine_ke, size_t memory_budget, MgView fine_view, Deadline& dl)
     {
         deadline = &dl;
+        budget   = memory_budget;
         levels.reserve(MG_MAX_LEVELS);
         views.clear();
         views.push_back(fine_view);
@@ -960,8 +1083,14 @@ struct Multigrid
         while (views.back().n_dofs() > MG_COARSEST_DOFS) {
             if (levels.size() + 1 >= MG_MAX_LEVELS)
                 throw MgUnavailable("too many multigrid levels");
-            size_t cx, cy, cz;
+            dl.check("building the multigrid hierarchy");
+            size_t cx = (nx + 1) / 2, cy = (ny + 1) / 2, cz = (nz + 1) / 2;
+            if (double(bytes) + 4. * double(cx) * double(cy) * double(cz) > double(budget))
+                throw MgUnavailable("the multigrid hierarchy does not fit into the memory budget");
             cw = coarsen_weights(nx, ny, nz, cw, cx, cy, cz, dl);
+            const size_t solid_cells = size_t(std::count_if(cw.begin(), cw.end(), [](float w) { return w > 0.f; }));
+            if (double(bytes) + double(cw.capacity()) * 4. + level_bytes_bound(cx, cy, cz, solid_cells) > double(budget))
+                throw MgUnavailable("the multigrid hierarchy does not fit into the memory budget");
             nx = cx;
             ny = cy;
             nz = cz;
@@ -976,7 +1105,7 @@ struct Multigrid
             coarse_fixed(prev.ref, prev.fixed, L.ref(), L.fixed.data());
             level_inv_diag(L);
             bytes += L.bytes();
-            if (bytes + cw.capacity() * 4 > budget)
+            if (double(bytes) + double(cw.capacity()) * 4. > double(budget))
                 throw MgUnavailable("the multigrid hierarchy does not fit into the memory budget");
             if (L.node_full.size() * 10 > prev.ref.n_nodes * 9)
                 throw MgUnavailable("the multigrid levels do not get smaller");
@@ -990,18 +1119,31 @@ struct Multigrid
             views.push_back(v);
         }
         // The smoothing range of every level except the coarsest, which is solved directly.
+        if (fault == 5)
+            dl.seconds = 0.; // test hook: the clock runs out before the spectrum estimate
         for (size_t l = 0; l + 1 < views.size(); ++l) {
-            MgView& v = views[l];
-            v.lambda  = tune.lambda_safety * mg_lambda_max(v, v.x, v.res);
+            MgView& v         = views[l];
+            const double ritz = mg_lambda_max(v, dl);
+            v.lambda          = std::max(ritz, std::min(mg_gershgorin(v), tune.lambda_safety * ritz));
+            if (fault == 4)
+                v.lambda *= 0.35; // test hook: a spectrum estimate that is far too small
         }
         assemble_coarsest(views.back());
     }
 
+    // The coarsest level as a dense matrix and its LDLT factorisation. Refused (MgUnavailable) when the two copies do not fit
+    // into the budget (checked before they are allocated) or the factorisation is not safely positive definite: the
+    // pivots must be finite and above MG_COARSE_PIVOT_TOL times the largest one, and a solve with a fixed vector must
+    // reproduce it. Several point supports close together can make this matrix nearly singular.
     void assemble_coarsest(const MgView& v)
     {
         const size_t n = v.n_dofs();
+        if (double(bytes) + 2. * double(n) * double(n) * 8. + 32. * double(n) > double(budget))
+            throw MgUnavailable("the coarsest multigrid level does not fit into the memory budget");
+        deadline->check("building the multigrid hierarchy");
         Eigen::MatrixXd M = Eigen::MatrixXd::Zero(n, n);
         for (size_t e = 0; e < v.n_elems; ++e) {
+            deadline->tick("building the multigrid hierarchy");
             const double w = v.op.weight ? double(v.op.weight[e]) : 1.;
             for (int i = 0; i < 8; ++i)
                 for (int j = 0; j < 8; ++j)
@@ -1016,7 +1158,38 @@ struct Multigrid
                 M.col(i).setZero();
                 M(i, i) = 1.;
             }
+        if (fault == 8) { // test hook: a coarsest matrix that is singular
+            M.row(0).setZero();
+            M.col(0).setZero();
+        }
+        deadline->check("building the multigrid hierarchy");
         coarsest.compute(M);
+        deadline->check("building the multigrid hierarchy");
+        if (coarsest.info() != Eigen::Success)
+            throw MgUnavailable("the matrix of the coarsest multigrid level could not be factorised");
+        const Eigen::VectorXd pivots = coarsest.vectorD();
+        const double          big    = pivots.cwiseAbs().maxCoeff(), small = pivots.minCoeff();
+        if (!pivots.allFinite() || !(big > 0.) || !(small > MG_COARSE_PIVOT_TOL * big))
+            throw MgUnavailable("the matrix of the coarsest multigrid level is singular or not positive definite (supports too close together?)");
+        coarse_pivot_ratio = small / big;
+        Eigen::VectorXd rhs = Eigen::VectorXd::Zero(long(n));
+        for (size_t i = 0; i < n; ++i)
+            rhs[long(i)] = v.fixed[i] ? 0. : probe_value(i, 7);
+        const Eigen::VectorXd sol = coarsest.solve(rhs);
+        if (!sol.allFinite() || !((M * sol - rhs).norm() <= 1e-8 * rhs.norm()))
+            throw MgUnavailable("the direct solve of the coarsest multigrid level is inaccurate");
+    }
+
+    // A pseudo-random value in [-1, 1) for dof i: the same on every run, with all frequencies present.
+    static double probe_value(size_t i, unsigned seed)
+    {
+        uint32_t h = uint32_t(i) * 2654435761u ^ (seed * 0x9E3779B9u + 0x85EBCA6Bu);
+        h ^= h >> 15;
+        h *= 2246822519u;
+        h ^= h >> 13;
+        h *= 3266489917u;
+        h ^= h >> 16;
+        return double(h) / 2147483648. - 1.;
     }
 
     // x_l = B_l b_l. Returns false when the clock ran out.
@@ -1041,9 +1214,102 @@ struct Multigrid
         mg_restrict(v.ref, v.res, c.ref, c.fixed, c.b);
         if (!cycle(l + 1))
             return false;
+        if (l == 0 && hooks_armed && (fault == 6 || fault == 7) && ++top_cycles == (fault == 6 ? 1 : 3))
+            deadline->seconds = 0.; // test hook: the clock runs out between the coarse correction and the post-smoothing
+        if (deadline->expired()) {
+            timed_out = true;
+            return false;
+        }
         mg_prolong_add(v.ref, v.fixed, v.x, c.ref, c.x);
         mg_chebyshev(v, tune, false);
         return true;
+    }
+
+    // Is the finished cycle B a symmetric, positive definite operator on the free dofs? That is what the conjugate gradient
+    // needs of its preconditioner and what a spectrum estimate that is too small breaks. For `rounds` pairs of fixed
+    // pseudo-random vectors x, y (zero on the held dofs, all frequencies present) it computes Bx and By and tests
+    // <Bx,x> > 0, <By,y> > 0 and <Bx,y> = <x,By>. xv, yv, zv are work vectors of the size of the finest level (zv receives
+    // the output); the right-hand side and the output of the finest level are redirected there for the time of the check.
+    // `timed_out` is set when the clock ran out.
+    MgCheck check(int rounds, double* xv, double* yv, double* zv)
+    {
+        MgView&       f  = views[0];
+        double* const b0 = f.b;
+        double* const x0 = f.x;
+        const size_t  n  = f.n_dofs();
+        MgCheck       out;
+        out.ok           = true;
+        out.min_rayleigh = std::numeric_limits<double>::infinity();
+        f.x              = zv;
+        for (int round = 0; round < rounds && out.ok; ++round) {
+            for (size_t i = 0; i < n; ++i) {
+                xv[i] = f.fixed[i] ? 0. : probe_value(i, unsigned(2 * round + 1));
+                yv[i] = f.fixed[i] ? 0. : probe_value(i, unsigned(2 * round + 2));
+            }
+            const auto dotv = [&](const double* a, const double* b) {
+                double sum = 0.;
+                for (size_t i = 0; i < n; ++i)
+                    sum += a[i] * b[i];
+                return sum;
+            };
+            f.b = xv;
+            if (!cycle(0)) {
+                out.ok = false;
+                break;
+            }
+            const double bxx = dotv(zv, xv), bxy = dotv(zv, yv);
+            f.b = yv;
+            if (!cycle(0)) {
+                out.ok = false;
+                break;
+            }
+            const double byy = dotv(zv, yv), xby = dotv(xv, zv);
+            const double xx = dotv(xv, xv), yy = dotv(yv, yv);
+            if (!(xx > 0.) || !(yy > 0.) || !std::isfinite(bxx + bxy + byy + xby)) {
+                out.ok = false;
+                break;
+            }
+            out.min_rayleigh = std::min({ out.min_rayleigh, bxx / xx, byy / yy });
+            if (!(bxx > 0.) || !(byy > 0.)) {
+                out.ok = false;
+                break;
+            }
+            out.symmetry_defect = std::max(out.symmetry_defect, std::abs(bxy - xby) / std::sqrt(bxx * byy));
+            if (!(out.symmetry_defect <= 1e-8))
+                out.ok = false;
+        }
+        f.b        = b0;
+        f.x        = x0;
+        top_cycles  = 0; // the test hooks count the cycles of the solver proper, not those of the check
+        hooks_armed = true;
+        return out;
+    }
+
+    // Largest |<Pu,v> - <u,Rv>| / (|Pu| |v|) over the level pairs for pseudo-random u (coarse, zero on held dofs) and v (fine,
+    // zero on held dofs): the restriction is the transpose of the prolongation. Allocates its own vectors (test access).
+    double transfer_defect() const
+    {
+        double worst = 0.;
+        for (size_t l = 0; l + 1 < views.size(); ++l) {
+            const MgView &f = views[l], &c = views[l + 1];
+            std::vector<double> u(c.n_dofs()), v(f.n_dofs()), pu(f.n_dofs(), 0.), rv(c.n_dofs(), 0.);
+            for (size_t i = 0; i < u.size(); ++i)
+                u[i] = c.fixed[i] ? 0. : probe_value(i, 11);
+            for (size_t i = 0; i < v.size(); ++i)
+                v[i] = f.fixed[i] ? 0. : probe_value(i, 12);
+            mg_prolong_add(f.ref, f.fixed, pu.data(), c.ref, u.data());
+            mg_restrict(f.ref, v.data(), c.ref, c.fixed, rv.data());
+            double lhs = 0., rhs = 0., npu = 0., nv = 0.;
+            for (size_t i = 0; i < v.size(); ++i) {
+                lhs += pu[i] * v[i];
+                npu += pu[i] * pu[i];
+                nv += v[i] * v[i];
+            }
+            for (size_t i = 0; i < u.size(); ++i)
+                rhs += u[i] * rv[i];
+            worst = std::max(worst, std::abs(lhs - rhs) / std::max(std::sqrt(npu * nv), 1e-300));
+        }
+        return worst;
     }
 };
 
@@ -1130,7 +1396,7 @@ ThinResult thin_cells(const Body& body, size_t thin, size_t probe_cell, Deadline
 
 } // namespace
 
-static StressResult solve_stress_unguarded(const StressInput& input, const StressProgress& progress)
+static StressResult solve_stress_unguarded(const StressInput& input, const StressProgress& progress, StressMultigridProbe* probe = nullptr)
 {
     const auto report = [&](int percent, const std::string& message) {
         if (progress)
@@ -1468,10 +1734,19 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         }
 
     // ---- the preconditioner
-    // Multigrid needs the hierarchy (about 32 bytes per solver node on top of the Jacobi footprint, measured with
-    // the share of the levels); when it does not fit into the memory budget or cannot be built, the solver uses Jacobi.
-    // The vectors of the conjugate gradient that are idle while the cycle runs serve as its scratch: q, and f (after the
-    // start of the iteration only its norm is used).
+    // Multigrid needs the hierarchy (estimate_hierarchy_bytes: about 30 bytes per solver node for a compact body, up to
+    // about 200 for a rod, on top of the Jacobi footprint); when it does not fit into the memory budget, cannot be built
+    // or fails its check (see Multigrid::check), the solver uses Jacobi and says so.
+    //
+    // Work vectors. The conjugate gradient owns u, r, p, z, q; f was only needed to start r (r = f) and for its norm.
+    // While a multigrid cycle runs, the vectors that are idle serve as its scratch: the finest level reads its
+    // right-hand side from r, writes its result to z, and uses q (the residual) and f (the Chebyshev direction) as work
+    // vectors (aliasing: after this point f holds garbage; only f_norm is used). The check below borrows p and u as well
+    // (u is zero again afterwards).
+    //
+    // Invariant that mg_restrict relies on (it sums the fine residual without a mask): r is exactly 0 on the held dofs.
+    // It holds because f is set to 0 there (line "a load on a held node goes into the support"), the operator is applied
+    // masked (q is 0 on held dofs, so r -= alpha q keeps r there), and the cycle writes only free dofs.
     Multigrid           mg;
     bool                use_mg = input.preconditioner == StressPreconditioner::Multigrid;
     const auto          fall_back = [&](const std::string& why) {
@@ -1486,7 +1761,7 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         try {
             if (input.fault_for_test == 1)
                 throw MgUnavailable("test fault");
-            if (budget <= 0. || double(n_nodes) * MG_BYTES_PER_NODE > budget)
+            if (budget <= 0. || estimate_hierarchy_bytes(grid.nx, grid.ny, grid.nz, n_nodes) > budget)
                 throw MgUnavailable("not enough memory budget left for the hierarchy");
             MgView fine;
             fine.op       = op;
@@ -1495,18 +1770,44 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
             fine.fixed    = fixed.data();
             fine.n_elems  = b.elem_cell.size();
             fine.x = z.data(); fine.b = r.data(); fine.res = q.data(); fine.d = f.data();
-            mg.build(b, ke, size_t(budget), fine, deadline);
             mg.fault = input.fault_for_test;
+            mg.build(b, ke, size_t(budget), fine, deadline);
+            const MgCheck check = mg.check(2, p.data(), u.data(), z.data());
+            std::fill(u.begin(), u.end(), 0.);
+            if (mg.timed_out)
+                failed("the time limit of " + Deadline::format_seconds(max_seconds) + " s was reached while preparing the solver; use a larger voxel_size or a higher max_seconds");
+            if (!check.ok)
+                throw MgUnavailable("the cycle is not a symmetric positive definite operator (smallest <Mx,x>/<x,x> " + Deadline::format_seconds(check.min_rayleigh) +
+                                    ", asymmetry " + Deadline::format_seconds(check.symmetry_defect) + ")");
+            if (probe) {
+                // Test access: more rounds on the finished hierarchy and the transfer check, then stop before the solver.
+                std::vector<double> xv(n_dofs), yv(n_dofs), zv(n_dofs);
+                const MgCheck more = mg.check(8, xv.data(), yv.data(), zv.data());
+                probe->built           = more.ok;
+                probe->levels          = mg.level_count();
+                probe->min_rayleigh    = more.min_rayleigh;
+                probe->symmetry_defect = more.symmetry_defect;
+                probe->transfer_defect = mg.transfer_defect();
+                probe->coarse_pivot_ratio = mg.coarse_pivot_ratio;
+                probe->hierarchy_bytes    = mg.bytes + 8 * mg.views.back().n_dofs() * mg.views.back().n_dofs();
+                probe->estimated_bytes    = size_t(estimate_hierarchy_bytes(grid.nx, grid.ny, grid.nz, n_nodes));
+                return result;
+            }
         } catch (const MgUnavailable& e) {
             fall_back(e.what());
         } catch (const std::bad_alloc&) {
             fall_back("not enough memory for the hierarchy");
         }
     }
+    if (probe && !use_mg) {
+        probe->built = false;
+        probe->why   = result.warnings.empty() ? std::string() : result.warnings.back();
+        return result;
+    }
     result.preconditioner    = use_mg ? StressPreconditioner::Multigrid : StressPreconditioner::Jacobi;
     result.multigrid_levels  = use_mg ? mg.level_count() : 0;
     // z = M^-1 r. False when the clock ran out inside a multigrid cycle.
-    size_t cycles = 0;
+    unsigned cycles = 0;
     const auto precondition = [&]() -> bool {
         if (!use_mg) {
             for (size_t i = 0; i < n_dofs; ++i)
@@ -1515,7 +1816,8 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         }
         if (!mg.cycle(0))
             return false;
-        if (mg.fault == 2 && ++cycles >= 3)
+        // test hook: fault 2 spoils the result from the 3rd cycle on, 100 + k from the k-th cycle on
+        if ((mg.fault == 2 || mg.fault >= 100) && ++cycles >= (mg.fault == 2 ? 3u : unsigned(mg.fault - 100)))
             z[0] = std::numeric_limits<double>::quiet_NaN();
         return true;
     };
@@ -1584,13 +1886,21 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         // of magnitude, ends the multigrid run: the solver goes on with Jacobi from the current iterate.
         if (use_mg && (!(rz_new > 0.) || !std::isfinite(rz_new) || r_norm > 1e4 * f_norm)) {
             fall_back(std::isfinite(rz_new) && rz_new > 0. ? "the residual grew by orders of magnitude" : "the cycle was not positive definite");
+            // Restart of the conjugate gradient: the old direction p and the scalar rz belong to the multigrid
+            // preconditioner, and beta = rz_Jacobi / rz_multigrid would mix two different inner products. r is
+            // kept: it is f - K u by the recursion r -= alpha q whatever the preconditioner was (f itself is gone,
+            // it served as scratch). z is formed again with Jacobi, the new direction is p = z, rz = <r,z>.
             precondition();
             rz_new = dot(r, z);
+            p      = z;
+            rz     = rz_new;
+            ++result.cg_restarts;
+        } else {
+            const double beta = rz_new / rz;
+            rz                = rz_new;
+            for (size_t i = 0; i < n_dofs; ++i)
+                p[i] = z[i] + beta * p[i];
         }
-        const double beta = rz_new / rz;
-        rz                = rz_new;
-        for (size_t i = 0; i < n_dofs; ++i)
-            p[i] = z[i] + beta * p[i];
         if (result.iterations % STAGNATION_CHECK == 0) {
             best_at_check.push_back(best);
             const size_t window = std::max(STAGNATION_MIN_WINDOW, result.iterations / 2 / STAGNATION_CHECK * STAGNATION_CHECK);
@@ -1761,6 +2071,13 @@ StressResult solve_stress(const StressInput& input, const StressProgress& progre
     } catch (const std::length_error&) {
         throw EngineError(ErrorCode::EngineError, "the analysis is too large for the available memory; use a larger voxel_size");
     }
+}
+
+StressMultigridProbe probe_multigrid_for_test(const StressInput& input)
+{
+    StressMultigridProbe probe;
+    solve_stress_unguarded(input, nullptr, &probe);
+    return probe;
 }
 
 } // namespace Slic3r::engine
