@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useState } from "react";
+import { useCallback, useId, useMemo, useState, type ReactNode } from "react";
 import { countStates, sharedSource, type CockpitGroup } from "./model.ts";
 import { ParamRow, ROW_GRID } from "./ParamRow.tsx";
 
@@ -73,9 +73,11 @@ export interface SidebarProps {
   machineLabel: string;
   /** e.g. "printer.cfg · printer.cfg" or "profile defaults" */
   configSource: string;
+  /** Extra controls under the header, e.g. the uniform-scale switch. */
+  extra?: ReactNode;
 }
 
-export function Sidebar({ groups, rejected, onValueChange, onDismiss, machineLabel, configSource }: SidebarProps) {
+export function Sidebar({ groups, rejected, onValueChange, onDismiss, machineLabel, configSource, extra }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
 
   const toggle = useCallback((groupId: string) => {
@@ -109,6 +111,7 @@ export function Sidebar({ groups, rejected, onValueChange, onDismiss, machineLab
               : "All values within limits."}
         </p>
       </header>
+      {extra}
 
       <div
         aria-hidden="true"

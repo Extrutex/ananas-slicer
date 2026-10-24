@@ -1,7 +1,12 @@
 import type {
+  BoundsResult,
   CompatiblePresets,
   EngineInfo,
   LimitsImportResult,
+  ModelLoadResult,
+  ObjectTransform,
+  PreviewChunkJson,
+  PreviewSummary,
   PrinterPreset,
   ResolveResult,
   SchemaOption,
@@ -60,6 +65,27 @@ export class EngineClient {
 
   async importPrinterCfg(text: string): Promise<LimitsImportResult> {
     return (await this.#transport.call("limits.import", { printer_cfg: text })) as LimitsImportResult;
+  }
+
+  async loadModel(path: string): Promise<ModelLoadResult> {
+    return (await this.#transport.call("model.load", { path })) as ModelLoadResult;
+  }
+
+  async bounds(path: string, transforms: ObjectTransform[]): Promise<BoundsResult> {
+    return (await this.#transport.call("model.bounds", { path, transforms })) as BoundsResult;
+  }
+
+  async previewLoad(gcode: string): Promise<PreviewSummary> {
+    return (await this.#transport.call("preview.load", { gcode })) as PreviewSummary;
+  }
+
+  async previewChunk(gcode: string, layerFrom: number, layerTo: number, travel: boolean): Promise<PreviewChunkJson> {
+    return (await this.#transport.call("preview.chunk", {
+      gcode,
+      layer_from: layerFrom,
+      layer_to: layerTo,
+      travel,
+    })) as PreviewChunkJson;
   }
 
   /** One slice at a time; `onProgress` receives the engine's `slice.progress` notifications meanwhile. */

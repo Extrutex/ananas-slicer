@@ -16,7 +16,12 @@ import {
   type SliceResult,
 } from "../engine/protocol.ts";
 import type { CockpitGroup } from "../cockpit/model.ts";
+import { axisIndex, parseObjectId } from "../cockpit/objectParams.ts";
 import { buildGroups } from "../cockpit/params.ts";
+import { fitsBed, parseBed, type Bed } from "../viewer/bed.ts";
+import type { Quantity } from "../viewer/heatmap.ts";
+import { objectsFromModel, toEngineTransform, type SceneObject, type Transform } from "../viewer/objects.ts";
+import { mergeChunks, type PreviewData } from "../viewer/preview.ts";
 
 export interface SliceState {
   status: "idle" | "running" | "done" | "failed";
@@ -31,6 +36,29 @@ export interface ImportedState {
   label: string;
   limits: ImportedLimits;
   warnings: string[];
+}
+
+export type ViewMode = "solid" | "mesh" | "inspect";
+
+export interface PreviewState {
+  status: "none" | "loading" | "ready" | "failed";
+  data: PreviewData | null;
+  error: string | null;
+  quantity: Quantity;
+  /** Inclusive layer indices shown. */
+  layerMin: number;
+  layerMax: number;
+  showTravel: boolean;
+  /** Vertical gap added per layer, mm. */
+  explodeLayers: number;
+}
+
+export interface ViewState {
+  /** What the viewport shows: the model on the bed or the sliced G-code. */
+  target: "model" | "gcode";
+  mode: ViewMode;
+  /** 0..1: how far the model's parts are pulled apart. */
+  explode: number;
 }
 
 export interface CockpitState {
@@ -50,7 +78,14 @@ export interface CockpitState {
   imported: ImportedState | null;
   importError: string | null;
   model: string;
+  modelError: string | null;
   outputDir: string;
+  bed: Bed;
+  objects: SceneObject[];
+  selected: number | null;
+  uniformScale: boolean;
+  view: ViewState;
+  preview: PreviewState;
   slice: SliceState;
 }
 
@@ -58,6 +93,20 @@ const DEFAULT_PRINTER = "Voron 2.4 350 0.4 nozzle";
 const DEFAULT_FILAMENT = "Generic PLA @System";
 
 const IDLE_SLICE: SliceState = { status: "idle", percent: 0, message: "", result: null, error: null };
+
+const NO_PREVIEW: PreviewState = {
+  status: "none",
+  data: null,
+  error: null,
+  quantity: "speed",
+  layerMin: 0,
+  layerMax: 0,
+  showTravel: false,
+  explodeLayers: 0,
+};
+
+/** Layers fetched per request; the toolpaths of a layer range arrive as typed arrays. */
+const PREVIEW_CHUNK_LAYERS = 25;
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -82,7 +131,14 @@ export class CockpitSession {
     imported: null,
     importError: null,
     model: "",
+    modelError: null,
     outputDir: "",
+    bed: parseBed(undefined, undefined),
+    objects: [],
+    selected: null,
+    uniformScale: true,
+    view: { target: "model", mode: "solid", explode: 0 },
+    preview: NO_PREVIEW,
     slice: IDLE_SLICE,
   };
 
@@ -130,6 +186,7 @@ export class CockpitSession {
         });
         await this.#loadPrinter(first.name);
         this.#set({ phase: "ready" });
+        await this.#loadModelFile(defaults.model);
       } catch (error) {
         this.#set({ phase: "failed", error: message(error) });
       }
@@ -158,7 +215,11 @@ export class CockpitSession {
       overrides: { ...overrides },
       limits: imported?.limits,
     });
-    this.#set({ resolved, groups: buildGroups(this.#state.schema, resolved) });
+    this.#set({
+      resolved,
+      groups: buildGroups(this.#state.schema, resolved),
+      bed: parseBed(resolved.config.printable_area, resolved.config.printable_height),
+    });
   }
 
   selectPrinter(printer: string): Promise<void> {
@@ -252,6 +313,151 @@ export class CockpitSession {
     this.#set({ model });
   }
 
+  // --- model on the bed -------------------------------------------------------------------------
+
+  /** Loads a model file and puts its objects in the middle of the bed. */
+  loadModel(path: string): Promise<void> {
+    return this.#enqueue(() => this.#loadModelFile(path));
+  }
+
+  async #loadModelFile(path: string): Promise<void> {
+    try {
+      const model = await this.#client.loadModel(path);
+      const placed = objectsFromModel(model, this.#state.bed.center);
+      // Show the objects only once the engine has confirmed where they stand, so nothing is drawn (or framed)
+      // at a position that is about to change.
+      const bounds = await this.#client.bounds(path, placed.map((object) => toEngineTransform(object.transform)));
+      const objects = placed.map((object, index) => {
+        const answer = bounds.objects[index];
+        return answer ? { ...object, box: answer.bbox, offset: answer.offset } : object;
+      });
+      this.#set({ model: path, modelError: null, objects, selected: objects.length === 1 ? 0 : null, preview: NO_PREVIEW, view: { ...this.#state.view, target: "model" } });
+    } catch (error) {
+      this.#set({ modelError: message(error), objects: [], selected: null });
+    }
+  }
+
+  /** Asks the engine for every object's box and offset under its current transform. */
+  async #refreshBounds(): Promise<void> {
+    const { model, objects } = this.#state;
+    if (objects.length === 0) return;
+    const bounds = await this.#client.bounds(model, objects.map((object) => toEngineTransform(object.transform)));
+    this.#set({
+      objects: this.#state.objects.map((object, index) => {
+        const answer = bounds.objects[index];
+        return answer ? { ...object, box: answer.bbox, offset: answer.offset } : object;
+      }),
+    });
+  }
+
+  /** The object that is moved by a drag stays where the pointer puts it until the engine has confirmed the placement. */
+  moveObject(index: number, position: [number, number]): void {
+    this.#set({
+      objects: this.#state.objects.map((object, at) => {
+        if (at !== index) return object;
+        const delta: [number, number] = [position[0] - object.transform.position[0], position[1] - object.transform.position[1]];
+        return {
+          ...object,
+          transform: { ...object.transform, position },
+          offset: [object.offset[0] + delta[0], object.offset[1] + delta[1], object.offset[2]],
+          box: {
+            min: [object.box.min[0] + delta[0], object.box.min[1] + delta[1], object.box.min[2]],
+            max: [object.box.max[0] + delta[0], object.box.max[1] + delta[1], object.box.max[2]],
+          },
+        };
+      }),
+    });
+  }
+
+  /** The drag ended: let the engine confirm the final placement. */
+  commitObject(): Promise<void> {
+    return this.#enqueue(async () => {
+      try {
+        await this.#refreshBounds();
+      } catch (error) {
+        this.#set({ error: message(error) });
+      }
+    });
+  }
+
+  selectObject(index: number | null): void {
+    this.#set({ selected: index });
+  }
+
+  setUniformScale(uniform: boolean): void {
+    this.#set({ uniformScale: uniform });
+  }
+
+  /** Applies an edit of an "object.<field>.<axis>" row to the selected object. Scale rows are percent. */
+  setObjectValue(id: string, value: number): Promise<void> {
+    return this.#enqueue(async () => {
+      const parsed = parseObjectId(id);
+      const index = this.#state.selected;
+      if (parsed === null || index === null || this.#state.objects[index] === undefined) return;
+      const axis = axisIndex(parsed.axis);
+      const current = this.#state.objects[index]!.transform;
+      const next: Transform = { position: [...current.position], rotation: [...current.rotation], scale: [...current.scale] };
+      if (parsed.field === "position" && axis < 2) next.position[axis] = value;
+      else if (parsed.field === "rotation") next.rotation[axis] = value;
+      else if (parsed.field === "scale") {
+        const factor = value / 100;
+        if (this.#state.uniformScale) next.scale = [factor, factor, factor];
+        else next.scale[axis] = factor;
+      }
+      this.#set({ objects: this.#state.objects.map((object, at) => (at === index ? { ...object, transform: next } : object)) });
+      try {
+        await this.#refreshBounds();
+      } catch (error) {
+        this.#set({ objects: this.#state.objects.map((object, at) => (at === index ? { ...object, transform: current } : object)) });
+        this.#set({ invalid: { ...this.#state.invalid, [id]: message(error) } });
+      }
+    });
+  }
+
+  /** Whether every object stands on the bed. */
+  get fitsBed(): boolean {
+    return this.#state.objects.every((object) => fitsBed(object.box, this.#state.bed));
+  }
+
+  setViewMode(mode: ViewMode): void {
+    this.#set({ view: { ...this.#state.view, mode } });
+  }
+
+  setViewTarget(target: "model" | "gcode"): void {
+    this.#set({ view: { ...this.#state.view, target } });
+  }
+
+  setExplode(explode: number): void {
+    this.#set({ view: { ...this.#state.view, explode } });
+  }
+
+  // --- G-code preview ---------------------------------------------------------------------------
+
+  /** Reads a G-code file's toolpaths layer range by layer range and shows them. */
+  loadPreview(gcode: string): Promise<void> {
+    return this.#enqueue(async () => {
+      this.#set({ preview: { ...NO_PREVIEW, status: "loading" } });
+      try {
+        const summary = await this.#client.previewLoad(gcode);
+        const chunks = [];
+        for (let from = 0; from < summary.layers.length; from += PREVIEW_CHUNK_LAYERS) {
+          chunks.push(await this.#client.previewChunk(gcode, from, Math.min(from + PREVIEW_CHUNK_LAYERS, summary.layers.length) - 1, true));
+        }
+        const data = mergeChunks(summary, chunks);
+        this.#set({
+          preview: { ...NO_PREVIEW, status: "ready", data, layerMin: 0, layerMax: Math.max(0, summary.layers.length - 1) },
+          view: { ...this.#state.view, target: "gcode" },
+        });
+      } catch (error) {
+        this.#set({ preview: { ...NO_PREVIEW, status: "failed", error: message(error) } });
+      }
+    });
+  }
+
+  setPreview(patch: Partial<Pick<PreviewState, "quantity" | "layerMin" | "layerMax" | "showTravel" | "explodeLayers">>): void {
+    this.#set({ preview: { ...this.#state.preview, ...patch } });
+  }
+
   /** Slices the model with the current selection, overrides and limits into the output folder. */
   slice(): Promise<SliceResult | null> {
     return this.#enqueue(async () => {
@@ -268,10 +474,12 @@ export class CockpitSession {
             limits: imported?.limits,
             model,
             output: `${outputDir.replace(/[\\/]$/, "")}/${base}.gcode`,
+            transforms: this.#state.objects.length > 0 ? this.#state.objects.map((object) => toEngineTransform(object.transform)) : undefined,
           },
           (progress) => this.#set({ slice: { ...this.#state.slice, status: "running", ...progress } }),
         );
         this.#set({ slice: { status: "done", percent: 100, message: "Finished", result, error: null } });
+        void this.loadPreview(result.gcode);
         return result;
       } catch (error) {
         this.#set({ slice: { ...IDLE_SLICE, status: "failed", error: message(error) } });

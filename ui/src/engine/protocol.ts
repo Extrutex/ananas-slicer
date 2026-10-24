@@ -105,6 +105,8 @@ export interface LimitsImportResult {
 export interface SliceRequest extends Selection {
   model: string;
   output: string;
+  /** One placement per object; without it the model keeps its layout and is centred. */
+  transforms?: ObjectTransform[];
 }
 
 export interface SliceResult {
@@ -134,4 +136,85 @@ export class EngineRpcError extends Error {
     this.name = "EngineRpcError";
     this.code = code;
   }
+}
+
+/** An object's placement on the bed (docs/HLSD/engine.md): position is the centre of its bounding box. */
+export interface ObjectTransform {
+  position?: [number, number];
+  rotation?: [number, number, number];
+  scale?: [number, number, number];
+}
+
+export interface BoxJson {
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
+export interface MeshStats {
+  facets: number;
+  volume: number;
+  open_edges: number;
+  shells: number;
+  repaired: {
+    degenerate_facets: number;
+    edges_fixed: number;
+    facets_removed: number;
+    facets_reversed: number;
+    backwards_edges: number;
+  };
+}
+
+export interface PartJson {
+  name: string;
+  vertices: string;
+  indices: string;
+  triangles: number;
+  bbox: BoxJson;
+}
+
+export interface ObjectJson {
+  name: string;
+  /** Where the file puts the object; null when it has no instance. */
+  placement: { position: [number, number]; rotation: [number, number, number]; scale: [number, number, number]; bbox: BoxJson } | null;
+  parts: PartJson[];
+  bbox: BoxJson;
+  stats: MeshStats;
+}
+
+export interface ModelLoadResult {
+  path: string;
+  objects: ObjectJson[];
+}
+
+export interface BoundsResult {
+  objects: { bbox: BoxJson; offset: [number, number, number] }[];
+}
+
+export interface Range {
+  min: number;
+  max: number;
+}
+
+export interface PreviewSummary {
+  gcode: string;
+  time_s: number;
+  layers: { id: number; z: number }[];
+  extrusion_segments: number;
+  travel_segments: number;
+  bbox: BoxJson | null;
+  speed: Range;
+  flow: Range;
+  accel: Range;
+  roles: { id: number; name: string; segments: number }[];
+}
+
+export interface PreviewChunkJson {
+  count: number;
+  positions?: string;
+  speed?: string;
+  flow?: string;
+  accel?: string;
+  role?: string;
+  kind?: string;
+  layer?: string;
 }

@@ -1,9 +1,12 @@
 import { useRef, useState } from "react";
 import { AckDialog } from "./AckDialog.tsx";
+import { OBJECT_PREFIX, objectGroup } from "./cockpit/objectParams.ts";
 import { Sidebar } from "./cockpit/Sidebar.tsx";
 import type { SliceResult } from "./engine/protocol.ts";
 import type { CockpitSession } from "./state/session.ts";
 import { useSession } from "./state/useSession.ts";
+import { fitsBed } from "./viewer/bed.ts";
+import { Viewer } from "./viewer/Viewer.tsx";
 
 const SELECT_CLASS =
   "h-target max-w-[220px] truncate rounded border border-edge-field bg-surface-field px-1.5 font-data text-ks-table text-ink-strong";
@@ -50,6 +53,9 @@ export function App({ session }: { session: CockpitSession }) {
 
   const exceeded = state.resolved?.violations.filter((violation) => violation.state === "exceeded") ?? [];
   const running = state.slice.status === "running";
+  const selectedObject = state.selected !== null ? state.objects[state.selected] : undefined;
+  const outside = state.objects.some((object) => !fitsBed(object.box, state.bed));
+  const groups = selectedObject ? [objectGroup(selectedObject), ...state.groups] : state.groups;
   const limitsSource = state.imported
     ? `${state.resolved?.limits?.source ?? "printer.cfg"} · ${state.imported.label}`
     : "profile defaults";
@@ -149,7 +155,8 @@ export function App({ session }: { session: CockpitSession }) {
 
         <button
           type="button"
-          disabled={running}
+          disabled={running || outside || state.objects.length === 0}
+          title={outside ? "An object is outside the print area" : undefined}
           onClick={startSlice}
           className="ml-auto h-target rounded border border-edge-strong bg-carbon-700 px-3 font-semibold text-ink-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:text-ink-disabled"
         >
@@ -159,18 +166,24 @@ export function App({ session }: { session: CockpitSession }) {
 
       <div className="flex min-h-0 flex-1">
         <Sidebar
-          groups={state.groups}
+          groups={groups}
           rejected={state.invalid}
-          onValueChange={(key, value) => void session.setValue(key, value)}
+          onValueChange={(key, value) => void (key.startsWith(OBJECT_PREFIX) ? session.setObjectValue(key, value) : session.setValue(key, value))}
           onDismiss={(key) => session.dismissInvalid(key)}
           machineLabel={state.selection.printer}
           configSource={limitsSource}
+          extra={
+            selectedObject ? (
+              <label className="flex items-center gap-2 border-b border-edge px-3 py-1.5 font-data text-ks-table text-ink-muted">
+                <input type="checkbox" checked={state.uniformScale} onChange={(event) => session.setUniformScale(event.target.checked)} />
+                Uniform scale
+              </label>
+            ) : null
+          }
         />
 
         <main className="flex min-w-0 flex-1 flex-col bg-surface-viewport">
-          <div className="flex flex-1 items-center justify-center text-ink-muted">
-            <p className="m-0 font-data text-ks-table">3D viewport {"–"} not built yet</p>
-          </div>
+          <Viewer session={session} state={state} />
           <section aria-label="Slice" className="border-t border-edge bg-surface-panel px-4 py-3">
             <div className="flex items-center gap-3">
               <label className="flex flex-1 items-center gap-2 text-ks-table text-ink-muted">
@@ -181,9 +194,22 @@ export function App({ session }: { session: CockpitSession }) {
                   spellCheck={false}
                   value={state.model}
                   onChange={(event) => session.setModel(event.target.value)}
+                  onKeyDown={(event) => event.key === "Enter" && void session.loadModel(state.model)}
                   className="h-target min-w-0 flex-1 rounded border border-edge-field bg-surface-field px-2 font-data text-ks-table text-ink-strong"
                 />
               </label>
+              <button
+                type="button"
+                onClick={() => void session.loadModel(state.model)}
+                className="h-target rounded border border-edge-strong bg-surface-raised px-3 text-ks-table text-ink hover:bg-surface-hover"
+              >
+                Open
+              </button>
+              {state.modelError ? (
+                <span role="alert" className="max-w-[40%] truncate font-data text-ks-table text-signal-limit" title={state.modelError}>
+                  {state.modelError}
+                </span>
+              ) : null}
             </div>
             {state.slice.status !== "idle" ? (
               <div className="mt-3" data-testid="slice-status" data-status={state.slice.status}>

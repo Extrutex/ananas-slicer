@@ -29,12 +29,39 @@ settings tabs and are ambiguous in a table.
   an em dash otherwise.
 - Slicing with a value above a limit first asks for an acknowledgement that lists every violation.
 
+## The viewport
+
+`ui/src/viewer` draws the bed, the model and the G-code. `ViewerScene.ts` is the only WebGL code; everything that can
+be decided without a GPU sits in pure modules next to it (`bed`, `heatmap`, `inspect`, `objects`, `preview`) and is
+tested without one.
+
+- **Where an object stands** is decided by the engine (`model.bounds`), never by the browser: the browser builds
+  its matrix from the engine's offset, rotation and scale (`T * Rz*Ry*Rx * S`), and a test compares it with the
+  engine's own bounding box for rotated, scaled and multi-object models. Dragging moves the object at once and the
+  engine confirms the placement when the pointer is released.
+- **Looks:** soft shadows from a key light, a studio environment for the reflections, screen-space ambient occlusion,
+  and crease edges so a part reads like a CAD model: smooth over curved surfaces, sharp across creases.
+- **Views of the model:** *Solid*; *Mesh* (triangles as a wireframe); *Inspect*, which paints every face by what the
+  printer has to do for it: no support needed, near the profile's support threshold, needs support, on the bed. The
+  colours are flat and unlit so they are the legend's colours; the camera may go under the bed, which turns
+  translucent, to look at the undersides. The mesh statistics (triangles, volume, open edges, repairs) are shown.
+- **Exploded view:** the parts of a multi-part model move apart along the line from the model's centre; for a
+  G-code the layers move apart by a gap per layer.
+- **G-code:** the toolpaths come from `preview.*` in layer chunks, are coloured by speed, flow or acceleration with the
+  eleven-bin ramp of the design, and a value above the machine limit takes the limit colour instead of the top of
+  the ramp. A layer range and a travel-move switch limit what is drawn.
+- Without WebGL the viewport says so; the cockpit keeps working.
+
+Not built yet: drawing a path with its real width and height, cut-away sections, painting supports, arranging
+several objects automatically.
+
 ## Running it
 
 ```sh
 cd ui
 npm install
-npm test                    # unit, session and app tests; the last two start the real engine
+npm test                    # unit, session and app tests; most of them start the real engine
+npm run e2e                 # the viewer in headless Chrome: page and pixels (needs Chrome; CHROME_BIN picks it)
 cargo test --manifest-path src-tauri/Cargo.toml     # the Rust bridge against the real engine
 
 # in a plain browser
