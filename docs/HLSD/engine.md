@@ -79,7 +79,8 @@ mm, N and MPa; z is the build direction.
   by the sign of its volume) and whose centre lies within 0.87 voxel of it. That reach is the halo: a selection can
   take faces up to 0.87 voxel beyond the triangle's edge, and a face that lies between two grid planes pulls in only
   the outer layer, not the side faces. A selection that finds no quad at all (neither by box nor by triangle, e.g. a
-  triangle much smaller than a cell) takes the nodes within 0.87 voxel instead. A support
+  triangle much smaller than a cell) takes the nodes within 0.87 voxel instead; if a box finds quads but a tiny triangle of the same selection finds none, that
+  triangle is silently dropped (the fallback applies only when the whole selection is empty). A support
   holds the displacement components in its `axes` (default all three) at zero at the nodes of the selected quads (and
   the box nodes). A load has a `force` in N, the resultant on the selection; it is spread over the selected quads, as
   the consistent load of a uniform traction, or equally over the nodes when the selection has no quad.
@@ -119,8 +120,10 @@ mm, N and MPa; z is the build direction.
   (at least 5 % of the material, or where the stress is highest; bending locks, so the result is too stiff and too low),
   a voxel volume more than 20 % off the mesh volume (thin parts lost), negative volumes (ignored, so what they cut out
   is solid), a load that partly acts on held nodes (those parts go into the support; shown when more than 1 % of the
-  input force is lost), a skipped thin-wall check (it has its own time budget `warning_seconds` after the solver, and a
-  converged result is never discarded for it), several instances (only the first is analysed), and parts that touch only at an edge or corner (a hinge in
+  input force is lost, judged per load against the sum of the load magnitudes, so loads that cancel neither hide a loss nor
+  raise a false alarm), a skipped thin-wall check (it has its own time budget `warning_seconds` after the solver, which
+  must be finite and above 0 and is cut to what is left of `max_seconds`, so the whole analysis stays within
+  `max_seconds`; a converged result is never discarded for it), several instances (only the first is analysed), and parts that touch only at an edge or corner (a hinge in
   the voxel model).
 
 Limits to keep in mind: a voxel model has a stepped surface, stress at a corner or under a point load grows without

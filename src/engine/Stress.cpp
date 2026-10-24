@@ -689,6 +689,8 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         invalid("the loads add up to more than " + Deadline::format_seconds(STRESS_MAX_FORCE) + " N in one direction");
     if (!(input.max_seconds > 0.) || !std::isfinite(input.max_seconds))
         invalid("max_seconds must be above 0");
+    if (!(input.warning_seconds > 0.) || !std::isfinite(input.warning_seconds))
+        invalid("warning_seconds must be finite and above 0");
     for (const StressSupport& s : input.supports)
         if (s.where.box && (!s.where.box->min.allFinite() || !s.where.box->max.allFinite()))
             invalid("a support box must be finite");
@@ -821,8 +823,24 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
                         fixed[3 * node + a] = 1;
     }
     std::vector<double> f(n_dofs, 0.);
-    for (size_t l = 0; l < input.loads.size(); ++l)
-        distribute_load(pick(input.loads[l].where, "load", l), input.loads[l].force, f);
+    // What each load loses to the supports is judged on its own, against the sum of the magnitudes of all loads: loads
+    // that cancel (a pair, a couple) neither hide a loss nor raise a false alarm.
+    double              force_total = 0., force_lost = 0.;
+    {
+        std::vector<double> one(n_dofs, 0.);
+        for (size_t l = 0; l < input.loads.size(); ++l) {
+            std::fill(one.begin(), one.end(), 0.);
+            distribute_load(pick(input.loads[l].where, "load", l), input.loads[l].force, one);
+            Vec3d reaches = Vec3d::Zero();
+            for (size_t i = 0; i < n_dofs; ++i) {
+                if (!fixed[i])
+                    reaches[i % 3] += one[i];
+                f[i] += one[i];
+            }
+            force_total += input.loads[l].force.stableNorm();
+            force_lost  += (input.loads[l].force - reaches).stableNorm();
+        }
+    }
 
     StressResult result;
     result.warnings   = input.warnings;
@@ -832,9 +850,6 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
     result.solid_cells = solid_cells;
     result.nodes      = n_nodes;
     result.fixed_dofs = size_t(std::count(fixed.begin(), fixed.end(), 1));
-    Vec3d input_force = Vec3d::Zero();
-    for (const StressLoad& load : input.loads)
-        input_force += load.force;
     double f_max = 0.;
     for (size_t i = 0; i < n_dofs; ++i)
         if (fixed[i])
@@ -844,9 +859,9 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
             f_max = std::max(f_max, std::abs(f[i]));
         }
     // A load on a held node goes into the support and is lost for the body: say so when it is more than a hundredth.
-    if ((result.applied_force - input_force).norm() > 0.01 * input_force.norm())
+    if (force_total > 0. && force_lost > 0.01 * force_total)
         result.warnings.push_back("Part of the load acts on nodes that a support holds and is taken by the support: " +
-                                  Deadline::format_seconds(result.applied_force.norm()) + " N of " + Deadline::format_seconds(input_force.norm()) +
+                                  Deadline::format_seconds(force_total - force_lost) + " N of " + Deadline::format_seconds(force_total) +
                                   " N reach the body. Keep loads and supports apart or use a smaller voxel_size.");
     if (!(f_max > 0.) || !std::isfinite(f_max))
         invalid("no load reaches a free node (all loaded nodes are held by a support, or the force is zero)");
@@ -1114,7 +1129,8 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         const size_t max_cell = grid.cell(index_of(0, grid.nx), index_of(1, grid.ny), index_of(2, grid.nz));
         // The converged result is never thrown away for the warnings: they have a time budget of their own.
         Deadline warning_clock;
-        warning_clock.seconds = input.warning_seconds;
+        // Within max_seconds, which counts from the start of the call: the check gets what is left of it, at most warning_seconds.
+        warning_clock.seconds = std::max(0., std::min(input.warning_seconds, max_seconds - std::chrono::duration<double>(std::chrono::steady_clock::now() - deadline.start).count()));
         ThinResult thin;
         bool       thin_checked = true;
         try {

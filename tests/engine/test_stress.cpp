@@ -788,8 +788,9 @@ TEST_CASE("Stress: a triangle selection takes only the face that looks the way t
 TEST_CASE("Stress: a tilted end face is loaded and held without loss", "[Engine][Stress]")
 {
     indexed_triangle_set mesh = bar(30., 8., 8.);
-    const double         angle = 20. * M_PI / 180.;
-    for (auto& v : mesh.vertices) // rotation about y: the end faces now lean by 20 degrees
+    const double         degrees = GENERATE(20., 45.);
+    const double         angle = degrees * M_PI / 180.;
+    for (auto& v : mesh.vertices) // rotation about y: the end faces now lean by 20 or 45 degrees
         v = Vec3f(float(std::cos(angle) * v.x() + std::sin(angle) * v.z()), v.y(), float(-std::sin(angle) * v.x() + std::cos(angle) * v.z()));
     const auto original = bar(30., 8., 8.);
     StressInput in = base(mesh, 1.);
@@ -848,4 +849,49 @@ TEST_CASE("Stress: a triangle much smaller than a cell takes the nodes near it f
     std::printf("[stress] tiny triangle load: applied %.6f N (input 5), reaction %.6f N\n", r.applied_force.x(), r.reaction.x());
     CHECK_THAT(r.applied_force.x(), Catch::Matchers::WithinRel(5., 1e-9));
     CHECK_THAT(r.reaction.x(), Catch::Matchers::WithinRel(-5., 1e-6));
+}
+
+TEST_CASE("Stress: the load warning judges each load, not the vector sum", "[Engine][Stress]")
+{
+    SECTION("a load pair that cancels and loses nothing gives no warning")
+    {
+        StressInput in = cantilever(20., 4., 10., 1.);
+        StressLoad  back = in.loads.front();
+        back.where       = box(Vec3d(10, 0, 0), Vec3d(10, 4, 4)); // free nodes in the middle
+        back.force       = Vec3d(0, 0, 10);
+        in.loads.push_back(back);
+        const StressResult r = solve_stress(in);
+        CHECK(r.converged);
+        CHECK_FALSE(has_warning(r, "taken by the support"));
+    }
+    SECTION("a pair that cancels but loses one part warns")
+    {
+        StressInput in = cantilever(20., 4., 10., 1.);
+        StressLoad  back = in.loads.front();
+        back.where       = box(Vec3d(0, 0, 0), Vec3d(0, 4, 4)); // entirely on the support
+        back.force       = Vec3d(0, 0, 10);
+        in.loads.push_back(back);
+        const StressResult r = solve_stress(in);
+        std::printf("[stress] cancelling pair with a lost part: warnings %zu\n", r.warnings.size());
+        CHECK(has_warning(r, "taken by the support"));
+    }
+    SECTION("a tiny load with a loss warns, one without does not")
+    {
+        StressInput in = cantilever(20., 4., 1e-200, 1.);
+        CHECK_FALSE(has_warning(solve_stress(in), "taken by the support"));
+        in.loads.front().where = box(Vec3d(0, 0, 0), Vec3d(1, 4, 4));
+        CHECK(has_warning(solve_stress(in), "taken by the support"));
+    }
+}
+
+TEST_CASE("Stress: warning_seconds must be finite and above 0, and stays within max_seconds", "[Engine][Stress]")
+{
+    StressInput in = cantilever(20., 4., 1., 1.);
+    for (double bad : { std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(), 0., -1. }) {
+        in.warning_seconds = bad;
+        CHECK(error_of([&] { solve_stress(in); }) == ErrorCode::InvalidParams);
+    }
+    in.warning_seconds = 1e12; // cut to what is left of max_seconds, the result is still complete
+    in.max_seconds     = 600.;
+    CHECK(solve_stress(in).converged);
 }
