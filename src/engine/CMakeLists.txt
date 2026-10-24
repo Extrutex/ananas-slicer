@@ -5,6 +5,11 @@ add_library(ananas_engine_core STATIC
     Engine.hpp
     Limits.cpp
     Limits.hpp
+    ModelData.cpp
+    ModelData.hpp
+    Preview.cpp
+    Preview.hpp
+    Base64.hpp
     Schema.cpp
     Schema.hpp
 )

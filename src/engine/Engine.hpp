@@ -1,5 +1,8 @@
 #pragma once
 
+#include "ModelData.hpp"
+#include "Preview.hpp"
+
 #include "libslic3r/AppConfig.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "libslic3r/PrintConfig.hpp"
@@ -55,6 +58,10 @@ private:
     nlohmann::json config_resolve(const nlohmann::json& params);
     nlohmann::json limits_import(const nlohmann::json& params) const;
     nlohmann::json limits_check(const nlohmann::json& params);
+    nlohmann::json model_load(const nlohmann::json& params);
+    nlohmann::json model_bounds(const nlohmann::json& params);
+    nlohmann::json preview_load(const nlohmann::json& params);
+    nlohmann::json preview_chunk(const nlohmann::json& params);
     nlohmann::json slice(const nlohmann::json& params, const nlohmann::json& request_id, const Notify& notify);
 
     // The full config of printer + process + filament, with "overrides" (key -> serialized value) and an
@@ -63,6 +70,8 @@ private:
 
     PresetBundle m_bundle;
     AppConfig    m_app_config;
+    ModelCache   m_models;
+    PreviewCache m_preview;
 };
 
 } // namespace Slic3r::engine

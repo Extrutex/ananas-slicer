@@ -6,8 +6,11 @@
 Standard library only. Exits non-zero on the first failed expectation.
 """
 
+import base64
 import json
+import math
 import os
+import struct
 import subprocess
 import sys
 import tempfile
@@ -173,6 +176,69 @@ def main():
 
         response, _ = engine.call("slice", {**base, "model": str(DATA / "no_such_model.stl"), "output": str(output)})
         expect(response["error"]["code"] == -32602, "slice with a missing model answers -32602")
+
+    # --- model ----------------------------------------------------------------------------------
+    cube = str(DATA / "20mm_cube.obj")
+    loaded = engine.result("model.load", {"path": cube})
+    obj = loaded["objects"][0]
+    expect(len(loaded["objects"]) == 1 and len(obj["parts"]) == 1, "model.load returns the object with one part")
+    part = obj["parts"][0]
+    vertices = struct.unpack("<%df" % (len(base64.b64decode(part["vertices"])) // 4), base64.b64decode(part["vertices"]))
+    indices = struct.unpack("<%dI" % (len(base64.b64decode(part["indices"])) // 4), base64.b64decode(part["indices"]))
+    expect(part["triangles"] == 12 and len(indices) == 36 and max(indices) < len(vertices) // 3,
+           "the part's mesh decodes to 12 triangles with valid indices")
+    size = [obj["bbox"]["max"][i] - obj["bbox"]["min"][i] for i in range(3)]
+    expect(all(abs(v - 20) < 1e-3 for v in size), "the object's bounding box is 20 mm on every side")
+    expect(obj["stats"]["open_edges"] == 0 and abs(obj["stats"]["volume"] - 8000) < 1 and obj["stats"]["shells"] == 1,
+           "the mesh statistics report a closed 8000 mm^3 shell")
+    response, _ = engine.call("model.load", {"path": "/no/such/model.stl"})
+    expect(response["error"]["code"] == -32602, "model.load of a missing file answers -32602")
+
+    def bbox_of(transform):
+        box = engine.result("model.bounds", {"path": cube, "transforms": [transform]})["objects"][0]["bbox"]
+        return box["min"], box["max"]
+
+    low, high = bbox_of({"position": [100, 120]})
+    expect(abs((low[0] + high[0]) / 2 - 100) < 1e-6 and abs((low[1] + high[1]) / 2 - 120) < 1e-6 and abs(low[2]) < 1e-6,
+           "model.bounds centres the object at the position and sets it down on the bed")
+    low, high = bbox_of({"position": [0, 0], "scale": [2, 1, 0.5]})
+    expect(abs(high[0] - low[0] - 40) < 1e-3 and abs(high[2] - low[2] - 10) < 1e-3, "scale applies per axis")
+    low, high = bbox_of({"position": [0, 0], "rotation": [0, 0, 45]})
+    expect(abs(high[0] - low[0] - 20 * math.sqrt(2)) < 1e-3, "a rotation about Z widens the footprint to the diagonal")
+    low, high = bbox_of({"position": [0, 0], "rotation": [45, 0, 0]})
+    expect(abs(low[2]) < 1e-6 and abs(high[2] - 20 * math.sqrt(2)) < 1e-3, "a rotation about X is set down on the bed again")
+    for bad in ({"scale": [0, 1, 1]}, {"rotation": [0, 0]}, {"position": [1]}, {"scale": [1, 1, 5000]}):
+        response, _ = engine.call("model.bounds", {"path": cube, "transforms": [bad]})
+        expect(response["error"]["code"] == -32602, f"model.bounds refuses {bad}")
+
+    # --- slice with a placement, then the preview of its G-code ---------------------------------
+    with tempfile.TemporaryDirectory() as out_dir:
+        output = Path(out_dir) / "placed.gcode"
+        placed = engine.result("slice", {**base, "model": cube, "output": str(output),
+                                         "transforms": [{"position": [60, 70], "scale": [1, 1, 0.5]}]})
+        expect(placed["layers"] == 50, "a model scaled to half height slices to half the layers")
+        info_ = engine.result("preview.load", {"gcode": str(output)})
+        expect(len(info_["layers"]) == 50 and info_["extrusion_segments"] > 1000, "preview.load describes the layers and segments")
+        low, high = info_["bbox"]["min"], info_["bbox"]["max"]
+        expect(40 < (low[0] + high[0]) / 2 < 80 and abs((low[1] + high[1]) / 2 - 70) < 15,
+               "the toolpaths lie where the object was placed (skirt included)")
+        expect(info_["speed"]["max"] > 0 and info_["flow"]["max"] > 0 and info_["accel"]["max"] > 0, "speed, flow and acceleration ranges are reported")
+        expect({r["name"] for r in info_["roles"]} >= {"Outer wall", "Sparse infill"}, "the roles present are named")
+        chunk = engine.result("preview.chunk", {"gcode": str(output), "layer_from": 0, "layer_to": 9})
+        count = chunk["count"]
+        positions = struct.unpack("<%df" % (count * 6), base64.b64decode(chunk["positions"]))
+        speeds = struct.unpack("<%df" % count, base64.b64decode(chunk["speed"]))
+        layers = struct.unpack("<%dH" % count, base64.b64decode(chunk["layer"]))
+        expect(count > 100 and len(positions) == count * 6 and min(speeds) > 0 and max(layers) <= 9 and min(layers) == 0,
+               f"preview.chunk returns typed arrays for the first ten layers ({count} segments)")
+        z_by_layer = {layer: positions[i * 6 + 5] for i, layer in enumerate(layers)}
+        expect(all(abs(z - info_["layers"][layer]["z"]) < 1e-3 for layer, z in z_by_layer.items()), "segment heights match the layer table")
+        with_travel = engine.result("preview.chunk", {"gcode": str(output), "layer_from": 0, "layer_to": 9, "travel": True})
+        expect(with_travel["count"] > count, "travel moves come with the travel flag only")
+        response, _ = engine.call("preview.chunk", {"gcode": str(output), "layer_from": 5, "layer_to": 500})
+        expect(response["error"]["code"] == -32602, "a layer range beyond the file answers -32602")
+        response, _ = engine.call("preview.load", {"gcode": str(Path(out_dir) / "missing.gcode")})
+        expect(response["error"]["code"] == -32602, "preview.load of a missing file answers -32602")
 
     engine.close()
     expect(all(json.loads(line) for line in engine.stdout_lines), "the protocol channel carried only JSON")

@@ -36,7 +36,16 @@ invalid parameters, `-32001` a named preset does not exist, `-32000` the operati
 | `config.resolve` | `printer`, optional `process`, `filament`, `overrides`, `limits` | the resolved preset names, the full config as serialized strings, the effective `limits` and the limit violations |
 | `limits.import` | exactly one of `printer_cfg` (text) or `moonraker` (JSON text) | the Klipper limits as Klipper resolves them, their source, and the importer's warnings |
 | `limits.check` | as `config.resolve` | the effective `limits` and the limit violations |
+| `model.load` | `path` | the model's objects: per object its model parts as meshes (base64 float32 vertices, uint32 indices), bounding box and mesh statistics (facets, volume, open edges, shells, repairs) |
+| `model.bounds` | `path`, `transforms` | per object the bounding box and the instance offset after the transform |
+| `preview.load` | `gcode` | the layers (index, z), extent, speed/flow/acceleration ranges, roles, estimated time and segment counts of a G-code file |
+| `preview.chunk` | `gcode`, `layer_from`, `layer_to`, optional `travel` | the segments of a layer range as typed arrays: positions, speed, flow, acceleration, role, kind, layer |
 | `slice` | as `config.resolve`, plus `model` and `output` | the G-code path, estimated time, layer count, filament use, effective limits and violations; `slice.progress` notifications with the request id |
+
+A transform is `{position:[x,y], rotation:[x,y,z], scale:[x,y,z]}`, every key optional: `position` is the centre
+of the transformed object's bounding box on the bed, rotation is in degrees (applied as Rz*Ry*Rx), and the object is
+always set down on the bed. `slice` takes `transforms`, one per object; without it the model keeps its layout and is
+centred on the bed. `preview.*` reads the G-code itself, so it serves any file, also one the engine did not write.
 
 `process` and `filament` default to the printer's own. `overrides` maps a setting key to its serialized value.
 `limits` is an object with the Klipper limits and a `source` of `printer_cfg` or `moonraker`; it replaces the

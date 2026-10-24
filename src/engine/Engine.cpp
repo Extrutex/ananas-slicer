@@ -29,8 +29,9 @@ namespace {
 
 constexpr int PROTOCOL_VERSION = 1;
 
-const char* const METHODS[] = { "engine.info",   "presets.list", "config.schema", "config.resolve",
-                                "limits.import", "limits.check", "slice" };
+const char* const METHODS[] = { "engine.info",   "presets.list", "config.schema", "config.resolve", "limits.import",
+                                "limits.check",  "model.load",   "model.bounds",  "preview.load",   "preview.chunk",
+                                "slice" };
 
 const json& param(const json& params, const char* name)
 {
@@ -49,6 +50,27 @@ std::string string_param(const json& params, const char* name, bool required)
     if (!value.is_string())
         throw EngineError(ErrorCode::InvalidParams, std::string("parameter \"") + name + "\" must be a string");
     return value.get<std::string>();
+}
+
+size_t index_param(const json& params, const char* name, bool required)
+{
+    const json& value = param(params, name);
+    if (value.is_null()) {
+        if (required)
+            throw EngineError(ErrorCode::InvalidParams, std::string("missing parameter \"") + name + "\"");
+        return 0;
+    }
+    if (!value.is_number_unsigned())
+        throw EngineError(ErrorCode::InvalidParams, std::string("parameter \"") + name + "\" must be a non-negative integer");
+    return value.get<size_t>();
+}
+
+// The transform for object `index` from the "transforms" array; an object without an entry gets the default one.
+ObjectTransform transform_at(const json& transforms, size_t index)
+{
+    if (!transforms.is_array())
+        throw EngineError(ErrorCode::InvalidParams, "\"transforms\" must be an array");
+    return index < transforms.size() ? parse_transform(transforms[index]) : ObjectTransform{};
 }
 
 Vec2d printable_area_center(const DynamicPrintConfig& config)
@@ -210,6 +232,9 @@ Engine::Engine(const std::string& profiles_dir, const std::string& vendor)
     // Validation mode reads the vendors straight from the profiles folder instead of a data directory,
     // so the engine neither needs nor writes a user data tree.
     set_data_dir(profiles_dir);
+    // The 3MF and STEP readers keep working copies under the temporary directory; unset, that is the
+    // root of the file system and a read of any 3MF fails.
+    set_temporary_dir((fs::temp_directory_path() / "ananas-engine").string());
     const fs::path resources = fs::path(profiles_dir).parent_path();
     if (fs::exists(resources / "info"))
         set_resources_dir(resources.string());
@@ -409,6 +434,59 @@ json Engine::limits_check(const json& params)
     return { { "limits", effective_limits_json(config) }, { "violations", violations_json(config) } };
 }
 
+json Engine::model_load(const json& params)
+{
+    const std::string path = string_param(params, "path", true);
+    if (!fs::is_regular_file(path))
+        throw EngineError(ErrorCode::InvalidParams, "model file not found: " + path);
+    try {
+        const Model model   = m_models.copy_of(path);
+        json        objects = json::array();
+        for (const ModelObject* object : model.objects)
+            objects.push_back(object_mesh_json(*object));
+        return { { "path", path }, { "objects", std::move(objects) } };
+    } catch (const EngineError&) {
+        throw;
+    } catch (const std::exception& ex) {
+        throw EngineError(ErrorCode::EngineError, std::string("cannot read the model: ") + ex.what());
+    }
+}
+
+json Engine::model_bounds(const json& params)
+{
+    const std::string path = string_param(params, "path", true);
+    if (!fs::is_regular_file(path))
+        throw EngineError(ErrorCode::InvalidParams, "model file not found: " + path);
+    try {
+        Model model = m_models.copy_of(path);
+        json  boxes = json::array();
+        for (size_t i = 0; i < model.objects.size(); ++i) {
+            ModelObject&        object = *model.objects[i];
+            const BoundingBoxf3 box    = apply_transform(object, transform_at(param(params, "transforms"), i), Vec2d::Zero());
+            const Vec3d         offset = object.instances.front()->get_offset();
+            // The offset is what the slicer moves the object by, so a front end can draw it exactly there.
+            boxes.push_back({ { "bbox", bounding_box_json(box) }, { "offset", { offset.x(), offset.y(), offset.z() } } });
+        }
+        return { { "objects", std::move(boxes) } };
+    } catch (const EngineError&) {
+        throw;
+    } catch (const std::exception& ex) {
+        throw EngineError(ErrorCode::EngineError, std::string("cannot read the model: ") + ex.what());
+    }
+}
+
+json Engine::preview_load(const json& params)
+{
+    return m_preview.load(string_param(params, "gcode", true));
+}
+
+json Engine::preview_chunk(const json& params)
+{
+    const json& travel = param(params, "travel");
+    return m_preview.chunk(string_param(params, "gcode", true), index_param(params, "layer_from", true), index_param(params, "layer_to", true),
+                           travel.is_boolean() && travel.get<bool>());
+}
+
 json Engine::slice(const json& params, const json& request_id, const Notify& notify)
 {
     const std::string model_path  = string_param(params, "model", true);
@@ -419,10 +497,18 @@ json Engine::slice(const json& params, const json& request_id, const Notify& not
     const DynamicPrintConfig config = resolve(params);
 
     try {
-        Model model = Model::read_from_file(model_path);
+        Model model = m_models.copy_of(model_path);
         if (model.objects.empty())
             throw EngineError(ErrorCode::EngineError, "the model file contains no objects");
-        model.center_instances_around_point(printable_area_center(config));
+        const Vec2d center = printable_area_center(config);
+        const json& transforms = param(params, "transforms");
+        if (transforms.is_null()) {
+            // No placement given: keep the model's own layout and put it in the middle of the bed.
+            model.center_instances_around_point(center);
+        } else {
+            for (size_t i = 0; i < model.objects.size(); ++i)
+                apply_transform(*model.objects[i], transform_at(transforms, i), center);
+        }
 
         Print print;
         for (ModelObject* object : model.objects) {
@@ -504,6 +590,14 @@ json Engine::handle(const json& request, const Notify& notify)
             result = limits_import(params);
         else if (method == "limits.check")
             result = limits_check(params);
+        else if (method == "model.load")
+            result = model_load(params);
+        else if (method == "model.bounds")
+            result = model_bounds(params);
+        else if (method == "preview.load")
+            result = preview_load(params);
+        else if (method == "preview.chunk")
+            result = preview_chunk(params);
         else if (method == "slice")
             result = slice(params, id, notify);
         else
