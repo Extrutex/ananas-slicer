@@ -42,19 +42,6 @@ constexpr std::array<ScalarRule, 6> ACCEL_RULES{ {
     { "bridge_acceleration", u8"mm/s²" },
 } };
 
-// A speed with the line width it prints at; their product with the layer height is the volumetric flow.
-struct FlowRule
-{
-    const char* speed_key;
-    const char* width_key;
-};
-
-constexpr std::array<FlowRule, 3> FLOW_RULES{ {
-    { "outer_wall_speed", "outer_wall_line_width" },
-    { "inner_wall_speed", "inner_wall_line_width" },
-    { "sparse_infill_speed", "sparse_infill_line_width" },
-} };
-
 std::string source_of(const ConfigBase& config)
 {
     const auto* source = config.option<ConfigOptionEnum<KlipperLimitsSource>>("klipper_limits_source");
@@ -91,22 +78,8 @@ double scalar(const ConfigBase& config, const std::string& key)
     return std::nan("");
 }
 
-// A line width in mm; a percentage is taken of the first nozzle diameter. NaN if unset or automatic (0).
-double line_width(const ConfigBase& config, const std::string& key)
-{
-    const auto* option = config.option<ConfigOptionFloatOrPercent>(key);
-    if (option == nullptr)
-        return std::nan("");
-    const double nozzle = scalar(config, "nozzle_diameter");
-    if (option->percent && std::isnan(nozzle))
-        return std::nan("");
-    const double width = option->get_abs_value(nozzle);
-    return width > 0.0 ? width : std::nan("");
-}
-
 void add_if_over(std::vector<LimitViolation>& out, const ConfigBase& config, const std::string& key, const char* unit,
-                 const char* kind, double value, double limit, const char* limit_key, const std::string& source,
-                 bool approximate = false)
+                 const char* kind, double value, double limit, const char* limit_key, const std::string& source)
 {
     if (std::isnan(value) || std::isnan(limit) || limit <= 0.0)
         return;
@@ -123,23 +96,29 @@ void add_if_over(std::vector<LimitViolation>& out, const ConfigBase& config, con
     violation.source      = source;
     violation.value       = value;
     violation.limit       = limit;
-    violation.approximate = approximate;
     out.push_back(std::move(violation));
 }
 
 } // namespace
 
+std::optional<EffectiveLimits> effective_limits(const DynamicPrintConfig& config)
+{
+    try {
+        return EffectiveLimits{ source_of(config), klipper_limits_from_config(config) };
+    } catch (const RuntimeError&) {
+        // A profile that states no machine limits and carries no imported snapshot has nothing to compare with.
+        return std::nullopt;
+    }
+}
+
 std::vector<LimitViolation> check_limits(const DynamicPrintConfig& config)
 {
     std::vector<LimitViolation> out;
-    KlipperLimits               limits;
-    try {
-        limits = klipper_limits_from_config(config);
-    } catch (const RuntimeError&) {
-        // A profile that states no machine limits and carries no imported snapshot has nothing to compare with.
+    const std::optional<EffectiveLimits> effective = effective_limits(config);
+    if (!effective)
         return out;
-    }
-    const std::string source = source_of(config);
+    const KlipperLimits& limits = effective->limits;
+    const std::string&   source = effective->source;
 
     for (const ScalarRule& rule : SPEED_RULES)
         add_if_over(out, config, rule.key, rule.unit, "machine", scalar(config, rule.key), limits.max_velocity,
@@ -148,20 +127,6 @@ std::vector<LimitViolation> check_limits(const DynamicPrintConfig& config)
         add_if_over(out, config, rule.key, rule.unit, "machine", scalar(config, rule.key), limits.max_accel,
                     "printer.max_accel", source);
 
-    // Volumetric flow: speed x line width x layer height against the filament's hot end limit. Computed from
-    // the nominal widths, not from the toolpaths, so it is marked approximate.
-    const double max_flow     = scalar(config, "filament_max_volumetric_speed");
-    const double layer_height = scalar(config, "layer_height");
-    if (!std::isnan(max_flow) && max_flow > 0.0 && !std::isnan(layer_height)) {
-        for (const FlowRule& rule : FLOW_RULES) {
-            const double speed = scalar(config, rule.speed_key);
-            const double width = line_width(config, rule.width_key);
-            if (std::isnan(speed) || std::isnan(width))
-                continue;
-            add_if_over(out, config, rule.speed_key, u8"mm³/s", "profile", speed * width * layer_height, max_flow,
-                        "filament.max_volumetric_speed", "profile", true);
-        }
-    }
     return out;
 }
 

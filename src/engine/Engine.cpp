@@ -137,8 +137,18 @@ json violation_json(const LimitViolation& v)
              { "value", v.value },
              { "limit", v.limit },
              { "limit_key", v.limit_key },
-             { "source", v.source },
-             { "approximate", v.approximate } };
+             { "source", v.source } };
+}
+
+json limits_to_json(const KlipperLimits& l);
+
+// The limits the violations are measured against, or null when the profile states none.
+json effective_limits_json(const DynamicPrintConfig& config)
+{
+    const std::optional<EffectiveLimits> effective = effective_limits(config);
+    if (!effective)
+        return nullptr;
+    return { { "source", effective->source }, { "values", limits_to_json(effective->limits) } };
 }
 
 json violations_json(const DynamicPrintConfig& config)
@@ -324,11 +334,22 @@ DynamicPrintConfig Engine::resolve(const json& params)
             const ConfigOptionDef* def = print_config_def.get(key);
             if (def == nullptr || !config.has(key))
                 throw EngineError(ErrorCode::InvalidParams, "unknown setting \"" + key + "\"");
-            if (const std::string reason = invalid_reason(*def, value.get<std::string>()); !reason.empty())
+            std::string text = value.get<std::string>();
+            if (const std::string reason = invalid_reason(*def, text); !reason.empty())
                 throw EngineError(ErrorCode::InvalidParams, "cannot set \"" + key + "\": " + reason);
+            // One value for a per-extruder setting applies to every extruder; assigning it as is would
+            // shorten the vector and leave the other extruders without a value.
+            if (!def->is_scalar() && text.find(',') == std::string::npos) {
+                const auto* current = static_cast<const ConfigOptionVectorBase*>(config.option(key));
+                if (current != nullptr && current->size() > 1) {
+                    const std::string single = text;
+                    for (size_t i = 1; i < current->size(); ++i)
+                        text += "," + single;
+                }
+            }
             ConfigSubstitutionContext substitutions(ForwardCompatibilitySubstitutionRule::Disable);
-            if (!config.set_deserialize_nothrow(key, value.get<std::string>(), substitutions))
-                throw EngineError(ErrorCode::InvalidParams, "cannot set \"" + key + "\" to \"" + value.get<std::string>() + "\"");
+            if (!config.set_deserialize_nothrow(key, text, substitutions))
+                throw EngineError(ErrorCode::InvalidParams, "cannot set \"" + key + "\" to \"" + text + "\"");
         }
     }
 
@@ -361,6 +382,7 @@ json Engine::config_resolve(const json& params)
              { "process", m_bundle.prints.get_selected_preset_name() },
              { "filament", m_bundle.filaments.get_selected_preset_name() },
              { "config", std::move(values) },
+             { "limits", effective_limits_json(config) },
              { "violations", violations_json(config) } };
 }
 
@@ -383,7 +405,8 @@ json Engine::limits_import(const json& params) const
 
 json Engine::limits_check(const json& params)
 {
-    return { { "violations", violations_json(resolve(params)) } };
+    const DynamicPrintConfig config = resolve(params);
+    return { { "limits", effective_limits_json(config) }, { "violations", violations_json(config) } };
 }
 
 json Engine::slice(const json& params, const json& request_id, const Notify& notify)
@@ -442,6 +465,7 @@ json Engine::slice(const json& params, const json& request_id, const Notify& not
                  { "layers", layers },
                  { "filament_mm", print.print_statistics().total_used_filament },
                  { "filament_g", print.print_statistics().total_weight },
+                 { "limits", effective_limits_json(config) },
                  { "violations", violations_json(config) } };
     } catch (const EngineError&) {
         throw;

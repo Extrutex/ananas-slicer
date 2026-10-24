@@ -100,38 +100,6 @@ TEST_CASE("an imported Klipper snapshot replaces the profile's machine limits an
     CHECK_THAT(found.front().limit, WithinAbs(3000., 1e-9));
 }
 
-TEST_CASE("a volumetric flow above the filament's limit is an approximate profile violation", "[EngineLimits]")
-{
-    DynamicPrintConfig config = config_with_machine_limits(300., 5000.);
-    config.set_key_value("layer_height", new ConfigOptionFloat(0.2));
-    config.set_key_value("outer_wall_line_width", new ConfigOptionFloatOrPercent(0.4, false));
-    config.set_key_value("outer_wall_speed", new ConfigOptionFloats({ 200. }));
-    config.set_key_value("filament_max_volumetric_speed", new ConfigOptionFloats({ 12. }));
-
-    // 200 mm/s x 0.4 mm x 0.2 mm = 16 mm^3/s
-    const auto found = violations_of(config, "outer_wall_speed", "profile");
-    REQUIRE(found.size() == 1);
-    CHECK(found.front().state == "exceeded");
-    CHECK(found.front().approximate);
-    CHECK(found.front().limit_key == "filament.max_volumetric_speed");
-    CHECK_THAT(found.front().value, WithinAbs(16., 1e-9));
-    CHECK_THAT(found.front().limit, WithinAbs(12., 1e-9));
-}
-
-TEST_CASE("a percentage line width is taken of the nozzle diameter", "[EngineLimits]")
-{
-    DynamicPrintConfig config = config_with_machine_limits(300., 5000.);
-    config.set_key_value("layer_height", new ConfigOptionFloat(0.2));
-    config.set_key_value("nozzle_diameter", new ConfigOptionFloats({ 0.4 }));
-    config.set_key_value("outer_wall_line_width", new ConfigOptionFloatOrPercent(100., true));
-    config.set_key_value("outer_wall_speed", new ConfigOptionFloats({ 200. }));
-    config.set_key_value("filament_max_volumetric_speed", new ConfigOptionFloats({ 12. }));
-
-    const auto found = violations_of(config, "outer_wall_speed", "profile");
-    REQUIRE(found.size() == 1);
-    CHECK_THAT(found.front().value, WithinAbs(16., 1e-9));
-}
-
 TEST_CASE("a profile without machine limits and without a snapshot has nothing to compare with", "[EngineLimits]")
 {
     DynamicPrintConfig config = config_with_machine_limits(0., 0.);

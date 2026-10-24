@@ -33,10 +33,10 @@ invalid parameters, `-32001` a named preset does not exist, `-32000` the operati
 | `engine.info` | – | name, version, protocol number, method names |
 | `presets.list` | optional `printer` | without `printer`: every instantiable printer preset with vendor, model, variant and default process; with it: the printer's compatible `processes` and `filaments` |
 | `config.schema` | – | every print, filament and printer setting: key, scope, type, vector, label, tooltip, category, unit, mode, bounds, enum choices, default |
-| `config.resolve` | `printer`, optional `process`, `filament`, `overrides`, `limits` | the resolved preset names, the full config as serialized strings and the limit violations |
+| `config.resolve` | `printer`, optional `process`, `filament`, `overrides`, `limits` | the resolved preset names, the full config as serialized strings, the effective `limits` and the limit violations |
 | `limits.import` | exactly one of `printer_cfg` (text) or `moonraker` (JSON text) | the Klipper limits as Klipper resolves them, their source, and the importer's warnings |
-| `limits.check` | as `config.resolve` | the limit violations |
-| `slice` | as `config.resolve`, plus `model` and `output` | the G-code path, estimated time, layer count, filament use and violations; `slice.progress` notifications with the request id |
+| `limits.check` | as `config.resolve` | the effective `limits` and the limit violations |
+| `slice` | as `config.resolve`, plus `model` and `output` | the G-code path, estimated time, layer count, filament use, effective limits and violations; `slice.progress` notifications with the request id |
 
 `process` and `filament` default to the printer's own. `overrides` maps a setting key to its serialized value.
 `limits` is an object with the Klipper limits and a `source` of `printer_cfg` or `moonraker`; it replaces the
@@ -51,15 +51,14 @@ is `-32602` with the reason, and nothing is changed. An invalid draft is never r
 
 ## Limits
 
-`check_limits` compares speeds and accelerations with the machine limits the config carries, and the volumetric
-flow of the wall and infill speeds with the filament's maximum. Machine limits come from an imported Klipper
-snapshot when there is one (`printer.cfg` or Moonraker) and otherwise from the profile's machine limits; the
+`check_limits` compares the print speeds and accelerations with the machine limits the config carries. Machine
+limits come from an imported Klipper snapshot when there is one (`printer.cfg` or Moonraker) and otherwise from the profile's machine limits; the
 violation names which (`source`). A violation has a `state`: `caution` from 90 % of the limit, `exceeded` above
 it. The engine reports and never clamps.
 
-The volumetric flow is computed from the nominal line width, speed and layer height, not from the toolpaths, and
-is marked `approximate`. The kind `firmware` is reserved: the importer already refuses Klipper values that are out
-of range, and no slicer setting can exceed a firmware limit.
+The kinds `profile` and `firmware` are reserved. The slicer caps the volumetric flow at the filament's maximum
+itself, so a speed that asks for more is not a violation, and the importer already refuses Klipper values that are
+out of range; no slicer setting can exceed a firmware limit.
 
 ## Slicing
 

@@ -143,6 +143,14 @@ def main():
     expect(response["error"]["code"] == -32602 and "smooth_time" in response["error"]["message"],
            "limits Klipper itself would refuse answer -32602")
 
+    # The effective limits come back with every resolve, so a nominal row can show its limit too.
+    defaults = engine.result("config.resolve", base)
+    expect(defaults["limits"]["source"] == "profile" and defaults["limits"]["values"]["max_accel"] > 0,
+           "config.resolve returns the effective limits and that they come from the profile")
+    imported_view = engine.result("limits.check", {**base, "limits": {**limits, "source": "moonraker"}})
+    expect(imported_view["limits"]["source"] == "moonraker" and imported_view["limits"]["values"]["max_accel"] == limits["max_accel"],
+           "limits.check returns an imported snapshot as the effective limits with its source")
+
     resolved = engine.result("config.resolve", {**base, "overrides": {"layer_height": "0.28"}})
     expect(resolved["printer"] == PRINTER and resolved["process"] == PROCESS and resolved["config"]["layer_height"] == "0.28",
            "config.resolve returns the names and applies overrides")
@@ -160,7 +168,8 @@ def main():
         percents = [n["params"]["percent"] for n in notifications if n["method"] == "slice.progress"]
         expect(percents and percents == sorted(percents) and percents[-1] >= 90, f"slice streams monotonic progress ({len(percents)} notifications)")
         expect(all(n["params"]["id"] == response["id"] for n in notifications), "progress notifications carry the request id")
-        expect(isinstance(result["violations"], list), "slice reports violations")
+        expect(isinstance(result["violations"], list) and result["limits"]["values"]["max_velocity"] > 0,
+               "slice reports violations and the limits they were measured against")
 
         response, _ = engine.call("slice", {**base, "model": str(DATA / "no_such_model.stl"), "output": str(output)})
         expect(response["error"]["code"] == -32602, "slice with a missing model answers -32602")
