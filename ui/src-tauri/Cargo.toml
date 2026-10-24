@@ -1,0 +1,15 @@
+[package]
+name = "ananas-ui"
+version = "0.0.0"
+description = "ANANAS SLICER user interface: a Tauri shell that drives ananas-engine."
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

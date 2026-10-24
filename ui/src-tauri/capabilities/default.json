@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The main window may listen for the engine's notifications; the engine commands are the app's own.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
