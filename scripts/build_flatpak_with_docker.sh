@@ -98,8 +98,8 @@ echo "  ccache:     enabled"
 echo ""
 
 # ---------- prepare manifest ----------
-MANIFEST_SRC="scripts/flatpak/de._3dwindt.AnanasSlicer.yml"
-MANIFEST_DOCKER="scripts/flatpak/de._3dwindt.AnanasSlicer.docker.yml"
+MANIFEST_SRC="scripts/flatpak/io.github.extrutex.AnanasSlicer.yml"
+MANIFEST_DOCKER="scripts/flatpak/io.github.extrutex.AnanasSlicer.docker.yml"
 # Ensure cleanup on exit (success or failure)
 trap 'rm -f "$PROJECT_ROOT/$MANIFEST_DOCKER"' EXIT
 
@@ -204,7 +204,7 @@ flatpak-builder $FORCE_CLEAN_FLAG \
     --arch="$BUILD_ARCH" \
     --repo=flatpak-repo \
     flatpak-build \
-    scripts/flatpak/de._3dwindt.AnanasSlicer.docker.yml
+    scripts/flatpak/io.github.extrutex.AnanasSlicer.docker.yml
 builder_end=$(date +%s)
 builder_duration=$((builder_end - builder_start))
 
@@ -213,7 +213,7 @@ flatpak build-bundle \
     --arch="$BUILD_ARCH" \
     flatpak-repo \
     "$BUNDLE_NAME" \
-    de._3dwindt.AnanasSlicer
+    io.github.extrutex.AnanasSlicer
 bundle_end=$(date +%s)
 bundle_duration=$((bundle_end - bundle_start))
 

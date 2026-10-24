@@ -1,4 +1,4 @@
-app-id: de._3dwindt.AnanasSlicer
+app-id: io.github.extrutex.AnanasSlicer
 runtime: org.gnome.Platform
 runtime-version: "50"
 sdk: org.gnome.Sdk
@@ -31,8 +31,8 @@ finish-args:
   - --filesystem=/mnt
   - --filesystem=/run/spnav.sock:ro
   # Allow ANANAS SLICER to own and talk to instance-check D-Bus names (InstanceCheck.cpp)
-  - --talk-name=de._3dwindt.AnanasSlicer.InstanceCheck.*
-  - --own-name=de._3dwindt.AnanasSlicer.InstanceCheck.*
+  - --talk-name=io.github.extrutex.AnanasSlicer.InstanceCheck.*
+  - --own-name=io.github.extrutex.AnanasSlicer.InstanceCheck.*
   - --system-talk-name=org.freedesktop.UDisks2
   - --env=SPNAV_SOCKET=/run/spnav.sock
   # Read-only access to the sandbox of the app id before the rename (KLIPSLICE): on the first start
@@ -450,7 +450,7 @@ modules:
 
       # AppData metainfo for GNOME Software & Co.
       - type: file
-        path: de._3dwindt.AnanasSlicer.metainfo.xml
+        path: io.github.extrutex.AnanasSlicer.metainfo.xml
 
       # Startup script
       - type: file

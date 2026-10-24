@@ -277,7 +277,7 @@ if (APPLE)
     if (CMAKE_MACOSX_BUNDLE)
         set(CMAKE_INSTALL_RPATH @executable_path/../Frameworks)
     endif()
-    SET(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "de.3dwindt.AnanasSlicer")
+    SET(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "io.github.extrutex.AnanasSlicer")
 
     # The macOS CI jobs build with Ninja (build_release_macos.sh -x), so the Xcode generator
     # is not covered. Xcode adds -Wshorten-64-to-32 by default ("Implicit Conversion to 32 Bit
@@ -1220,7 +1220,7 @@ elseif (SLIC3R_FHS)
     if(ORCA_BUNDLED_UV_EXECUTABLE)
         install(PROGRAMS "${ORCA_BUNDLED_UV_EXECUTABLE}" DESTINATION "${SLIC3R_FHS_RESOURCES}/tools/uv" RENAME "${ORCA_BUNDLED_UV_FILENAME}")
     endif()
-    install(FILES src/dev-utils/platform/unix/de._3dwindt.AnanasSlicer.desktop DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
+    install(FILES src/dev-utils/platform/unix/io.github.extrutex.AnanasSlicer.desktop DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
     foreach(SIZE 32 128 192 256 512)
         install(FILES ${SLIC3R_RESOURCES_DIR}/images/AnanasSlicer_${SIZE}px.png
             DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${SIZE}x${SIZE}/apps RENAME AnanasSlicer.png
@@ -1235,7 +1235,7 @@ elseif (CMAKE_MACOSX_BUNDLE)
         install(PROGRAMS "${ORCA_BUNDLED_UV_EXECUTABLE}" DESTINATION "${CMAKE_INSTALL_PREFIX}/AnanasSlicer.app/Contents/Resources/tools/uv" RENAME "${ORCA_BUNDLED_UV_FILENAME}")
     endif()
 else ()
-    install(FILES src/dev-utils/platform/unix/de._3dwindt.AnanasSlicer.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/resources/applications)
+    install(FILES src/dev-utils/platform/unix/io.github.extrutex.AnanasSlicer.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/resources/applications)
     install(DIRECTORY "${SLIC3R_RESOURCES_DIR}/" DESTINATION "${CMAKE_INSTALL_PREFIX}/resources")
     if(ORCA_BUNDLED_UV_EXECUTABLE)
         install(PROGRAMS "${ORCA_BUNDLED_UV_EXECUTABLE}" DESTINATION "${CMAKE_INSTALL_PREFIX}/resources/tools/uv" RENAME "${ORCA_BUNDLED_UV_FILENAME}")
@@ -1250,10 +1250,10 @@ configure_file(${LIBDIR}/dev-utils/platform/unix/fhs.hpp.in ${LIBDIR_BIN}/dev-ut
 # previous ANANAS SLICER and never an installed OrcaSlicer.
 set (CPACK_PACKAGE_NAME "ANANAS SLICER")
 set (CPACK_PACKAGE_VENDOR "ANANAS SLICER contributors")
-set (CPACK_PACKAGE_VERSION_MAJOR "${ORCA_VERSION_MAJOR}")
-set (CPACK_PACKAGE_VERSION_MINOR "${ORCA_VERSION_MINOR}")
-set (CPACK_PACKAGE_VERSION_PATCH "${ORCA_VERSION_PATCH}")
-set (CPACK_PACKAGE_FILE_NAME "AnanasSlicer_Windows_Installer_V${SoftFever_VERSION}")
+set (CPACK_PACKAGE_VERSION_MAJOR "${ANANAS_VERSION_MAJOR}")
+set (CPACK_PACKAGE_VERSION_MINOR "${ANANAS_VERSION_MINOR}")
+set (CPACK_PACKAGE_VERSION_PATCH "${ANANAS_VERSION_PATCH}")
+set (CPACK_PACKAGE_FILE_NAME "AnanasSlicer_Windows_Installer_V${ANANAS_VERSION}")
 # Suffix the Windows installer with its target arch so the x64 and arm64 builds
 # produce distinct filenames (matches ARCH_SUFFIX in build_orca.yml). Same
 # CMAKE_SYSTEM_PROCESSOR mapping used by orcaslicer_copy_dlls() above.
@@ -1265,7 +1265,7 @@ if (WIN32)
     endif ()
 endif ()
 set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "ANANAS SLICER is an open source slicer for Klipper printers")
-set (CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Extrutex/KlipSlice")
+set (CPACK_PACKAGE_HOMEPAGE_URL "${ANANAS_PROJECT_URL}")
 set (CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
 set (CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/resources/images\\\\AnanasSlicer.ico")
 set (CPACK_NSIS_MUI_ICON "${CPACK_PACKAGE_ICON}")

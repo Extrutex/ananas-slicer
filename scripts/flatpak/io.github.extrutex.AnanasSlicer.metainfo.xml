@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+    <id>io.github.extrutex.AnanasSlicer</id>
+    <launchable type="desktop-id">io.github.extrutex.AnanasSlicer.desktop</launchable>
+    <name>ANANAS SLICER</name>
+    <summary>Slicer for Klipper printers</summary>
+    <developer id="io.github.extrutex">
+        <name>ANANAS SLICER contributors</name>
+    </developer>
+    <url type="homepage">https://github.com/Extrutex/ananas-slicer</url>
+    <url type="bugtracker">https://github.com/Extrutex/ananas-slicer/issues</url>
+    <url type="vcs-browser">https://github.com/Extrutex/ananas-slicer</url>
+    <url type="help">https://extrutex.github.io/ananas-slicer-wiki/</url>
+    <url type="donation">https://ko-fi.com/3dw_sebastianwindt</url>
+    <metadata_license>0BSD</metadata_license>
+    <project_license>AGPL-3.0-only</project_license>
+    <content_rating type="oars-1.1" />
+    <requires>
+        <display_length compare="gt">768</display_length>
+    </requires>
+    <recommends>
+        <control>keyboard</control>
+        <control>pointing</control>
+    </recommends>
+    <description>
+        <p>ANANAS SLICER is a free and open-source, community-developed FDM slicer for printers
+            running Klipper, based on OrcaSlicer. It sends jobs to the printer through
+            Moonraker.</p>
+        <p>Key features include advanced calibration tools, adaptive layer heights, tree supports
+            and multi-material support.</p>
+    </description>
+    <!-- Brand neutrals from docs/design/tokens.css: alu-100 (ink) on light, carbon-850 (panel) on dark. -->
+    <branding>
+        <color type="primary" scheme_preference="light">#d8e0e6</color>
+        <color type="primary" scheme_preference="dark">#0f1317</color>
+    </branding>
+    <releases>
+        <release version="0.1.0-alpha.1" date="2026-10-24" type="development">
+            <description>
+                <p>First public alpha of ANANAS SLICER.</p>
+            </description>
+        </release>
+    </releases>
+</component>
