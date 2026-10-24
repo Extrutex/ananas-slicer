@@ -2,6 +2,7 @@
 
 #include "ModelData.hpp"
 #include "Preview.hpp"
+#include "StressApi.hpp"
 
 #include "libslic3r/AppConfig.hpp"
 #include "libslic3r/PresetBundle.hpp"
@@ -10,6 +11,7 @@
 #include <nlohmann/json.hpp>
 
 #include <functional>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -63,6 +65,8 @@ private:
     nlohmann::json model_bounds(const nlohmann::json& params);
     nlohmann::json preview_load(const nlohmann::json& params);
     nlohmann::json preview_chunk(const nlohmann::json& params);
+    nlohmann::json analyze_stress(const nlohmann::json& params, const nlohmann::json& request_id, const Notify& notify);
+    nlohmann::json analyze_chunk(const nlohmann::json& params) const;
     nlohmann::json moonraker_upload(const nlohmann::json& params) const;
     nlohmann::json moonraker_start(const nlohmann::json& params) const;
     nlohmann::json slice(const nlohmann::json& params, const nlohmann::json& request_id, const Notify& notify);
@@ -75,6 +79,9 @@ private:
     AppConfig    m_app_config;
     ModelCache   m_models;
     PreviewCache m_preview;
+    // The last stress analysis, kept for analyze.chunk; a new one replaces it.
+    std::shared_ptr<const StressResult> m_stress;
+    size_t                              m_stress_id{ 0 };
 };
 
 } // namespace Slic3r::engine

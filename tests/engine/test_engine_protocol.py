@@ -26,6 +26,29 @@ PROCESS = "0.20mm Standard @Voron"
 FILAMENT = "Generic PLA @System"
 
 
+def write_box_stl(path, dx, dy, dz):
+    """An ASCII STL of the box (0,0,0)-(dx,dy,dz). Triangles 0-1 are the x = 0 face, 2-3 the x = dx face."""
+    v = lambda x, y, z: (x * dx, y * dy, z * dz)
+    quads = [  # outward-facing quads: x=0, x=1, y=0, y=1, z=0, z=1
+        [v(0, 0, 0), v(0, 0, 1), v(0, 1, 1), v(0, 1, 0)],
+        [v(1, 0, 0), v(1, 1, 0), v(1, 1, 1), v(1, 0, 1)],
+        [v(0, 0, 0), v(1, 0, 0), v(1, 0, 1), v(0, 0, 1)],
+        [v(0, 1, 0), v(0, 1, 1), v(1, 1, 1), v(1, 1, 0)],
+        [v(0, 0, 0), v(0, 1, 0), v(1, 1, 0), v(1, 0, 0)],
+        [v(0, 0, 1), v(1, 0, 1), v(1, 1, 1), v(0, 1, 1)],
+    ]
+    triangles = []
+    for a, b, c, d in quads:
+        triangles += [(a, b, c), (a, c, d)]
+    lines = ["solid box"]
+    for t in triangles:
+        lines.append("facet normal 0 0 0\n outer loop")
+        lines += ["  vertex %.6f %.6f %.6f" % p for p in t]
+        lines.append(" endloop\nendfacet")
+    lines.append("endsolid box")
+    Path(path).write_text("\n".join(lines) + "\n")
+
+
 class Session:
     def __init__(self):
         self.proc = subprocess.Popen(
@@ -84,6 +107,7 @@ def main():
     info = engine.result("engine.info")
     expect(info["name"] == "ananas-engine" and info["protocol"] == 1, "engine.info names the engine and protocol 1")
     expect("slice" in info["methods"], "engine.info lists slice")
+    expect({"analyze.stress", "analyze.chunk"} <= set(info["methods"]), "engine.info lists the stress analysis")
 
     # --- errors ---------------------------------------------------------------------------------
     engine.send_raw("this is not json")
@@ -239,6 +263,77 @@ def main():
         expect(response["error"]["code"] == -32602, "a layer range beyond the file answers -32602")
         response, _ = engine.call("preview.load", {"gcode": str(Path(out_dir) / "missing.gcode")})
         expect(response["error"]["code"] == -32602, "preview.load of a missing file answers -32602")
+
+    # --- stress analysis ------------------------------------------------------------------------
+    with tempfile.TemporaryDirectory() as stl_dir:
+        stl = Path(stl_dir) / "beam.stl"
+        write_box_stl(stl, 40.0, 4.0, 4.0)
+        material = {"youngs_modulus": 2000, "poisson_ratio": 0.3, "yield_strength": 40}
+        request = {
+            "model": str(stl), "material": material, "voxel_size": 1.0,
+            "transform": {"position": [20, 2]},  # the beam then spans x 0..40, y 0..4, z 0..4 (as model.bounds says)
+            "supports": [{"box": {"min": [0, 0, 0], "max": [0, 4, 4]}}],
+            "loads": [{"box": {"min": [40, 0, 0], "max": [40, 4, 4]}, "force": [0, 0, -10]}],
+        }
+        response, notifications = engine.call("analyze.stress", request)
+        expect("result" in response, f"analyze.stress answers a result: {response.get('error')}")
+        stress = response["result"]
+        progress = [n["params"]["percent"] for n in notifications if n.get("method") == "analyze.progress"]
+        expect(len(progress) >= 3 and progress == sorted(progress) and progress[-1] == 100
+               and all(n["params"]["id"] == response["id"] for n in notifications),
+               f"analyze.progress rises to 100 and carries the request id ({len(progress)} notifications)")
+        expect(stress["grid"]["size"] == [40, 4, 4] and stress["solid_cells"] == 640, "the voxel grid is 40 x 4 x 4 cells")
+        expect(stress["solver"]["converged"] and stress["solver"]["residual"] < 1e-5, "the solver converged")
+        # Beam theory with shear (Timoshenko): 5.04 mm. Four cells over the height give about 4 % less.
+        tip = stress["max_displacement"]["value"]
+        expect(4.6 < tip < 5.05, f"the tip deflection is close to beam theory ({tip:.3f} mm against 5.04)")
+        expect(abs(stress["reaction"][2] - 10) < 1e-3 and abs(stress["applied_force"][2] + 10) < 1e-9,
+               "the support reaction balances the load")
+        expect(stress["max_von_mises"]["value"] > 20 and stress["min_safety"]["value"] < 2
+               and stress["max_von_mises"]["at"][0] < 2, "the highest stress sits at the clamp")
+        chunk = engine.result("analyze.chunk", {"id": stress["id"], "z_from": 0, "z_to": 1})
+        cells = chunk["count"]
+        solid = base64.b64decode(chunk["solid"])
+        vm = struct.unpack("<%df" % cells, base64.b64decode(chunk["von_mises"]))
+        safety = struct.unpack("<%df" % cells, base64.b64decode(chunk["safety"]))
+        vec = struct.unpack("<%df" % (cells * 3), base64.b64decode(chunk["displacement_vec"]))
+        expect(cells == 2 * 40 * 4 and len(solid) == cells and sum(solid) == cells, "analyze.chunk returns two grid layers")
+        expect(max(vm) == max(vm[:cells]) and max(vm) > 5 and min(safety) > 0 and min(vec[2::3]) < -1,
+               "the chunk carries stress, safety and displacement per cell")
+        response, _ = engine.call("analyze.chunk", {"id": stress["id"], "z_from": 2, "z_to": 9})
+        expect(response["error"]["code"] == -32602, "a layer range beyond the grid answers -32602")
+        response, _ = engine.call("analyze.chunk", {"id": stress["id"] + 1, "z_from": 0, "z_to": 0})
+        expect(response["error"]["code"] == -32602, "analyze.chunk of an unknown analysis answers -32602")
+
+        # Selection by triangle indices gives the same answer as the box.
+        by_triangles = dict(request)
+        by_triangles["supports"] = [{"triangles": [0, 1]}]  # the x = 0 face leads write_box_stl's triangle list
+        by_triangles["loads"] = [{"triangles": [2, 3], "force": [0, 0, -10]}]
+        same = engine.result("analyze.stress", by_triangles)
+        expect(abs(same["max_displacement"]["value"] - tip) < 1e-4, "supports and loads can be picked by triangle index")
+
+        # Z weakening: the safety falls, the in-plane stiffness stays.
+        weak = engine.result("analyze.stress", {**request, "material": {**material, "z_factor": 0.5}})
+        expect(weak["max_displacement"]["value"] > tip, "a weaker z direction deflects more")
+
+        for bad, why in (({**request, "supports": []}, "no support"),
+                         ({**request, "loads": []}, "no load"),
+                         ({**request, "voxel_size": 0}, "a voxel size of zero"),
+                         ({**request, "voxel_size": 0.001}, "a voxel size that makes billions of cells"),
+                         ({**request, "material": {"youngs_modulus": 2000}}, "a material without yield strength"),
+                         ({**request, "supports": [{"box": {"min": [90, 90, 90], "max": [99, 99, 99]}}]}, "a support in empty space"),
+                         ({**request, "object": 5}, "a missing object"),
+                         ({k: v for k, v in request.items() if k != "model"}, "no model"),
+                         ({**request, "model": str(Path(stl_dir) / "none.stl")}, "a missing model file")):
+            response, _ = engine.call("analyze.stress", bad)
+            expect(response.get("error", {}).get("code") == -32602, f"analyze.stress refuses {why}")
+
+        # A surface that is no solid never gets as far as the solver: the loader refuses it or the analysis does.
+        broken = Path(stl_dir) / "surface.stl"
+        broken.write_text("solid t\nfacet normal 0 0 1\n outer loop\n vertex 0 0 0\n vertex 10 0 0\n vertex 0 10 5\n"
+                          " endloop\nendfacet\nendsolid t\n")
+        response, _ = engine.call("analyze.stress", {**request, "model": str(broken)})
+        expect(response.get("error", {}).get("code") == -32000, "a model without a closed volume answers -32000")
 
     engine.close()
     expect(all(json.loads(line) for line in engine.stdout_lines), "the protocol channel carried only JSON")

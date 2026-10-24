@@ -33,7 +33,7 @@ constexpr int PROTOCOL_VERSION = 1;
 const char* const METHODS[] = { "engine.info",   "presets.list", "config.schema", "config.resolve", "limits.import",
                                 "limits.check",  "model.load",   "model.bounds",  "preview.load",   "preview.chunk",
                                 "moonraker.connect", "moonraker.upload", "moonraker.start", "moonraker.status", "moonraker.cancel",
-                                "slice" };
+                                "slice", "analyze.stress", "analyze.chunk" };
 
 const json& param(const json& params, const char* name)
 {
@@ -527,6 +527,41 @@ json Engine::moonraker_start(const json& params) const
     return { { "name", name }, { "host", target.base_url } };
 }
 
+json Engine::analyze_stress(const json& params, const json& request_id, const Notify& notify)
+{
+    const std::string model_path = string_param(params, "model", true);
+    if (!fs::is_regular_file(model_path))
+        throw EngineError(ErrorCode::InvalidParams, "model file not found: " + model_path);
+    try {
+        Model       model = m_models.copy_of(model_path);
+        StressInput input = parse_stress_request(params, model);
+
+        // Same rule as slice progress: a progress bar must not go back.
+        int        reported = 0;
+        const auto progress = [&](int percent, const std::string& message) {
+            reported = std::max(reported, std::clamp(percent, 0, 100));
+            if (notify)
+                notify({ { "jsonrpc", "2.0" },
+                         { "method", "analyze.progress" },
+                         { "params", { { "id", request_id }, { "percent", reported }, { "message", message } } } });
+        };
+        auto result = std::make_shared<const StressResult>(solve_stress(input, progress));
+        m_stress    = result;
+        return stress_summary_json(++m_stress_id, *result);
+    } catch (const EngineError&) {
+        throw;
+    } catch (const std::exception& ex) {
+        throw EngineError(ErrorCode::EngineError, std::string("stress analysis failed: ") + ex.what());
+    }
+}
+
+json Engine::analyze_chunk(const json& params) const
+{
+    if (!m_stress || index_param(params, "id", true) != m_stress_id)
+        throw EngineError(ErrorCode::InvalidParams, "no stress analysis with this id (only the latest is kept)");
+    return stress_chunk_json(m_stress_id, *m_stress, index_param(params, "z_from", true), index_param(params, "z_to", true));
+}
+
 json Engine::slice(const json& params, const json& request_id, const Notify& notify)
 {
     const std::string model_path  = string_param(params, "model", true);
@@ -638,6 +673,10 @@ json Engine::handle(const json& request, const Notify& notify)
             result = preview_load(params);
         else if (method == "preview.chunk")
             result = preview_chunk(params);
+        else if (method == "analyze.stress")
+            result = analyze_stress(params, id, notify);
+        else if (method == "analyze.chunk")
+            result = analyze_chunk(params);
         else if (method == "moonraker.connect")
             result = moonraker_connect(parse_target(params));
         else if (method == "moonraker.upload")

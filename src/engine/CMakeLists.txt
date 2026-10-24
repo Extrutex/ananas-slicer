@@ -12,6 +12,10 @@ add_library(ananas_engine_core STATIC
     Preview.cpp
     Preview.hpp
     Base64.hpp
+    Stress.cpp
+    Stress.hpp
+    StressApi.cpp
+    StressApi.hpp
     Schema.cpp
     Schema.hpp
 )
