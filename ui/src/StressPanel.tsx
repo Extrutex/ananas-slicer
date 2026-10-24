@@ -241,7 +241,7 @@ export function StressPanel({ session, state }: { session: CockpitSession; state
           </div>
           {stress.armed !== null ? (
             <p className="m-0 mt-1.5 text-ks-micro text-ink-secondary" data-testid="pick-hint">
-              Klicken Sie im Viewport auf eine Fläche, um sie zu wählen; ein zweiter Klick nimmt sie wieder heraus. {stress.pickNote ?? ""}
+              Klicken Sie im Viewport auf eine Fläche, um sie zu wählen; ein zweiter Klick nimmt sie wieder heraus. Die Auswahl reicht bis knapp eine Zelle über den Rand der Fläche hinaus. {stress.pickNote ?? ""}
             </p>
           ) : null}
         </Section>

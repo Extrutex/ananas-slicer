@@ -732,3 +732,120 @@ TEST_CASE("Stress: closed meshes of every kind never count a ray twice on a shar
     std::printf("[stress] watertight meshes voxelized: %zu runs, %zu reported as open\n", runs, odd);
     CHECK(odd == 0);
 }
+
+namespace {
+
+// The triangles of `mesh` whose three vertices all lie on the plane coordinate[axis] == value.
+std::vector<size_t> triangles_on_plane(const indexed_triangle_set& mesh, int axis, float value)
+{
+    std::vector<size_t> ids;
+    for (size_t t = 0; t < mesh.indices.size(); ++t) {
+        const auto& tri = mesh.indices[t];
+        if (mesh.vertices[tri[0]][axis] == value && mesh.vertices[tri[1]][axis] == value && mesh.vertices[tri[2]][axis] == value)
+            ids.push_back(t);
+    }
+    return ids;
+}
+
+} // namespace
+
+TEST_CASE("Stress: a triangle selection takes only the face that looks the way the triangle looks", "[Engine][Stress]")
+{
+    // A plate 10 x 10 mm and 0.7 mm thick in cells of 1 mm: one cell thick, its two faces 0.7 mm apart, so the back face
+    // lies within reach of the triangles of the front face.
+    const double w = 10., t = 0.7, F = 100.;
+    StressInput  by_box = tension_bar(2, w, t, 1., F);
+    StressInput  by_triangles = by_box;
+    const auto&  mesh = by_triangles.parts.front();
+    by_triangles.supports.front().where.box.reset();
+    by_triangles.supports.front().where.triangles = triangles_on_plane(mesh, 2, 0.f);
+    by_triangles.loads.front().where.box.reset();
+    by_triangles.loads.front().where.triangles = triangles_on_plane(mesh, 2, float(t));
+    REQUIRE(by_triangles.supports.front().where.triangles.size() == 2);
+    REQUIRE(by_triangles.loads.front().where.triangles.size() == 2);
+
+    const StressResult a = solve_stress(by_triangles), b = solve_stress(by_box);
+    std::printf("[stress] thin wall by triangles: applied %.6f N, reaction %.6f N, tip %.6f mm, von Mises %.6f; by box: tip %.6f mm, "
+                "von Mises %.6f (F / A = %.6f)\n",
+                a.applied_force.z(), a.reaction.z(), a.max_displacement, a.max_von_mises, b.max_displacement, b.max_von_mises,
+                F / (w * w));
+    CHECK_THAT(a.applied_force.z(), Catch::Matchers::WithinRel(F, 1e-9)); // nothing of the load fell on the held side
+    CHECK_THAT(a.reaction.z(), Catch::Matchers::WithinRel(-F, 1e-6));
+    CHECK_THAT(a.max_displacement, Catch::Matchers::WithinRel(b.max_displacement, 1e-6));
+    CHECK_THAT(double(a.max_von_mises), Catch::Matchers::WithinRel(F / (w * w), 1e-3));
+    CHECK(a.fixed_dofs == b.fixed_dofs);
+    CHECK_FALSE(has_warning(a, "taken by the support"));
+
+    // The same wall wound inside out is selected the same way.
+    StressInput inside_out = by_triangles;
+    for (auto& tri : inside_out.parts.front().indices)
+        std::swap(tri[1], tri[2]);
+    const StressResult c = solve_stress(inside_out);
+    CHECK_THAT(c.max_displacement, Catch::Matchers::WithinRel(a.max_displacement, 1e-9));
+    CHECK_THAT(c.applied_force.z(), Catch::Matchers::WithinRel(F, 1e-9));
+}
+
+TEST_CASE("Stress: a tilted end face is loaded and held without loss", "[Engine][Stress]")
+{
+    indexed_triangle_set mesh = bar(30., 8., 8.);
+    const double         angle = 20. * M_PI / 180.;
+    for (auto& v : mesh.vertices) // rotation about y: the end faces now lean by 20 degrees
+        v = Vec3f(float(std::cos(angle) * v.x() + std::sin(angle) * v.z()), v.y(), float(-std::sin(angle) * v.x() + std::cos(angle) * v.z()));
+    const auto original = bar(30., 8., 8.);
+    StressInput in = base(mesh, 1.);
+    StressSelection held, loaded;
+    held.triangles   = triangles_on_plane(original, 0, 0.f);   // vertex indices are unchanged by the rotation
+    loaded.triangles = triangles_on_plane(original, 0, 30.f);
+    REQUIRE(held.triangles.size() == 2);
+    REQUIRE(loaded.triangles.size() == 2);
+    in.supports.push_back({ held, { true, true, true } });
+    in.loads.push_back({ loaded, Vec3d(0, 0, -10) });
+    const StressResult r = solve_stress(in);
+    std::printf("[stress] tilted end face: applied %.6f %.6f %.6f, reaction %.6f %.6f %.6f, tip %.4f mm\n", r.applied_force.x(),
+                r.applied_force.y(), r.applied_force.z(), r.reaction.x(), r.reaction.y(), r.reaction.z(), r.max_displacement);
+    CHECK(r.converged);
+    CHECK_THAT(r.applied_force.z(), Catch::Matchers::WithinRel(-10., 1e-9));
+    CHECK_THAT((r.applied_force + r.reaction).norm(), Catch::Matchers::WithinAbs(0., 1e-6));
+}
+
+TEST_CASE("Stress: a load that partly sits on a held node is reported", "[Engine][Stress]")
+{
+    StressInput in = cantilever(20., 4., 10., 1.);
+    in.loads.front().where = box(Vec3d(0, 0, 0), Vec3d(1, 4, 4)); // the first row of nodes is held, the second is free
+    const StressResult r = solve_stress(in);
+    std::printf("[stress] load beside a support: applied %.4f of 10 N, warnings: %zu\n", -r.applied_force.z(), r.warnings.size());
+    CHECK(has_warning(r, "taken by the support"));
+    CHECK(-r.applied_force.z() < 10.);
+    CHECK(-r.applied_force.z() > 0.);
+
+    const StressResult clean = solve_stress(cantilever(20., 4., 10., 1.));
+    CHECK_FALSE(has_warning(clean, "taken by the support"));
+}
+
+TEST_CASE("Stress: the warnings after the solver never discard a converged result", "[Engine][Stress]")
+{
+    StressInput in = cantilever(20., 4., 1., 1.);
+    in.warning_seconds = 1e-9; // runs out at once
+    StressResult r;
+    REQUIRE_NOTHROW(r = solve_stress(in));
+    CHECK(r.converged);
+    CHECK(r.max_von_mises > 0.f);
+    CHECK(has_warning(r, "skipped"));
+    CHECK_FALSE(has_warning(solve_stress(cantilever(20., 4., 1., 1.)), "skipped"));
+}
+
+TEST_CASE("Stress: a triangle much smaller than a cell takes the nodes near it for the load", "[Engine][Stress]")
+{
+    // A tiny closed tetrahedron inside the bar supplies the triangle; it sits on a node, away from every surface.
+    StressInput in = tension_bar(0, 8., 20., 1., 5.);
+    indexed_triangle_set tiny;
+    tiny.vertices = { Vec3f(10.f, 4.f, 4.f), Vec3f(10.f, 4.2f, 4.f), Vec3f(10.f, 4.f, 4.2f), Vec3f(9.8f, 4.1f, 4.1f) };
+    tiny.indices  = { stl_triangle_vertex_indices(0, 2, 1), stl_triangle_vertex_indices(0, 1, 3), stl_triangle_vertex_indices(1, 2, 3), stl_triangle_vertex_indices(2, 0, 3) };
+    in.parts.push_back(tiny);
+    in.loads.front().where.box.reset();
+    in.loads.front().where.triangles = { 12 }; // the first triangle after the 12 of the bar
+    const StressResult r = solve_stress(in);
+    std::printf("[stress] tiny triangle load: applied %.6f N (input 5), reaction %.6f N\n", r.applied_force.x(), r.reaction.x());
+    CHECK_THAT(r.applied_force.x(), Catch::Matchers::WithinRel(5., 1e-9));
+    CHECK_THAT(r.reaction.x(), Catch::Matchers::WithinRel(-5., 1e-6));
+}

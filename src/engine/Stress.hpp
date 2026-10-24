@@ -72,6 +72,7 @@ struct StressInput
     size_t                            max_cells{ STRESS_MAX_CELLS };               // cells of the voxel grid (solid or not)
     size_t                            max_bytes{ STRESS_MAX_BYTES };               // estimated memory of the analysis
     double                            max_seconds{ 600. };                         // wall clock of the whole analysis from the call on (checking, voxelizing, building, solving); capped at STRESS_MAX_SECONDS
+    double                            warning_seconds{ 60. };                      // own time budget of the thin-wall check after the solver; when it runs out the result is kept and a note is added
     size_t                            max_selection_triangles{ STRESS_MAX_SELECTION_TRIANGLES }; // capped at the same constant
     std::vector<std::string>          warnings;                                    // passed on into the result, before the solver's own
 };

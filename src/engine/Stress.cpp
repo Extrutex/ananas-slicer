@@ -308,13 +308,18 @@ struct TriangleSource
 {
     const std::vector<indexed_triangle_set>& parts;
     std::vector<size_t>                      offset; // first triangle index of each part, and the total at the end
+    std::vector<bool>                        inverted; // per part: the mesh is wound inside out (negative volume)
 
     explicit TriangleSource(const std::vector<indexed_triangle_set>& p) : parts(p)
     {
         offset.push_back(0);
-        for (const auto& part : parts)
+        for (const auto& part : parts) {
             offset.push_back(offset.back() + part.indices.size());
+            inverted.push_back(its_volume(part) < 0.f);
+        }
     }
+    // Whether the part of triangle `id` is wound inside out, so that its normal points into the material.
+    bool is_inverted(size_t id) const { return inverted[size_t(std::upper_bound(offset.begin(), offset.end(), id) - offset.begin()) - 1]; }
     size_t count() const { return offset.back(); }
     std::array<Vec3d, 3> at(size_t id) const
     {
@@ -415,13 +420,14 @@ Selected select(const Body& body, const StressSelection& where, const std::vecto
     }
 
     const double reach = 0.8661 * g.h, reach2 = reach * reach;
-    const size_t quads_before_triangles = out.quads.size();
     for (size_t id : ids) {
         const auto  tri = source.at(id);
         Vec3d       normal = (tri[1] - tri[0]).cross(tri[2] - tri[0]);
         const double len   = normal.norm();
         if (len > 0.)
             normal /= len;
+        if (source.is_inverted(id))
+            normal = -normal; // the outward normal, also for a mesh wound inside out
         const Vec3d lo = tri[0].cwiseMin(tri[1]).cwiseMin(tri[2]).array() - reach, hi = tri[0].cwiseMax(tri[1]).cwiseMax(tri[2]).array() + reach;
         size_t       first[3], last[3];
         bool         outside = false;
@@ -448,6 +454,9 @@ Selected select(const Body& body, const StressSelection& where, const std::vecto
                         if (std::abs(normal[axis]) < 0.5)
                             continue;
                         for (int side = 0; side < 2; ++side) {
+                            // Only the face that looks the way the triangle looks: the back of a one-cell wall is not selected.
+                            if (normal[axis] * (side ? 1. : -1.) < 0.5)
+                                continue;
                             if (!face_exposed(body, c, axis, side))
                                 continue;
                             Vec3d centre = g.cell_center(i, j, k);
@@ -460,8 +469,8 @@ Selected select(const Body& body, const StressSelection& where, const std::vecto
             }
     }
 
-    if (!ids.empty() && out.quads.size() == quads_before_triangles) {
-        // No surface face found: the nodes within reach of the triangles.
+    if (!ids.empty() && out.quads.empty()) {
+        // No surface face found, neither by box nor by triangle: the nodes within reach of the triangles.
         for (size_t id : ids) {
             const auto  tri = source.at(id);
             const Vec3d lo = tri[0].cwiseMin(tri[1]).cwiseMin(tri[2]).array() - reach, hi = tri[0].cwiseMax(tri[1]).cwiseMax(tri[2]).array() + reach;
@@ -823,6 +832,9 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
     result.solid_cells = solid_cells;
     result.nodes      = n_nodes;
     result.fixed_dofs = size_t(std::count(fixed.begin(), fixed.end(), 1));
+    Vec3d input_force = Vec3d::Zero();
+    for (const StressLoad& load : input.loads)
+        input_force += load.force;
     double f_max = 0.;
     for (size_t i = 0; i < n_dofs; ++i)
         if (fixed[i])
@@ -831,6 +843,11 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
             result.applied_force[i % 3] += f[i];
             f_max = std::max(f_max, std::abs(f[i]));
         }
+    // A load on a held node goes into the support and is lost for the body: say so when it is more than a hundredth.
+    if ((result.applied_force - input_force).norm() > 0.01 * input_force.norm())
+        result.warnings.push_back("Part of the load acts on nodes that a support holds and is taken by the support: " +
+                                  Deadline::format_seconds(result.applied_force.norm()) + " N of " + Deadline::format_seconds(input_force.norm()) +
+                                  " N reach the body. Keep loads and supports apart or use a smaller voxel_size.");
     if (!(f_max > 0.) || !std::isfinite(f_max))
         invalid("no load reaches a free node (all loaded nodes are held by a support, or the force is zero)");
     // The solver works on the load scaled to a largest component of 1 and the displacements are scaled back: the
@@ -1095,8 +1112,18 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
             return size_t(std::clamp(std::floor((result.max_von_mises_at[d] - grid.origin[d]) / grid.h), 0., double(count) - 1.));
         };
         const size_t max_cell = grid.cell(index_of(0, grid.nx), index_of(1, grid.ny), index_of(2, grid.nz));
-        const ThinResult thin = thin_cells(b, 4, max_cell, deadline);
-        if (thin.fraction >= 0.05 || thin.at_cell)
+        // The converged result is never thrown away for the warnings: they have a time budget of their own.
+        Deadline warning_clock;
+        warning_clock.seconds = input.warning_seconds;
+        ThinResult thin;
+        bool       thin_checked = true;
+        try {
+            thin = thin_cells(b, 4, max_cell, warning_clock);
+        } catch (const EngineError&) {
+            thin_checked = false;
+            result.warnings.push_back("The check for thin walls was skipped (time limit); the result itself is complete.");
+        }
+        if (thin_checked && (thin.fraction >= 0.05 || thin.at_cell))
             result.warnings.push_back("Walls or ribs are thinner than 4 cells" + std::string(thin.at_cell ? ", also where the stress is highest" : "") +
                                       " (" + std::to_string(int(std::lround(100. * thin.fraction))) +
                                       " % of the material): the elements lock in bending and the result is too stiff and too low in stress. "
