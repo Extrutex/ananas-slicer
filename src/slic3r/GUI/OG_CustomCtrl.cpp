@@ -361,8 +361,8 @@ void OG_CustomCtrl::OnMotion(wxMouseEvent& event)
         if (!line.is_visible) continue;
         line.is_focused = is_point_in_rect(pos, line.rect_label);
         if (line.is_focused) {
-            if (!suppress_hyperlinks && !line.og_line.label_path.empty())
-                tooltip = OptionsGroup::get_url(line.og_line.label_path) + "\n\n";
+            if (!suppress_hyperlinks && !line.og_line.label_path.empty() && !line.og_line.get_options().empty())
+                tooltip = OptionsGroup::get_url(line.og_line.get_options().front().opt_id) + "\n\n";
             tooltip += line.og_line.label_tooltip;
             // BBS: markdown tip
             focusedLine = &line;
@@ -1037,10 +1037,10 @@ wxCoord OG_CustomCtrl::CtrlLine::draw_edit_bmp(wxDC &dc, wxPoint pos, const wxBi
 
 bool OG_CustomCtrl::CtrlLine::launch_browser() const
 {
-    if (!is_focused || og_line.label_path.empty())
+    if (!is_focused || og_line.label_path.empty() || og_line.get_options().empty())
         return false;
 
-    return OptionsGroup::launch_browser(og_line.label_path);
+    return OptionsGroup::launch_browser(og_line.get_options().front().opt_id);
 }
 
 } // GUI

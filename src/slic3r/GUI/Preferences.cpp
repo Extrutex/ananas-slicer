@@ -264,7 +264,7 @@ wxBoxSizer *PreferencesDialog::create_item_label(wxString label, wxString toolti
 
     wxString url;
     if(!wiki_url.IsEmpty())
-        url = "https://www.orcaslicer.com/wiki/" + wiki_url;
+        url = ANANAS_WIKI_URL "settings/#" + wiki_url;
 
     auto label_ctrl = new WikiLabel(m_parent, label, url, wxDefaultPosition, DESIGN_TITLE_SIZE);
 

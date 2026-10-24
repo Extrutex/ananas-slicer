@@ -1381,7 +1381,7 @@ void GUI_App::init_app_config()
     set_log_path_and_level(log_filename, 3);
 #endif
 
-    BOOST_LOG_TRIVIAL(info) << boost::format("gui mode, Current OrcaSlicer Version %1% build %2%") % SoftFever_VERSION % build_commit_label;
+    BOOST_LOG_TRIVIAL(info) << boost::format("gui mode, %1% build %2%") % ANANAS_VERSION_DISPLAY % build_commit_label;
 
     //BBS: remove GCodeViewer as seperate APP logic
 	if (!app_config)
@@ -4382,7 +4382,7 @@ std::string GUI_App::format_display_version()
 {
     if (!version_display.empty()) return version_display;
 
-    version_display = SoftFever_VERSION;
+    version_display = ANANAS_VERSION_DISPLAY;
     return version_display;
 }
 

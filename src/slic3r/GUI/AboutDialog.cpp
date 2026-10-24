@@ -247,19 +247,25 @@ AboutDialog::AboutDialog()
     // version
     {
         vesizer->Add(0, 0, 1, wxEXPAND, FromDIP(5));
-        wxStaticText* version = new wxStaticText(this, wxID_ANY, wxString::FromUTF8(SoftFever_VERSION), wxDefaultPosition, wxDefaultSize);
+        wxStaticText* version = new wxStaticText(this, wxID_ANY, wxString::FromUTF8(ANANAS_VERSION), wxDefaultPosition, wxDefaultSize);
+        wxStaticText* based_on = new wxStaticText(this, wxID_ANY, wxString::FromUTF8(ANANAS_BASED_ON_DISPLAY), wxDefaultPosition, wxDefaultSize);
         wxStaticText* build_string = new wxStaticText(this, wxID_ANY, wxString::Format("Build %s", build_commit_label), wxDefaultPosition, wxDefaultSize);
+        based_on->SetFont(Label::Body_12);
         build_string->SetFont(Label::Body_12);
         wxFont version_font = GetFont();
         version_font = version_font.Scaled(1.85f); // SetPointSize(20) not works on macOS because it uses a 72 PPI reference
         version->SetFont(version_font);
         version->SetForegroundColour(header_fg);
+        based_on->SetForegroundColour(header_dim);
         build_string->SetForegroundColour(header_dim);
         version->SetBackgroundColour(header_bg);
+        based_on->SetBackgroundColour(header_bg);
         build_string->SetBackgroundColour(header_bg);
 
         vesizer->Add(version, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(24));
         vesizer->AddSpacer(FromDIP(5));
+        vesizer->Add(based_on, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(24));
+        vesizer->AddSpacer(FromDIP(2));
         vesizer->Add(build_string, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(24));
         vesizer->Add(0, 0, 1, wxEXPAND, FromDIP(5));
     }
@@ -339,15 +345,24 @@ AboutDialog::AboutDialog()
           const auto bgr_clr_str = encode_color(ColorRGB(bgr_clr.Red(), bgr_clr.Green(), bgr_clr.Blue()));
           // signal-path on dark, path-ink on light (docs/design/BRAND.md)
           const std::string link_clr = wxGetApp().dark_mode() ? "#4DB9FF" : "#1A86D6";
-          const std::string repo_url = "https://github.com/Extrutex/KlipSlice";
-          const std::string wiki_url = "https://extrutex.github.io/KlipSlice-Wiki/";
+          // Project links (version.inc): repository, wiki, issue tracker, discussions, donations.
+          const std::vector<std::pair<std::string, std::string>> links = {
+              {"GitHub",                    ANANAS_PROJECT_URL},
+              {"Wiki",                      ANANAS_WIKI_URL},
+              {_u8L("Issues"),              ANANAS_PROJECT_URL "/issues/new/choose"},
+              {_u8L("Discussions"),         ANANAS_PROJECT_URL "/discussions"},
+              {_u8L("Support the project"), ANANAS_DONATE_URL},
+          };
+          std::string links_html;
+          for (const auto& [label, url] : links) {
+              if (!links_html.empty())
+                  links_html += " &#183; ";
+              links_html += "<a style=\"color:" + link_clr + "\" href=\"" + url + "\">" + label + "</a>";
+          }
           const auto text = from_u8(
               "<html>"
               "<body bgcolor= \"" + bgr_clr_str + "\" >"
-              "<p style=\"text-align:left\">"
-              "<a style=\"color:" + link_clr + "\" href=\"" + repo_url + "\">" + repo_url + "</a><br/>"
-              "<a style=\"color:" + link_clr + "\" href=\"" + wiki_url + "\">" + wiki_url + "</a>"
-              "</p>"
+              "<p style=\"text-align:left\">" + links_html + "</p>"
               "</body>"
               "</html>");
           m_html->SetPage(text);

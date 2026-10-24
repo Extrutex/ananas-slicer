@@ -736,10 +736,8 @@ PublishSettingsDialog::PublishSettingsDialog(wxWindow* parent,
 
     // Guide links, bottom-left, sharing the footer row with the OK/Cancel buttons (pushed right).
     wxBoxSizer* links_sizer = new wxBoxSizer(wxVERTICAL);
-    auto* wiki_link = new HyperLink(this, _L("Wiki Guide"), "https://www.orcaslicer.com/wiki/publishing_3mf/publish_3mf.html");
-    auto* video_link = new HyperLink(this, _L("Video Guide"), "https://www.youtube.com/watch?v=-xt1N29UIOg");
+    auto* wiki_link = new HyperLink(this, _L("Wiki Guide"), ANANAS_WIKI_URL);
     links_sizer->Add(wiki_link , 0, wxALIGN_LEFT);
-    links_sizer->Add(video_link, 0, wxTOP | wxALIGN_LEFT, FromDIP(4));
 
     wxBoxSizer* footer = new wxBoxSizer(wxHORIZONTAL);
     footer->Add(links_sizer, 0, wxALIGN_CENTER_VERTICAL);

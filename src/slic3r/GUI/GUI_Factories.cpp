@@ -595,13 +595,13 @@ const std::vector<MenuFactory::HandyModel>& MenuFactory::handy_models()
         {"orca_cube",           L("Orca Cube"),           {"OrcaCube_v2.drc", "OrcaPlug_v2.drc"},                    true},
         {"orcasliced_combo",    L("OrcaSliced Combo"),    {"OrcaSliced.3mf", "OrcaCube_v2.drc", "OrcaPlug_v2.drc"},  true},
         {"orca_badge",          L("Orca Badge"),          {"OrcaBadge.3mf"}},
-        {"orca_tolerance_test", L("Orca Tolerance Test"), {"OrcaToleranceTest.drc"}},
+        {"orca_tolerance_test", L("ANANAS Tolerance Test"), {"OrcaToleranceTest.drc"}},
         {"3dbenchy",            L("3DBenchy"),            {"3DBenchy.drc"}},
         {"cali_cat",            L("Cali Cat"),            {"calicat.drc"}},
         {"autodesk_fdm_test",   L("Autodesk FDM Test"),   {"ksr_fdmtest_v4.drc"}},
         {"voron_cube",          L("Voron Cube"),          {"Voron_Design_Cube_v7.drc"}},
         {"stanford_bunny",      L("Stanford Bunny"),      {"Stanford_Bunny.drc"}},
-        {"orca_string_hell",    L("Orca String Hell"),    {"Orca_stringhell.drc"},                                   false, true},
+        {"orca_string_hell",    L("ANANAS String Hell"),  {"Orca_stringhell.drc"},                                   false, true},
     };
     return models;
 }

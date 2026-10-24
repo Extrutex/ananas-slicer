@@ -255,8 +255,9 @@ protected:
 	virtual int			config_type() const { return -1; }
 
 public:
-	static wxString		get_url(const std::string& path_end);
-	static bool			launch_browser(const std::string& path_end);
+	// Wiki page of a setting: the settings overview of the ANANAS SLICER wiki, anchored by option key.
+	static wxString		get_url(const std::string& opt_key);
+	static bool			launch_browser(const std::string& opt_key);
 
 protected:
     std::string         pick_plugin(const ConfigOptionDef& opt);

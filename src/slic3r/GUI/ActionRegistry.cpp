@@ -610,7 +610,7 @@ void ActionRegistry::materialize_setting_actions()
         // Footer description + wiki affordance; only settings whose row declared a wiki path have one.
         action->tooltip = opt.tooltip;
         if (!opt.wiki_path.empty())
-            action->help_url = into_u8(OptionsGroup::get_url(opt.wiki_path));
+            action->help_url = into_u8(OptionsGroup::get_url(opt.opt_key()));
 
         seed_from(stats, favs, id, *action);
         auto const action_id  = action->id();
