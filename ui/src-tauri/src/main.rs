@@ -2,6 +2,7 @@
 // notifications back. All slicing knowledge stays in the engine.
 
 mod engine;
+mod export;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -58,12 +59,19 @@ async fn engine_call(state: State<'_, EngineState>, method: String, params: Opti
 fn engine_defaults() -> Defaults {
     Defaults {
         model: configured("ANANAS_SAMPLE_MODEL", "tests/data/20mm_cube.obj").to_string_lossy().into_owned(),
-        output_dir: std::env::temp_dir().join("ananas-slicer").to_string_lossy().into_owned(),
+        output_dir: export::output_dir().to_string_lossy().into_owned(),
     }
+}
+
+/// Copies a G-code the engine wrote to the file the user chose in the save dialog.
+#[tauri::command]
+fn export_gcode(from: String, to: String) -> Result<u64, String> {
+    export::export_gcode(std::path::Path::new(&from), std::path::Path::new(&to), &export::output_dir())
 }
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let binary = configured(
                 "ANANAS_ENGINE_BIN",
@@ -82,7 +90,7 @@ fn main() {
             app.manage(EngineState(started));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![engine_call, engine_defaults])
+        .invoke_handler(tauri::generate_handler![engine_call, engine_defaults, export_gcode])
         .run(tauri::generate_context!())
         .expect("error while running the ANANAS SLICER shell");
 }

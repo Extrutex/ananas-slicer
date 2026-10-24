@@ -127,6 +127,8 @@ export interface SliceProgress {
 /** JSON-RPC error codes of the engine. */
 export const ERROR_INVALID_PARAMS = -32602;
 export const ERROR_NOT_FOUND = -32001;
+/** The printer host could not be reached or refused the request. */
+export const ERROR_PRINTER = -32002;
 
 export class EngineRpcError extends Error {
   readonly code: number;
@@ -206,6 +208,35 @@ export interface PreviewSummary {
   flow: Range;
   accel: Range;
   roles: { id: number; name: string; segments: number }[];
+}
+
+export interface PrinterConnectResult {
+  host: string;
+  moonraker_version: string;
+  klippy_state: string;
+  klippy_connected: boolean;
+  /** The Klipper limits as the running Klipper resolves them; null while it is not ready. */
+  limits: KlipperLimitValues | null;
+  warnings: string[];
+}
+
+export type PrintState = "standby" | "printing" | "paused" | "complete" | "cancelled" | "error" | "unknown";
+
+export interface PrinterStatus {
+  state: PrintState;
+  filename: string;
+  /** 0..1 */
+  progress: number;
+  print_duration: number;
+  total_duration: number;
+  message: string;
+  klippy_state: string;
+}
+
+export interface UploadResult {
+  name: string;
+  host: string;
+  print_started: boolean;
 }
 
 export interface PreviewChunkJson {

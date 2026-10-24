@@ -1,5 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AckDialog } from "./AckDialog.tsx";
+import { PrintDialog } from "./PrintDialog.tsx";
+import { PrinterDialog } from "./PrinterDialog.tsx";
 import { OBJECT_PREFIX, objectGroup } from "./cockpit/objectParams.ts";
 import { Sidebar } from "./cockpit/Sidebar.tsx";
 import type { SliceResult } from "./engine/protocol.ts";
@@ -7,6 +9,7 @@ import type { CockpitSession } from "./state/session.ts";
 import { useSession } from "./state/useSession.ts";
 import { fitsBed } from "./viewer/bed.ts";
 import { Viewer } from "./viewer/Viewer.tsx";
+import { createPlatform, type Platform } from "./platform.ts";
 
 const SELECT_CLASS =
   "h-target max-w-[220px] truncate rounded border border-edge-field bg-surface-field px-1.5 font-data text-ks-table text-ink-strong";
@@ -34,10 +37,24 @@ function SliceSummary({ result }: { result: SliceResult }) {
   );
 }
 
-export function App({ session }: { session: CockpitSession }) {
+const defaultPlatform = createPlatform();
+
+export function App({ session, platform = defaultPlatform }: { session: CockpitSession; platform?: Platform }) {
   const state = useSession(session);
   const fileInput = useRef<HTMLInputElement>(null);
   const [acknowledging, setAcknowledging] = useState(false);
+  const [printerOpen, setPrinterOpen] = useState(false);
+  const [confirmingPrint, setConfirmingPrint] = useState(false);
+  const [saved, setSaved] = useState<{ path: string } | { error: string } | null>(null);
+
+  // While a print runs (or has just been started) the printer's state is read every two seconds.
+  const jobState = state.printer.job?.state;
+  const watching = state.printer.status === "connected" && (jobState === "printing" || jobState === "paused" || state.upload.printStarted);
+  useEffect(() => {
+    if (!watching) return;
+    const timer = window.setInterval(() => void session.refreshPrinter(), 2000);
+    return () => window.clearInterval(timer);
+  }, [watching, session]);
 
   if (state.phase === "loading") {
     return <p className="p-6 font-data text-ks-ui text-ink-muted">Starting the engine {"…"}</p>;
@@ -134,6 +151,18 @@ export function App({ session }: { session: CockpitSession }) {
         >
           Import printer.cfg {"…"}
         </button>
+        <button
+          type="button"
+          aria-label="Printer connection"
+          onClick={() => setPrinterOpen(true)}
+          className="flex h-target items-center gap-1.5 rounded border border-edge-strong bg-surface-raised px-2 text-ks-table text-ink hover:bg-surface-hover"
+        >
+          <span
+            aria-hidden="true"
+            className={`inline-block h-2 w-2 rounded-full ${state.printer.status === "connected" ? "bg-signal-nominal" : state.printer.status === "failed" ? "bg-signal-limit" : "bg-steel-400"}`}
+          />
+          {state.printer.status === "connected" ? state.printer.host.replace(/^https?:\/\//, "") : "Connect printer \u2026"}
+        </button>
         {state.imported ? (
           <button
             type="button"
@@ -198,6 +227,15 @@ export function App({ session }: { session: CockpitSession }) {
                   className="h-target min-w-0 flex-1 rounded border border-edge-field bg-surface-field px-2 font-data text-ks-table text-ink-strong"
                 />
               </label>
+              {platform.native ? (
+                <button
+                  type="button"
+                  onClick={() => void platform.pickModel().then((path) => (path === null ? undefined : session.loadModel(path)))}
+                  className="h-target rounded border border-edge-strong bg-surface-raised px-3 text-ks-table text-ink hover:bg-surface-hover"
+                >
+                  Choose {"\u2026"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => void session.loadModel(state.model)}
@@ -229,7 +267,79 @@ export function App({ session }: { session: CockpitSession }) {
                     </p>
                   </div>
                 ) : null}
-                {state.slice.status === "done" && state.slice.result ? <SliceSummary result={state.slice.result} /> : null}
+                {state.slice.status === "done" && state.slice.result ? (
+                  <>
+                    <SliceSummary result={state.slice.result} />
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={state.printer.status !== "connected" || state.upload.status === "uploading"}
+                        title={state.printer.status !== "connected" ? "Connect a printer first" : undefined}
+                        onClick={() => void session.sendToPrinter(false)}
+                        className="h-target rounded border border-edge-strong bg-surface-raised px-3 text-ks-table text-ink hover:bg-surface-hover disabled:cursor-not-allowed disabled:text-ink-disabled"
+                      >
+                        Send to printer
+                      </button>
+                      <button
+                        type="button"
+                        disabled={state.printer.status !== "connected" || state.upload.status === "uploading" || state.printer.job?.state === "printing"}
+                        title={state.printer.status !== "connected" ? "Connect a printer first" : undefined}
+                        onClick={() => setConfirmingPrint(true)}
+                        className="h-target rounded border border-edge-strong bg-carbon-700 px-3 text-ks-table font-semibold text-ink-strong hover:bg-surface-hover disabled:cursor-not-allowed disabled:text-ink-disabled"
+                      >
+                        Send and print {"\u2026"}
+                      </button>
+                      {platform.native ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const result = state.slice.result;
+                            if (!result) return;
+                            const name = result.gcode.replace(/^.*[\\/]/, "");
+                            void platform
+                              .saveGcode(result.gcode, name)
+                              .then((path) => path !== null && setSaved({ path }))
+                              .catch((error: unknown) => setSaved({ error: error instanceof Error ? error.message : String(error) }));
+                          }}
+                          className="h-target rounded border border-edge-strong bg-surface-raised px-3 text-ks-table text-ink hover:bg-surface-hover"
+                        >
+                          Save G-code {"\u2026"}
+                        </button>
+                      ) : null}
+                      {saved ? (
+                        <span data-testid="saved" className={`font-data text-ks-table ${"error" in saved ? "text-signal-limit" : "text-ink-muted"}`}>
+                          {"path" in saved ? `Saved to ${saved.path}` : saved.error}
+                        </span>
+                      ) : null}
+                      <span data-testid="upload-status" data-status={state.upload.status} className={`font-data text-ks-table ${state.upload.status === "failed" ? "text-signal-limit" : "text-ink-muted"}`}>
+                        {state.upload.status === "uploading" ? "Uploading \u2026" : null}
+                        {state.upload.status === "done" ? `Stored as ${state.upload.name}${state.upload.printStarted ? " \u00b7 print started" : ""}` : null}
+                        {state.upload.status === "failed" ? state.upload.error : null}
+                      </span>
+                    </div>
+                  </>
+                ) : null}
+                {state.printer.status === "connected" && state.printer.job && state.printer.job.state !== "standby" ? (
+                  <div className="mt-3" data-testid="job" data-state={state.printer.job.state}>
+                    <div className="flex items-center gap-3 font-data text-ks-table text-ink-secondary">
+                      <span className="text-ink-strong">{state.printer.job.state}</span>
+                      <span className="truncate">{state.printer.job.filename}</span>
+                      <span className="ml-auto">{Math.round(state.printer.job.progress * 100)} %</span>
+                      {state.printer.job.state === "printing" || state.printer.job.state === "paused" ? (
+                        <button
+                          type="button"
+                          onClick={() => void session.cancelPrint()}
+                          className="h-target rounded border border-edge-strong bg-surface-raised px-2 text-ks-table text-ink hover:bg-surface-hover"
+                        >
+                          Cancel print
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 h-1.5 w-full bg-surface-field" role="progressbar" aria-label="Print progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.printer.job.progress * 100)}>
+                      <div className="h-full bg-signal-nominal" style={{ width: `${Math.round(state.printer.job.progress * 100)}%` }} />
+                    </div>
+                  </div>
+                ) : null}
                 {state.slice.status === "failed" ? (
                   <p role="alert" className="m-0 font-data text-ks-table text-signal-limit">
                     {state.slice.error}
@@ -243,13 +353,33 @@ export function App({ session }: { session: CockpitSession }) {
 
       <footer className="flex h-6 shrink-0 items-center gap-4 border-t border-edge bg-surface-chrome px-3 font-data text-ks-micro text-ink-muted">
         <span>engine {state.engine?.version}</span>
-        <span>limits {"·"} {limitsSource}</span>
+        <span>limits {"\u00b7"} {limitsSource}</span>
+        {state.printer.status === "connected" ? (
+          <span data-testid="printer-footer">
+            printer {"\u00b7"} {state.printer.klippyState || "?"}
+            {state.printer.job ? ` \u00b7 ${state.printer.job.state}` : ""}
+          </span>
+        ) : null}
         <span className="truncate">
           {state.selection.process} {"·"} {state.selection.filament}
         </span>
         {state.error ? <span className="ml-auto truncate text-signal-limit">{state.error}</span> : null}
         {state.importError ? <span className="ml-auto truncate text-signal-limit">import: {state.importError}</span> : null}
       </footer>
+
+      {printerOpen ? <PrinterDialog session={session} printer={state.printer} onClose={() => setPrinterOpen(false)} /> : null}
+      {confirmingPrint && state.slice.result ? (
+        <PrintDialog
+          host={state.printer.host}
+          result={state.slice.result}
+          fileName={state.slice.result.gcode.replace(/^.*[\\/]/, "")}
+          onCancel={() => setConfirmingPrint(false)}
+          onConfirm={() => {
+            setConfirmingPrint(false);
+            void session.sendToPrinter(true);
+          }}
+        />
+      ) : null}
 
       {acknowledging ? (
         <AckDialog

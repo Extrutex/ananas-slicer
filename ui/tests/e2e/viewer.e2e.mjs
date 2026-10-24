@@ -85,6 +85,7 @@ async function main() {
   const key = (k, code, vk) => send("Input.dispatchKeyEvent", { type: "keyDown", key: k, code, windowsVirtualKeyCode: vk }).then(() => send("Input.dispatchKeyEvent", { type: "keyUp", key: k, code, windowsVirtualKeyCode: vk }));
   const waitFor = async (expression, tries = 120) => { for (let i = 0; i < tries; i += 1) { if (await evaluate(expression)) return true; await sleep(250); } return false; };
   const click = (text) => evaluate(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === ${JSON.stringify(text)} || b.textContent.startsWith(${JSON.stringify(text)}))?.click()`);
+  const clickIn = (scope, text) => evaluate(`[...document.querySelectorAll(${JSON.stringify(scope + " button")})].find((b) => b.textContent.trim() === ${JSON.stringify(text)})?.click()`);
   const setInput = (selector, value) => evaluate(`(() => { const el = document.querySelector(${JSON.stringify(selector)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(String(value))}); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const typeInto = async (rowId, text) => { await evaluate(`document.querySelector('[data-testid="row-${rowId}"] input').focus()`); await sleep(150); await send("Input.insertText", { text }); await key("Enter", "Enter", 13); await sleep(900); };
   const open = async (path) => { await setInput('input[aria-label="Model file"]', path); await click("Open"); await sleep(3500); };
@@ -153,6 +154,30 @@ async function main() {
   check("the layer range hides the upper layers", differs(accel, await pixels()));
   const legend = await evaluate(`document.querySelector('[data-testid="heatmap-legend"]').innerText.replace(/\\n/g, ' | ')`);
   check("the legend names the limit", /Over limit/.test(legend), legend);
+
+  // --- the way to the printer: only against the virtual printer (tests/engine/rig/rig.sh up) ---
+  const rig = process.env.ANANAS_RIG_URL;
+  if (rig) {
+    await evaluate(`document.querySelector('button[aria-label="Printer connection"]').click()`);
+    await sleep(500);
+    await setInput('input[aria-label="Printer address"]', rig);
+    await clickIn("[role=dialog]", "Connect");
+    check("the app connects to the printer", await waitFor(`!!document.querySelector('[data-testid="printer-info"]')`, 40));
+    await shot("9-printer-dialog");
+    await clickIn("[role=dialog]", "Close"); await sleep(1200);
+    check("the printer's limits replace the profile's", (await evaluate(`document.querySelector('[data-testid="machine-line"]').innerText`)).includes(rig));
+    await click("Model"); await sleep(300);
+    await click("Slice plate");
+    if (await waitFor(`!!document.querySelector('[role=alertdialog]')`, 10)) await evaluate(`[...document.querySelectorAll('[role=alertdialog] button')].find((b) => b.textContent === 'Slice anyway').click()`);
+    check("the slice finishes", await waitFor(`document.querySelector('[data-testid="slice-status"]')?.dataset.status === 'done'`, 160));
+    await click("Send and print");
+    check("starting a print is asked for first", await waitFor(`document.querySelector('[role=alertdialog]')?.innerText.includes('Start a print?')`, 20));
+    await shot("10-print-dialog");
+    check("nothing prints before the answer", (await evaluate(`document.querySelector('[data-testid="job"]')?.dataset.state ?? 'none'`)) !== "printing");
+    await clickIn("[role=alertdialog]", "Upload and print");
+    check("the print runs to its end", await waitFor(`document.querySelector('[data-testid="job"]')?.dataset.state === 'complete'`, 240));
+    await shot("11-job-complete");
+  }
 
   check("the console stays clean", problems.length === 0, problems.slice(0, 3).join(" ; "));
   ws.close();

@@ -7,13 +7,16 @@ import type {
   ObjectTransform,
   PreviewChunkJson,
   PreviewSummary,
+  PrinterConnectResult,
   PrinterPreset,
+  PrinterStatus,
   ResolveResult,
   SchemaOption,
   Selection,
   SliceProgress,
   SliceRequest,
   SliceResult,
+  UploadResult,
 } from "./protocol.ts";
 
 export interface Notification {
@@ -86,6 +89,28 @@ export class EngineClient {
       layer_to: layerTo,
       travel,
     })) as PreviewChunkJson;
+  }
+
+  // --- the printer host (Moonraker or FLUXRAKER) ---
+
+  async connectPrinter(host: string, apiKey: string): Promise<PrinterConnectResult> {
+    return (await this.#transport.call("moonraker.connect", { host, api_key: apiKey })) as PrinterConnectResult;
+  }
+
+  async uploadGcode(host: string, apiKey: string, gcode: string, print: boolean): Promise<UploadResult> {
+    return (await this.#transport.call("moonraker.upload", { host, api_key: apiKey, gcode, print })) as UploadResult;
+  }
+
+  async startPrint(host: string, apiKey: string, name: string): Promise<void> {
+    await this.#transport.call("moonraker.start", { host, api_key: apiKey, name });
+  }
+
+  async cancelPrint(host: string, apiKey: string): Promise<void> {
+    await this.#transport.call("moonraker.cancel", { host, api_key: apiKey });
+  }
+
+  async printerStatus(host: string, apiKey: string): Promise<PrinterStatus> {
+    return (await this.#transport.call("moonraker.status", { host, api_key: apiKey })) as PrinterStatus;
   }
 
   /** One slice at a time; `onProgress` receives the engine's `slice.progress` notifications meanwhile. */

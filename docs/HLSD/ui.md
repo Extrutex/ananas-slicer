@@ -55,6 +55,24 @@ tested without one.
 Not built yet: drawing a path with its real width and height, cut-away sections, painting supports, arranging
 several objects automatically.
 
+## The printer
+
+The way from a slice to a machine: connect, slice against the printer's own limits, store the G-code, print.
+
+- **Connect** (Printer button, top bar): the address of a Moonraker or FLUXRAKER host and an optional API key. The key
+  stays in memory and goes only to that address. When the host's Klipper is ready, its limits (the running Klipper's
+  own parse of `printer.cfg`) replace the profile's: the cockpit holds every row against them and a speed the
+  printer cannot reach turns red at once. Disconnecting goes back to the profile's limits.
+- **Send to printer** stores the G-code. **Send and print** asks first, naming the printer, the file, the time and
+  the filament, and prints nothing until it is confirmed; cancelling the question does nothing. The session never
+  starts a print by itself.
+- While a print runs the printer is read every two seconds: state, file and progress, with a Cancel print button.
+- **Choose... / Save G-code...** are the desktop shell's native file dialogs. Saving copies a G-code the engine wrote
+  to the chosen file through one narrow command (`export_gcode`): only a file in the engine's output folder, only a
+  `.gcode` target, no links out of the folder. In a browser the model path field is used instead.
+
+Nothing here has touched a real printer. The tests run against the virtual printer (below) only.
+
 ## Running it
 
 ```sh
@@ -63,6 +81,12 @@ npm install
 npm test                    # unit, session and app tests; most of them start the real engine
 npm run e2e                 # the viewer in headless Chrome: page and pixels (needs Chrome; CHROME_BIN picks it)
 cargo test --manifest-path src-tauri/Cargo.toml     # the Rust bridge against the real engine
+
+# the way to the printer, against the virtual printer (real Klipper and Moonraker, reachable on 127.0.0.1 only)
+tests/engine/rig/rig.sh up                          # then: export ANANAS_RIG_URL=http://127.0.0.1:17125
+npm test                                            # the printer tests run now instead of being skipped
+npm run e2e                                         # also drives the dialogs and a whole print
+tests/engine/rig/rig.sh down
 
 # in a plain browser
 npm run bridge              # serves the engine on 127.0.0.1:4173 (localhost only)

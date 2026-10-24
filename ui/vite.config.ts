@@ -11,5 +11,7 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.test.{ts,tsx}"],
     testTimeout: 60000,
+    // The virtual printer is a single machine: test files that print must not run at the same time.
+    fileParallelism: false,
   },
 });

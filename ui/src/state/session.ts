@@ -7,6 +7,7 @@ import { EngineClient } from "../engine/client.ts";
 import {
   EngineRpcError,
   ERROR_INVALID_PARAMS,
+  type PrinterStatus,
   type CompatiblePresets,
   type EngineInfo,
   type ImportedLimits,
@@ -61,6 +62,26 @@ export interface ViewState {
   explode: number;
 }
 
+export interface PrinterConnection {
+  status: "disconnected" | "connecting" | "connected" | "failed";
+  /** The address the user gave, normalised by the engine once connected. */
+  host: string;
+  klippyState: string;
+  moonrakerVersion: string;
+  error: string | null;
+  warnings: string[];
+  /** The current print, as the host last reported it. */
+  job: PrinterStatus | null;
+}
+
+export interface UploadState {
+  status: "idle" | "uploading" | "done" | "failed";
+  /** The file name on the printer. */
+  name: string | null;
+  printStarted: boolean;
+  error: string | null;
+}
+
 export interface CockpitState {
   phase: "loading" | "ready" | "failed";
   error: string | null;
@@ -87,12 +108,26 @@ export interface CockpitState {
   view: ViewState;
   preview: PreviewState;
   slice: SliceState;
+  printer: PrinterConnection;
+  upload: UploadState;
 }
 
 const DEFAULT_PRINTER = "Voron 2.4 350 0.4 nozzle";
 const DEFAULT_FILAMENT = "Generic PLA @System";
 
 const IDLE_SLICE: SliceState = { status: "idle", percent: 0, message: "", result: null, error: null };
+
+const NO_PRINTER: PrinterConnection = {
+  status: "disconnected",
+  host: "",
+  klippyState: "",
+  moonrakerVersion: "",
+  error: null,
+  warnings: [],
+  job: null,
+};
+
+const NO_UPLOAD: UploadState = { status: "idle", name: null, printStarted: false, error: null };
 
 const NO_PREVIEW: PreviewState = {
   status: "none",
@@ -140,7 +175,12 @@ export class CockpitSession {
     view: { target: "model", mode: "solid", explode: 0 },
     preview: NO_PREVIEW,
     slice: IDLE_SLICE,
+    printer: NO_PRINTER,
+    upload: NO_UPLOAD,
   };
+
+  /** The API key of the connected printer. Kept in memory only: it is never put in the state a UI renders or stores. */
+  #apiKey = "";
 
   constructor(client: EngineClient) {
     this.#client = client;
@@ -456,6 +496,126 @@ export class CockpitSession {
 
   setPreview(patch: Partial<Pick<PreviewState, "quantity" | "layerMin" | "layerMax" | "showTravel" | "explodeLayers">>): void {
     this.#set({ preview: { ...this.#state.preview, ...patch } });
+  }
+
+  // --- the printer ------------------------------------------------------------------------------
+
+  /**
+   * Connects to a Moonraker-compatible host and, when its Klipper is ready, takes over its limits: they replace
+   * the profile's, and a value above them shows up in the cockpit at once.
+   */
+  connectPrinter(host: string, apiKey: string): Promise<void> {
+    return this.#enqueue(async () => {
+      this.#apiKey = apiKey;
+      this.#set({ printer: { ...NO_PRINTER, status: "connecting", host }, upload: NO_UPLOAD });
+      try {
+        const connected = await this.#client.connectPrinter(host, apiKey);
+        this.#set({
+          printer: {
+            status: "connected",
+            host: connected.host,
+            klippyState: connected.klippy_state,
+            moonrakerVersion: connected.moonraker_version,
+            error: null,
+            warnings: connected.warnings,
+            job: null,
+          },
+        });
+        if (connected.limits !== null) {
+          this.#set({
+            imported: { label: connected.host, limits: { ...connected.limits, source: "moonraker" }, warnings: connected.warnings },
+            importError: null,
+          });
+          await this.#resolve();
+        }
+        await this.#pollPrinter();
+      } catch (error) {
+        this.#apiKey = "";
+        this.#set({ printer: { ...NO_PRINTER, status: "failed", host, error: message(error) } });
+      }
+    });
+  }
+
+  disconnectPrinter(): Promise<void> {
+    return this.#enqueue(async () => {
+      this.#apiKey = "";
+      const fromPrinter = this.#state.imported?.limits.source === "moonraker";
+      this.#set({ printer: NO_PRINTER, upload: NO_UPLOAD, ...(fromPrinter ? { imported: null } : {}) });
+      if (fromPrinter) {
+        try {
+          await this.#resolve();
+        } catch (error) {
+          this.#set({ error: message(error) });
+        }
+      }
+    });
+  }
+
+  async #pollPrinter(): Promise<void> {
+    const { printer } = this.#state;
+    if (printer.status !== "connected") return;
+    try {
+      const job = await this.#client.printerStatus(printer.host, this.#apiKey);
+      this.#set({ printer: { ...this.#state.printer, job, klippyState: job.klippy_state, error: null } });
+    } catch (error) {
+      this.#set({ printer: { ...this.#state.printer, error: message(error) } });
+    }
+  }
+
+  /** Reads the printer's current state; the UI calls it on a timer while a print runs. */
+  refreshPrinter(): Promise<void> {
+    return this.#enqueue(() => this.#pollPrinter());
+  }
+
+  /**
+   * Stores the last slice's G-code on the printer. With `print` the host starts it: the caller asks the user first,
+   * the session never starts a print on its own.
+   */
+  sendToPrinter(print: boolean): Promise<void> {
+    return this.#enqueue(async () => {
+      const { printer, slice } = this.#state;
+      const gcode = slice.result?.gcode;
+      if (printer.status !== "connected" || gcode === undefined) {
+        this.#set({ upload: { ...NO_UPLOAD, status: "failed", error: gcode === undefined ? "Slice first." : "Connect a printer first." } });
+        return;
+      }
+      this.#set({ upload: { ...NO_UPLOAD, status: "uploading" } });
+      try {
+        const stored = await this.#client.uploadGcode(printer.host, this.#apiKey, gcode, print);
+        this.#set({ upload: { status: "done", name: stored.name, printStarted: stored.print_started, error: null } });
+        await this.#pollPrinter();
+      } catch (error) {
+        this.#set({ upload: { ...NO_UPLOAD, status: "failed", error: message(error) } });
+      }
+    });
+  }
+
+  /** Starts a file that is already on the printer. */
+  startPrint(name: string): Promise<void> {
+    return this.#enqueue(async () => {
+      const { printer } = this.#state;
+      if (printer.status !== "connected") return;
+      try {
+        await this.#client.startPrint(printer.host, this.#apiKey, name);
+        this.#set({ upload: { ...this.#state.upload, printStarted: true } });
+        await this.#pollPrinter();
+      } catch (error) {
+        this.#set({ upload: { ...this.#state.upload, status: "failed", error: message(error) } });
+      }
+    });
+  }
+
+  cancelPrint(): Promise<void> {
+    return this.#enqueue(async () => {
+      const { printer } = this.#state;
+      if (printer.status !== "connected") return;
+      try {
+        await this.#client.cancelPrint(printer.host, this.#apiKey);
+        await this.#pollPrinter();
+      } catch (error) {
+        this.#set({ printer: { ...this.#state.printer, error: message(error) } });
+      }
+    });
   }
 
   /** Slices the model with the current selection, overrides and limits into the output folder. */
