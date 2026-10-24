@@ -4,6 +4,7 @@ add_executable(${_TEST_NAME}_tests
     ${_TEST_NAME}_tests.cpp
     test_limits.cpp
     test_stress.cpp
+    test_stress_validation.cpp
 )
 
 target_link_libraries(${_TEST_NAME}_tests test_common ananas_engine_core Catch2::Catch2WithMain)
