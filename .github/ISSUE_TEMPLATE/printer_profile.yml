@@ -1,0 +1,59 @@
+name: Printer profile
+description: Add a printer that runs Klipper, or correct the evidence or the profile of one
+labels: ["printer-profile"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ANANAS SLICER ships profiles only for printers that verifiably run Klipper. Every model has an evidence record in [`docs/ananas-slicer/printer-firmware.json`](https://github.com/Extrutex/ananas-slicer/blob/main/docs/ananas-slicer/printer-firmware.json): stock Klipper with Moonraker, stock Klipper without Moonraker, Klipper through an established community conversion, or self-built. A printer without public evidence is not added, however popular it is; its owners use the **Generic Klipper Printer** profile or **Create printer**.
+  - type: input
+    id: model
+    attributes:
+      label: Vendor and model
+      placeholder: e.g. RatRig V-Core 4 400
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What do you want?
+      options:
+        - Add a printer that is missing
+        - Correct the evidence of a listed printer
+        - Correct the profile of a listed printer (bed, limits, start G-code, …)
+        - Remove a printer that does not run Klipper
+    validations:
+      required: true
+  - type: dropdown
+    id: firmware
+    attributes:
+      label: Firmware status
+      options:
+        - Stock Klipper with Moonraker
+        - Stock Klipper without Moonraker (vendor interface only)
+        - Klipper through an established community conversion
+        - Self-built or kit machine, Klipper by design
+        - Unclear
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Links that anyone can check. Vendor documentation or firmware sources for stock Klipper; the conversion's documentation for community conversions; the build documentation for self-built machines. Forum posts and videos count only as supporting material.
+    validations:
+      required: true
+  - type: textarea
+    id: machine
+    attributes:
+      label: Machine data
+      description: Kinematics (`printer.cfg` `kinematics:`), bed size and shape, nozzle sizes, `max_velocity`, `max_accel`, `square_corner_velocity`, toolhead, extruder. Attach the relevant parts of `printer.cfg`.
+    validations:
+      required: false
+  - type: textarea
+    id: tested
+    attributes:
+      label: Tested?
+      description: Which ANANAS SLICER version printed with which profile, and how it went.
+    validations:
+      required: false
