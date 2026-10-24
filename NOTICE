@@ -1,0 +1,29 @@
+ANANAS SLICER
+Copyright (C) 2026 ANANAS SLICER contributors
+
+This program is free software: you can redistribute it and/or modify it under the
+terms of the GNU Affero General Public License as published by the Free Software
+Foundation, version 3. See LICENSE.txt. Anyone who distributes this program,
+modified or not, must make the corresponding source code available under the same
+terms; the source of every release is the Git tag of that release at
+https://github.com/Extrutex/ananas-slicer.
+
+ANANAS SLICER is a fork of OrcaSlicer and contains code from the following
+projects, all licensed under the GNU Affero General Public License, version 3.
+Their copyright notices in the source files are retained.
+
+  OrcaSlicer     Copyright SoftFever and the OrcaSlicer contributors
+                 https://github.com/OrcaSlicer/OrcaSlicer
+  Bambu Studio   Copyright Bambu Lab
+                 https://github.com/bambulab/BambuStudio
+  PrusaSlicer    Copyright Prusa Research
+                 https://github.com/prusa3d/PrusaSlicer
+  Slic3r         Copyright Alessandro Ranellucci and the RepRap community
+                 https://github.com/Slic3r/Slic3r
+
+Third-party libraries are built from deps/ and listed in the About dialog
+(Help → About ANANAS SLICER → Third-party libraries). Their licenses are included
+with the packaged application.
+
+ANANAS SLICER is an independent project. It is not affiliated with or endorsed by
+the Klipper project, the Moonraker project, OrcaSlicer, Bambu Lab or Prusa Research.
