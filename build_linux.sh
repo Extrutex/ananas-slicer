@@ -329,7 +329,7 @@ function run_in_docker() {
     host_uid=$(id -u)
     host_gid=$(id -g)
     host_user="${USER:-orca}"
-    container_workspace="/__w/OrcaSlicer/OrcaSlicer"
+    container_workspace="/__w/ananas-slicer/ananas-slicer"
     build_args=()
     for item in "${FORWARDED_ARGS[@]}" ; do
         if [[ "${item}" == "-u" ]] || [[ "${item}" == "-D" ]] ; then
