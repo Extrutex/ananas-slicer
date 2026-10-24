@@ -514,6 +514,9 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
+          # The MSIX is left out: an unsigned MSIX cannot be installed, and its
+          # four-part version does not carry the alpha suffix.
+          rm -rf AnanasSlicer_Windows_MSIX_*
           for dir in */; do
             name=${dir%/}
             entries=$(find "$name" -mindepth 1 -maxdepth 1 | wc -l)
