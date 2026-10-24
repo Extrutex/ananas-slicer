@@ -422,25 +422,6 @@ private:
     Button *      m_later_btn  = nullptr;
 };
 
-
-class NetworkErrorDialog : public DPIDialog
-{
-public:
-    NetworkErrorDialog(wxWindow* parent);
-    ~NetworkErrorDialog() {};
-    virtual void on_dpi_changed(const wxRect& suggested_rect) {};
-
-private:
-    Label* m_text_basic;
-    HyperLink* m_link_server_state; // ORCA
-    Label* m_text_proposal;
-    HyperLink* m_text_wiki; // ORCA
-    Button *         m_button_confirm;
-
-public:
-    bool m_show_again{false};
-};
-
 // Multi-item filament-blacklist warning dialog with per-item wiki links. Replaces the plain
 // MessageDialog used for warnings so stacked accumulate-all warnings render with their own
 // optional Wiki link.

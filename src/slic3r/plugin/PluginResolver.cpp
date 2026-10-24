@@ -183,21 +183,22 @@ std::vector<PluginCapabilityId> capabilities_in_use(Preset::Type type, const Pre
 
 static std::string resolve_cloud_base_url()
 {
-    std::string cloud_base_url = "https://cloud.orcaslicer.com";
+    // Only the configured cloud agent knows the plugin hub; without one there is no address.
     if (auto agent = GUI::wxGetApp().getAgent()) {
-        if (auto orca_agent = std::dynamic_pointer_cast<OrcaCloudServiceAgent>(agent->get_cloud_agent())) {
-            if (!orca_agent->get_cloud_base_url().empty())
-                cloud_base_url = orca_agent->get_cloud_base_url();
-        }
+        if (auto orca_agent = std::dynamic_pointer_cast<OrcaCloudServiceAgent>(agent->get_cloud_agent()))
+            return orca_agent->get_cloud_base_url();
     }
-    return cloud_base_url;
+    return {};
 }
 
 std::string create_full_ref(const PluginCapabilityRef& ref) { return ref.name + ';' + ref.uuid + ';' + ref.capability_name; }
 
 std::string resolve_recovery_url(const PluginCapabilityRef& ref)
 {
-    return resolve_cloud_base_url() + "/app/plugins/plugin-hub?search=" + Http::url_encode(ref.name);
+    const std::string base = resolve_cloud_base_url();
+    if (base.empty())
+        return {};
+    return base + "/app/plugins/plugin-hub?search=" + Http::url_encode(ref.name);
 }
 
 // {present, enabled}; {false, false} when the plugin is not loaded or does not provide the capability.

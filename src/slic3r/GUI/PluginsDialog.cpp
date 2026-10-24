@@ -458,18 +458,18 @@ void refresh_plugin_metadata_blocking(bool fetch_cloud)
 
 void open_plugin_hub()
 {
-    std::string cloud_base_url = "https://cloud.orcaslicer.com";
-
+    // Only the configured cloud agent knows the plugin hub; without one there is nothing to open.
+    std::string cloud_base_url;
     if (wxGetApp().getAgent()) {
         auto orca_agent = std::dynamic_pointer_cast<OrcaCloudServiceAgent>(wxGetApp().getAgent()->get_cloud_agent());
-        if (orca_agent && !orca_agent->get_cloud_base_url().empty())
+        if (orca_agent)
             cloud_base_url = orca_agent->get_cloud_base_url();
     }
 
     while (!cloud_base_url.empty() && cloud_base_url.back() == '/')
         cloud_base_url.pop_back();
     if (cloud_base_url.empty())
-        cloud_base_url = "https://cloud.orcaslicer.com";
+        return;
 
     wxLaunchDefaultBrowser(wxString::FromUTF8(cloud_base_url + "/app/plugins/plugin-hub"));
 }

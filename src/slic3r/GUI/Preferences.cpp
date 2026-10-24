@@ -1495,9 +1495,6 @@ void PreferencesDialog::create_items()
         "filaments_area_preferred_count", 8, 99, [this](int value) {m_filament_height_timer.StartOnce(500);});
     g_sizer->Add(item_filament_area_height); 
 
-    auto item_shared_profiles  = create_item_checkbox(_L("Show shared profiles notification"), _L("Show a notification with a link to browse shared profiles when the selected printer is changed."), "show_shared_profiles_notification");
-    g_sizer->Add(item_shared_profiles);
-
     //// GENERAL > Features
     g_sizer->Add(create_item_title(_L("Features")), 1, wxEXPAND);
 
