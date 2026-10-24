@@ -6,6 +6,8 @@ on:
   # linux-arm and flatpak are opt-in via workflow_dispatch 'platforms'.
   push:
     branches: ['**']
+    # A v* tag runs the same build and then publishes a GitHub release (job `release`).
+    tags: ['v*']
     paths:
      - 'deps/**'
      - 'deps_src/**'
@@ -484,3 +486,81 @@ jobs:
     with:
       os: ubuntu-24.04-arm
       artifact: ${{ github.sha }}-flatpak-tests-aarch64
+
+  # ANANAS SLICER: a pushed tag v* turns the finished build into a GitHub release.
+  # Every package the build uploaded as an artifact (AnanasSlicer_*) is attached,
+  # with a SHA256SUMS.txt and the matching section of CHANGELOG.md as the notes.
+  # Pre-release when the tag names an alpha, beta or rc. Nothing is deployed
+  # anywhere else.
+  release:
+    name: GitHub release
+    needs: [build_linux, build_windows, build_macos_universal, unit_tests_linux_x86_64, unit_tests_windows_x64, unit_tests_macos_arm64, slice_check_linux]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') && !cancelled() && needs.build_linux.result == 'success' && needs.build_windows.result == 'success' && needs.build_macos_universal.result == 'success' && needs.unit_tests_linux_x86_64.result == 'success' && needs.unit_tests_windows_x64.result == 'success' && needs.unit_tests_macos_arm64.result == 'success' && needs.slice_check_linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download the packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: AnanasSlicer_*
+          path: dist
+
+      - name: Flatten single-file artifacts, zip the portable build, write checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          for dir in */; do
+            name=${dir%/}
+            entries=$(find "$name" -mindepth 1 -maxdepth 1 | wc -l)
+            single=$(find "$name" -mindepth 1 -maxdepth 1 -type f | head -n 1)
+            if [ "$entries" -eq 1 ] && [ -n "$single" ]; then
+              mv "$single" .
+              rmdir "$name"
+            else
+              (cd "$name" && zip -qr "../${name}.zip" .)
+              rm -rf "$name"
+            fi
+          done
+          ls -l
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Release notes from CHANGELOG.md
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=${GITHUB_REF_NAME}
+          ver=${tag#v}
+          awk -v ver="$ver" '
+            index($0, "## [" ver "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "CHANGELOG.md has no section for $ver" >&2
+            printf 'Release %s. See CHANGELOG.md.\n' "$tag" > notes.md
+          fi
+          {
+            echo
+            echo '## Downloads'
+            echo
+            echo 'The packages are unsigned alpha builds. The wiki explains the macOS Gatekeeper and Windows SmartScreen steps: https://extrutex.github.io/ananas-slicer-wiki/download/'
+            echo
+            echo '`SHA256SUMS.txt` holds the checksum of every file. The corresponding source code is this tag (AGPL-3.0).'
+          } >> notes.md
+          cat notes.md
+
+      - name: Create the GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=${GITHUB_REF_NAME}
+          pre=""
+          case "$tag" in *alpha*|*beta*|*rc*) pre="--prerelease" ;; esac
+          gh release create "$tag" dist/* --verify-tag --title "ANANAS SLICER ${tag#v}" --notes-file notes.md $pre
