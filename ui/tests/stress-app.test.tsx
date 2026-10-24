@@ -105,6 +105,8 @@ describe("das Panel Kraftverteilung", () => {
     expect(session.getState().stress.run.status).toBe("done");
     expect(summary).toHaveTextContent("Max. Spannung");
     expect(summary).toHaveTextContent("1000,0 N / 1000,0 N");
+    expect(within(panel).getByTestId("stress-corner-note")).toHaveTextContent("netzabhängig (Singularität)");
+    expect(within(panel).getByTestId("stress-corner-note")).toHaveTextContent("nur als Warnung lesen");
     expect(within(panel).getByRole("button", { name: "Modell zeigen" })).toBeInTheDocument();
 
     // Die Legende gehört in den Viewport; ohne WebGL zeigt dieser nur den Hinweis, die Legende kommt mit dem Mesh.

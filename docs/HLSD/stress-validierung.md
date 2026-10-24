@@ -1,6 +1,6 @@
 # Validierung des Spannungslösers (analyze.stress)
 
-Stand: 24.10.2026, Branch `feat/ui-stage5-kraft`, Löser unverändert (`src/engine/Stress.cpp`). Alle Aussagen sind
+Stand: 24.10.2026, Branch `feat/ui-stage5-kraft`; Stagnationsregel des Lösers geändert (`src/engine/Stress.cpp`, siehe „Befunde am Löser“). Alle Aussagen sind
 **Richtwerte, nicht zertifiziert**. Der Löser ist linear-elastisch, rechnet mit trilinearen Hexaeder-Elementen auf
 einem Würfelgitter (Voxel) und gibt die Spannung als Wert im Elementmittelpunkt aus.
 
@@ -155,6 +155,9 @@ auch die Querkontraktion enthält (Wurzel aus Längsdehnung² + Querkontraktion�
 | 0,5 | 16 | 51 840 | 26,16 | (8,25 \| 7,75 \| 4,75) | 1,33 | 1,53 | 1,942 | −1,2 % |
 | 0,25 | 32 | 415 360 | 34,55 | (8,12 \| 7,88 \| 4,88) | 1,75 | 1,16 | 1,951 | −0,5 % |
 
+Hinweis im Programm: Unter dem Ergebnis im Panel Kraftverteilung steht, dass Spannungsspitzen an scharfen Innenecken und an Lastpunkten
+netzabhängig sind (Singularität) und der Sicherheitsfaktor dort nur als Warnung zu lesen ist.
+
 Auswertung: Das Maximum sitzt in allen Stufen **in der Zelle an der inneren Ecke (8 | 8)** (Abstand höchstens eine Zellgröße), die
 Armspannung und die Durchbiegung stimmen mit der Balkentheorie (−0,5 % bzw. innerhalb der Schranken). Die Spitzenspannung an der Ecke
 **wächst bei jeder Halbierung etwa um das 1,3- bis 1,4-fache**, hat also keinen Grenzwert. Der Sicherheitsfaktor an der Ecke ist
@@ -162,26 +165,69 @@ daher netzabhängig (2,9 bis 1,2). Er ist **als Warnung zu lesen** („hier ist 
 scharfen Innenecke eine Sicherheit braucht, muss die Ecke ausrunden. Gegenüber der Balkenabschätzung liegt die Größenordnung bei
 0,7- bis 1,75-fach, je nach Auflösung; Faktor 2 Abweichung in beide Richtungen sollte man für scharfe Ecken einplanen.
 
-## Befunde am Löser (nicht behoben)
+## Befunde am Löser
 
-Kein Fall zeigt einen Fehler im Gleichungslöser, der nicht durch die Voxelauflösung erklärbar wäre. Zwei Auffälligkeiten der
-Abbruchlogik bei feinen, schlanken Gittern, beide **Verdacht (Vermutung), nicht bewiesen**:
+### 1. Vorzeitiger Abbruch „stagniert“ (behoben)
 
-1. **Vorzeitiger Abbruch „stagniert“** (Stagnationsfenster 1000 Iterationen, `src/engine/Stress.cpp` Zeile 986 ff.):
-   - Eingabe: Balken 96 × 6 × 6 mm, E = 2000, ν = 0,3, Linienlager unten an x = 0 und x = 96, Last 50 N auf einem 2 mm breiten
-     Streifen oben in der Mitte, Voxel 0,25 mm (384 × 24 × 24 Zellen).
-   - Erwartet: Konvergenz wie bei den Stufen 1,0 / 0,5 / 0,4 / 0,3 mm derselben Geometrie (1 184 / 2 458 / 3 233 / 4 411 Iterationen,
-     Durchbiegung 4,278 … 4,343 mm). Hochgerechnet etwa 5 300 Iterationen.
-   - Erhalten: Fehler „the solver stagnated after 2000 iterations (relative residual 0.844286)“.
-   - Zweiter Fall: Platte 40 × 100 × 2 mm (und 40 × 80 × 2 mm) mit Bohrung d = 10 mm, F = 800 N, Voxel 0,25 mm: „stagnated after 4000
-     (bzw. 3000) iterations (relative residual 0.00339 bzw. 0.00606)“, während Voxel 1,0 / 0,5 nach 2 766 / 5 702 Iterationen konvergieren.
-   - Deutung (Vermutung): Das Residuum des CG-Verfahrens mit Jacobi-Vorkonditionierer verharrt bei Biegung über einige tausend
-     Iterationen auf einem Plateau und fällt erst danach; die Regel „je 1000 Iterationen mindestens 1 % besser“ bricht dann ab, bevor
-     das Plateau endet. Die Lagerung ist in Ordnung (Starrkörperprüfung bestanden, gröbere Stufen konvergieren). Für Nutzer heißt das:
-     bei feinen Gittern kann ein berechenbarer Fall mit der irreführenden Meldung „Lager lassen den Körper frei“ abbrechen.
-   - Umgehung in den Tests: Stufen so gewählt, dass sie konvergieren.
-2. **Iterationszahl wächst etwa mit 1/Voxelgröße** (Platte 2 673 → 5 458 → 6 822 bei 0,5 / 0,25 / 0,2 mm), dazu passt die
-   Obergrenze `STRESS_MAX_ITERATIONS = 20000`. Das ist erwartet für CG mit Jacobi, gehört aber zur Aussage „feines Gitter ist teuer“.
+**Ursache bestätigt (Fakt, gemessen):** Die alte Regel in `src/engine/Stress.cpp` verlangte, dass das beste Residuum in jedem
+Fenster von 1000 Iterationen um mindestens 1 % fällt. Das Residuum des CG-Verfahrens mit Jacobi-Vorkonditionierer ist nicht
+monoton und liegt bei feinen, schlanken Gittern tausende Iterationen auf einem Plateau, bevor es fällt. Dieselben Läufe mit
+abgeschalteter Regel konvergierten:
+
+| Fall | alte Regel | ohne Regel / neue Regel | Rechenzeit (Mac mini) |
+|---|---|---|---|
+| Balken 96 × 6 × 6 mm, Voxel 0,25 (221 184 Zellen) | Abbruch bei 2 000 Iterationen, Residuum 0,844286 (reproduziert, identisch) | **konvergiert nach 5 669 Iterationen**, Residuum 9,6e-7; Durchbiegung +0,6 %, Randfaserspannung −1,8 % gegenüber der Theorie | 20 bis 30 s |
+| Platte 80 × 40 × 2 mm, Bohrung d = 10 mm, F = 800 N, Voxel 0,25 (399 488 Zellen) | Abbruch bei 3 000, Residuum 0,006 | **konvergiert nach 11 575 Iterationen**, Residuum 9,9e-7; Kt (brutto) 3,2422 gegen 3,2271 (+0,5 %) | etwa 90 s |
+| Platte 100 × 40 × 2 mm, sonst gleich (501 888 Zellen) | Abbruch bei 4 000 (Angabe der ersten Untersuchung) | **konvergiert nach 14 170 Iterationen**, Kt +0,4 % | etwa 2,5 min |
+
+Verlauf des Balkens (Residuum relativ, alle 500 Iterationen das bisher beste): 0,95 (500), 0,95 (1000), 0,66 (1500), 0,66 (2000),
+0,60 (2500), 0,19 (3000), 0,024 (3500), 1,5e-4 (4000), 7,5e-6 (4500). Die Platte (80 × 40) hat ein Plateau des besten Residuums von
+7 500 bis 9 500 (1,4e-4, 2 000 Iterationen ohne Fortschritt) und konvergiert danach.
+
+**Neue Regel:** Stagnation gilt erst, wenn das beste Residuum über ein langes Fenster um weniger als 1 % gefallen ist, mindestens
+3 000 Iterationen **und** mindestens die Hälfte aller bisherigen Iterationen (Prüfung alle 250 Iterationen); das Fenster wächst also
+mit dem Lauf. Harte Grenzen bleiben `max_iterations` (Deckel 20 000) und das Zeitlimit. Ein echter Mechanismus (Residuum bleibt auf
+einem Boden) endet weiter schnell: der Testfall „zwei Würfel an einer Ecke“ endet nach 800 Iterationen in 0,01 s, weil der Löser dort
+schon vorher eine nicht positive Richtung findet (`pq <= 0`). Ein reiner Residuumsboden ohne `pq <= 0` wurde nicht als eigener Test
+nachgestellt (nicht herstellbar ohne künstliches Gleichungssystem); die Regel dafür ist nur durch die Messungen oben begründet.
+
+**Meldung bei Nichtkonvergenz:** Die Starrkörperprüfung der Lager läuft vorab. Wer danach nicht konvergiert, bekommt nicht mehr
+„die Lager lassen den Körper frei“, sondern die Iterationen, das Residuum und die Toleranz sowie den Hinweis „größere voxel_size, oder
+mehr Zeit und Iterationen“ (Iterationsdeckel), „größere voxel_size“ und Fugen prüfen (Stagnation, Mechanismus) bzw. Werkstoff/Lasten prüfen (Überlauf).
+
+**Iterationsdeckel 20 000:** reicht für alle gemessenen Fälle (größter: 14 170). Die Zahl wächst etwa mit 1/Voxelgröße^1,4
+(Balken 4 411 → 5 669 von 0,3 auf 0,25 mm). Hochrechnung (**Vermutung, nicht gemessen**): eine dünne Platte an der Zellgrenze von
+5 Millionen Zellen bräuchte etwa 22 000 Iterationen und rund 30 Minuten, also über dem Standard von `max_seconds` = 600 und knapp
+über dem Deckel. Deshalb **nicht geändert**: Bei solchen Größen entscheidet das Zeitlimit, und der Deckel schützt vor einem Lauf
+ohne Ende; die Meldung nennt jetzt beide Wege. Ein besserer Vorkonditionierer (Mehrgitter) wäre der richtige Hebel und ist nicht billig;
+ein 3×3-Blockjacobi wurde nicht versucht.
+
+Test: `Stress-Validierung: feine schlanke Gitter konvergieren statt mit Stagnation abzubrechen` (nur mit `ANANAS_STRESS_FULL=1`, etwa
+2 Minuten).
+
+### 2. Iterationszahl wächst mit 1/Voxelgröße
+
+Platte 48 × 24 × 2 mm: 2 673 → 5 458 → 6 822 Iterationen bei 0,5 / 0,25 / 0,2 mm. Erwartet für CG mit Jacobi, gehört zur Aussage
+„feines Gitter ist teuer“.
+
+### 3. Auswertung nach dem Löser ohne Uhr (Doku angepasst)
+
+Reaktion, Spannung je Zelle und Extremwertsuche laufen nach dem Löser ohne Zeitprüfung. Gemessen an einem massiven Würfel mit
+4 913 000 Zellen (nahe dem Zellenlimit von 5 Millionen): **zusammen etwa 0,1 s** (Reaktion 0,04 s, Spannung 0,02 s, Extrema 0,01 s,
+Dünnwandprüfung 0,02 s), gegen etwa 13 s für den Löser mit 172 Iterationen (0,07 s je Iteration). Eine Uhr hier wäre Aufwand ohne
+Wirkung; die Grenze ist durch das Zellenlimit nach oben beschränkt. `max_seconds` kann deshalb um bis zu etwa 0,1 s (bei 5 Millionen
+Zellen) überschritten werden. In `engine.md` so vermerkt.
+
+### 4. Kantentreffer bei der Strahlparität (nicht bestätigt)
+
+Der Voxelisierer schickt senkrechte Strahlen durch die Zellmitten, um einen festen Bruchteil der Voxelgröße verschoben, damit ein
+Strahl nie auf einer Dreieckskante liegt. Gezielte Probe: Platten, deren Ober- und Unterseite in ein Dreiecksnetz zerlegt sind, dessen
+Kanten und Ecken genau an den Strahlorten liegen (Float-gerundet, so wie ein Netz sie speichert), mit einer und mit wechselnden
+Diagonalen, bei 9 Voxelgrößen (0,1 bis 1,5 mm): **in allen 18 Fällen** korrekte Zellzahl, kein Paritätsfehler. Gegenprobe (nur
+zur Messung, wieder entfernt): ohne den Versatz brechen dieselben Netze mit „nicht wasserdicht“ ab, die Probe kann den Fehler also
+erkennen. Mit dem Versatz ist ein exakter Treffer nur möglich, wenn eine Float-Koordinate genau dem Double-Strahlort entspricht;
+das ist nicht herstellbar. **Nichts geändert**; der Test `Stress: vertical rays that run along or across the edges and corners of the
+surface mesh` bleibt als Absicherung. Eine Eckenregel (oben-links) wäre nur nötig, wenn der Versatz je entfällt.
 
 ## Offen
 

@@ -36,7 +36,9 @@ template<class T> std::string encode(const std::vector<T>& values)
     return base64_encode(values.data(), values.size() * sizeof(T));
 }
 
-StressSelection parse_selection(const json& entry, const std::string& name)
+// `indices_left` is what the whole request may still list as triangle indices; it is checked against the length of a
+// list BEFORE the list is copied, so a hostile request does not first allocate memory and fail afterwards.
+StressSelection parse_selection(const json& entry, const std::string& name, size_t& indices_left)
 {
     StressSelection out;
     if (entry.contains("triangles")) {
@@ -45,6 +47,11 @@ StressSelection parse_selection(const json& entry, const std::string& name)
             invalid(name + ".triangles must be an array of triangle indices");
         if (list.size() > STRESS_MAX_TRIANGLES)
             invalid(name + ".triangles lists more than " + std::to_string(STRESS_MAX_TRIANGLES) + " triangles");
+        if (list.size() > indices_left)
+            invalid(name + ".triangles: all supports and loads together may list at most " + std::to_string(STRESS_MAX_SELECTION_INDICES) +
+                    " triangle indices");
+        indices_left -= list.size();
+        out.triangles.reserve(list.size());
         for (const json& id : list) {
             if (!id.is_number_unsigned())
                 invalid(name + ".triangles must hold non-negative integers");
@@ -138,13 +145,19 @@ StressInput parse_stress_request(const json& params, Model& model)
             invalid(std::string("\"") + key + "\" must be an array");
         return params.at(key);
     };
+    // The number of regions is checked before any of them is parsed and copied.
+    const json& supports = list("supports");
+    const json& loads    = list("loads");
+    if (supports.size() > STRESS_MAX_REGIONS || loads.size() > STRESS_MAX_REGIONS)
+        invalid("at most " + std::to_string(STRESS_MAX_REGIONS) + " supports and " + std::to_string(STRESS_MAX_REGIONS) + " loads are allowed");
+    size_t indices_left = STRESS_MAX_SELECTION_INDICES;
     size_t n = 0;
-    for (const json& entry : list("supports")) {
+    for (const json& entry : supports) {
         const std::string name = "supports[" + std::to_string(n++) + "]";
         if (!entry.is_object())
             invalid(name + " must be an object");
         StressSupport support;
-        support.where = parse_selection(entry, name);
+        support.where = parse_selection(entry, name, indices_left);
         if (entry.contains("axes")) {
             const json& axes = entry.at("axes");
             if (!axes.is_array() || axes.size() != 3 || !axes[0].is_boolean() || !axes[1].is_boolean() || !axes[2].is_boolean())
@@ -155,12 +168,12 @@ StressInput parse_stress_request(const json& params, Model& model)
         input.supports.push_back(std::move(support));
     }
     n = 0;
-    for (const json& entry : list("loads")) {
+    for (const json& entry : loads) {
         const std::string name = "loads[" + std::to_string(n++) + "]";
         if (!entry.is_object() || !entry.contains("force"))
             invalid(name + " must be an object with \"force\" [fx, fy, fz] in N");
         StressLoad load;
-        load.where = parse_selection(entry, name);
+        load.where = parse_selection(entry, name, indices_left);
         load.force = vec3(entry.at("force"), name + ".force");
         input.loads.push_back(std::move(load));
     }

@@ -96,12 +96,18 @@ mm, N and MPa; z is the build direction.
   estimated memory may not exceed 3 GB: before the voxelization the welding maps of the watertight check and the
   surface crossings of the voxelization (their number is capped by what the budget leaves, at most 50 million) are
   counted, afterwards about 330 bytes per cell of a compact body (5 million cells need roughly 1.7 GB); running out of
-  memory anyway answers `-32000`. At most 64 supports and 64 loads, 2 million different triangles per selection, a
+  memory anyway answers `-32000`. At most 64 supports and 64 loads, 2 million different triangles per selection and
+  20 million listed triangle indices over all supports and loads together (all checked while the request is read,
+  before a list is copied; one list is also bounded by the 10 million triangles), a
   force of at most 1e12 N per component of each load and of their sum. `max_iterations` is capped at 20000,
   `max_seconds` (default 600) at 3600. `max_seconds` is the wall clock of the whole analysis from the start of the
   call: the input check, the watertight check, the voxelization, building the mesh, the selections, the check of the
   supports and the solver all look at the clock periodically and end with `-32000`; the solver also stops when the best
-  residual falls by less than 1 % in 1000 iterations. A residual that reaches the tolerance in the iteration in which
+  residual has fallen by less than 1 % over a window of at least 3000 iterations and at least half of all iterations so
+  far (the residual of a conjugate gradient run sits on plateaus of thousands of iterations on fine, slender grids; a
+  fixed 1000-iteration window cut off runs that converged later, see `stress-validierung.md`). The evaluation after the
+  solver (reaction, stress per cell, extrema) is linear in the number of cells and not part of the clock: measured
+  0.1 s for 4.9 million solid cells, against about 0.07 s per solver iteration there. A residual that reaches the tolerance in the iteration in which
   the clock runs out counts as a result. Every vertex must be finite. There is no way to cancel a running analysis; it
   ends by itself within these limits.
 - **Supports.** Before solving, every piece of the model must be held against all three translations and all three

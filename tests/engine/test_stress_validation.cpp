@@ -580,3 +580,34 @@ TEST_CASE("Stress-Validierung: Winkelhalter, Spannungsmaximum an der inneren Eck
         CHECK(std::abs(runs[i].arm_error_top) < std::abs(runs[i - 1].arm_error_top)); // der Arm konvergiert dagegen
     }
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Stagnationsregel des Lösers. Das CG-Residuum liegt bei feinen, schlanken Gittern tausende Iterationen auf einem Plateau,
+// bevor es fällt. Die alte Regel („1 % Verbesserung je 1000 Iterationen“) brach diese Läufe ab, obwohl gröbere Stufen
+// derselben Geometrie konvergierten. Gemessen ohne Regel: Balken 96 x 6 x 6 mm, Voxel 0,25: 5 669 Iterationen (alte Regel:
+// Abbruch bei 2 000, Residuum 0,844); Platte 80 x 40 x 2 mm mit Bohrung d = 10 mm, Voxel 0,25: 11 575 Iterationen (alte Regel:
+// Abbruch bei 3 000, Residuum 0,006). Rechenzeit etwa 30 s bzw. 90 s, daher nur mit ANANAS_STRESS_FULL.
+TEST_CASE("Stress-Validierung: feine schlanke Gitter konvergieren statt mit Stagnation abzubrechen", "[Engine][Stress][Validation]")
+{
+    if (!full_run()) {
+        SKIP("nur mit ANANAS_STRESS_FULL (Minuten Rechenzeit)");
+    }
+    SECTION("Balken 96 x 6 x 6 mm, Voxel 0,25")
+    {
+        Bend b;
+        b.L = 96.;
+        b.F = 50.;
+        const BendRun r = run_bend(b, 0.25); // verlangt Konvergenz
+        CHECK(std::abs(r.deflection_error) < 0.02);
+        CHECK(r.stress_error < 0.);
+        CHECK(r.stress_error > -0.06);
+    }
+    SECTION("Platte 80 x 40 x 2 mm mit Bohrung d = 10 mm, Voxel 0,25")
+    {
+        const PlateRun r = run_plate(0.25, 40., 80., 2., 10., 800.);
+        CHECK(r.converged);
+        CHECK(r.iterations > 3000); // die alte Regel hätte vorher abgebrochen
+        CHECK(r.iterations < 20000);
+        CHECK(std::abs(r.error) < 0.03); // gemessen +0,5 %
+    }
+}

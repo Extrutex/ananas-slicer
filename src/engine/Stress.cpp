@@ -677,6 +677,16 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         invalid("no load given");
     if (input.supports.size() > STRESS_MAX_REGIONS || input.loads.size() > STRESS_MAX_REGIONS)
         invalid("at most " + std::to_string(STRESS_MAX_REGIONS) + " supports and " + std::to_string(STRESS_MAX_REGIONS) + " loads are allowed");
+    {
+        size_t listed = 0; // the lists are copied later (sorted, made unique): bound them first
+        for (const StressSupport& s : input.supports)
+            listed += s.where.triangles.size();
+        for (const StressLoad& l : input.loads)
+            listed += l.where.triangles.size();
+        if (listed > STRESS_MAX_SELECTION_INDICES)
+            invalid("all supports and loads together list " + std::to_string(listed) + " triangle indices, at most " +
+                    std::to_string(STRESS_MAX_SELECTION_INDICES) + " are allowed");
+    }
     Vec3d force_sum = Vec3d::Zero(); // sum of the absolute components: no cancelling can hide an overflow
     for (const StressLoad& load : input.loads) {
         if (!load.force.allFinite())
@@ -983,11 +993,20 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
     p = z;
     double rz = dot(r, z), r_norm = f_norm;
     int    last_percent = 15;
-    // Stagnation: the best residual must fall by 1 % within every window of iterations, otherwise the system is
-    // (nearly) singular or the tolerance is below what double precision can reach.
-    constexpr size_t STAGNATION_WINDOW = 1000;
-    double           best = r_norm, best_at_window_start = r_norm;
-    bool             stalled = false, timed_out = false;
+    // Stagnation: the residual of a conjugate gradient run is not monotone and on slender or fine grids it sits on a
+    // plateau for thousands of iterations before it falls again (measured: a 96 x 6 x 6 mm beam at 0.25 mm stays near 1
+    // for 2 500 iterations and converges after 5 669; a plate with a hole at 0.25 mm has its best residual flat for 2 000
+    // iterations at 7 500 to 9 500 and converges after 11 575). A fixed window of 1 000 iterations cut such runs off.
+    // The run counts as stalled only when the best residual has fallen by less than 1 % over a long window: at least
+    // STAGNATION_MIN_WINDOW iterations and at least half of all iterations so far, so the window grows with the run.
+    // A real mechanism (a residual floor from a load in the null space of the stiffness) is cut off after
+    // STAGNATION_MIN_WINDOW + STAGNATION_CHECK iterations; max_iterations and the time limit stay the hard limits.
+    constexpr size_t STAGNATION_CHECK      = 250;
+    constexpr size_t STAGNATION_MIN_WINDOW = 3000;
+    std::vector<double> best_at_check; // best residual after (k + 1) * STAGNATION_CHECK iterations
+    double              best = r_norm;
+    size_t              stall_window = 0;
+    bool                stalled = false, timed_out = false, mechanism = false, diverged = false;
     while (result.iterations < max_iterations) {
         if (std::isfinite(r_norm) && r_norm <= input.tolerance * f_norm) {
             result.converged = true;
@@ -995,8 +1014,10 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         }
         op.apply(p, q, true);
         const double pq = dot(p, q);
-        if (!(pq > 0.))
-            break; // the operator is not positive on p: a mechanism
+        if (!(pq > 0.)) {
+            mechanism = true; // the operator is not positive on p
+            break;
+        }
         const double alpha = rz / pq;
         for (size_t i = 0; i < n_dofs; ++i) {
             u[i] += alpha * p[i];
@@ -1010,15 +1031,20 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
             p[i] = z[i] + beta * p[i];
         r_norm = std::sqrt(dot(r, r));
         ++result.iterations;
-        if (!std::isfinite(r_norm))
+        if (!std::isfinite(r_norm)) {
+            diverged = true;
             break;
+        }
         best = std::min(best, r_norm);
-        if (result.iterations % STAGNATION_WINDOW == 0) {
-            if (best > 0.99 * best_at_window_start && best > input.tolerance * f_norm) {
-                stalled = true;
+        if (result.iterations % STAGNATION_CHECK == 0) {
+            best_at_check.push_back(best);
+            const size_t window = std::max(STAGNATION_MIN_WINDOW, result.iterations / 2 / STAGNATION_CHECK * STAGNATION_CHECK);
+            if (result.iterations > window && best > input.tolerance * f_norm &&
+                best > 0.99 * best_at_check[(result.iterations - window) / STAGNATION_CHECK - 1]) {
+                stalled      = true;
+                stall_window = window;
                 break;
             }
-            best_at_window_start = best;
         }
         if (deadline.expired()) {
             timed_out = true;
@@ -1041,12 +1067,24 @@ static StressResult solve_stress_unguarded(const StressInput& input, const Stres
         failed("the time limit of " + Deadline::format_seconds(max_seconds) + " s was reached while solving, after " +
                std::to_string(result.iterations) + " iterations (relative residual " + std::to_string(result.residual) +
                "); use a larger voxel_size or a looser tolerance");
+    // The supports passed the rigid-body check above, so a failure here is not "the supports leave the body free":
+    // say what happened and what helps.
+    const std::string progress_text = std::to_string(result.iterations) + " iterations (relative residual " + Deadline::format_seconds(result.residual) +
+                                      ", tolerance " + Deadline::format_seconds(input.tolerance) + ")";
     if (stalled && !result.converged)
-        failed("the solver stagnated after " + std::to_string(result.iterations) + " iterations (relative residual " +
-               std::to_string(result.residual) + "); the supports probably leave the body free to move or to rotate, or the tolerance is too tight");
+        failed("the solver stagnated after " + progress_text + ": the best residual fell by less than 1 % over the last " +
+               std::to_string(stall_window) + " iterations; use a larger voxel_size (slender parts at a fine grid are slow), "
+               "or check for parts that touch only at an edge or corner");
+    if (mechanism && !result.converged)
+        failed("the solver did not converge, stopped after " + progress_text + ": the model is not held in every direction although the supports "
+               "passed the rigid-body check (typically a part joined to the rest only at an edge or corner); check the joints, "
+               "or use a larger voxel_size");
+    if (diverged && !result.converged)
+        failed("the solver did not converge, the numbers overflowed after " + progress_text + "; check the material and the loads, "
+               "or use a larger voxel_size");
     if (!result.converged)
-        failed("the solver did not converge after " + std::to_string(result.iterations) + " iterations (relative residual " +
-               std::to_string(result.residual) + "); the supports probably leave the body free to move or to rotate");
+        failed("the solver did not converge within the limit of " + progress_text + "; use a larger voxel_size, or allow more time and iterations (max_iterations, at most " +
+               std::to_string(STRESS_MAX_ITERATIONS) + ")");
 
     // ---- results
     report(94, "Evaluating stress");

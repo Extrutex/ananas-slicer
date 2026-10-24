@@ -377,12 +377,27 @@ TEST_CASE("Stress: limits on memory, runtime and input", "[Engine][Stress]")
         // The cap on the iterations (20000) or the solver's own stop ends it: with the specific message, and soon.
         CHECK((text.find("did not converge") != std::string::npos || text.find("stagnated") != std::string::npos));
         CHECK(seconds < 60.);
+        CHECK(text.find("larger voxel_size") != std::string::npos);
+        CHECK(text.find("free to move") == std::string::npos); // the supports passed the check: they are not to blame
         const StressResult ok = solve_stress([&] {
             StressInput fine = cantilever(10., 4., 1., 1.);
             fine.max_iterations = std::numeric_limits<size_t>::max();
             return fine;
         }());
         CHECK(ok.converged);
+    }
+    SECTION("the iteration limit names iterations, residual and what helps, and does not blame the supports")
+    {
+        StressInput in = cantilever(20., 4., 1., 0.5);
+        in.max_iterations = 5;
+        const std::string text = message_of([&] { solve_stress(in); });
+        std::printf("[stress] iteration limit: '%s'\n", text.c_str());
+        CHECK(text.find("did not converge within the limit of 5 iterations") != std::string::npos);
+        CHECK(text.find("relative residual") != std::string::npos);
+        CHECK(text.find("larger voxel_size") != std::string::npos);
+        CHECK(text.find("more time and iterations") != std::string::npos);
+        CHECK(text.find("free to move") == std::string::npos);
+        CHECK(text.find("leave the body") == std::string::npos);
     }
     SECTION("wall-clock limit")
     {
@@ -894,4 +909,137 @@ TEST_CASE("Stress: warning_seconds must be finite and above 0, and stays within 
     in.warning_seconds = 1e12; // cut to what is left of max_seconds, the result is still complete
     in.max_seconds     = 600.;
     CHECK(solve_stress(in).converged);
+}
+
+TEST_CASE("Stress: the request parser bounds the regions before it copies them", "[Engine][Stress][Limits]")
+{
+    using json = nlohmann::json;
+    Model model;
+    ModelObject* object = model.add_object("bar", "", TriangleMesh(bar(10., 4., 4.)));
+    if (object->instances.empty())
+        object->add_instance();
+    const auto request = [&](json supports, json loads) {
+        return json{ { "material", { { "youngs_modulus", 2000. }, { "yield_strength", 40. } } },
+                     { "voxel_size", 1. },
+                     { "supports", std::move(supports) },
+                     { "loads", std::move(loads) } };
+    };
+    const json one_support = { { "box", { { "min", { 0, 0, 0 } }, { "max", { 0, 4, 4 } } } } };
+    const json one_load    = { { "box", { { "min", { 10, 0, 0 } }, { "max", { 10, 4, 4 } } } }, { "force", { 0, 0, -1 } } };
+    const auto text_of     = [&](const json& params) {
+        try {
+            parse_stress_request(params, model);
+        } catch (const EngineError& e) {
+            return std::make_pair(std::optional<ErrorCode>(e.code()), std::string(e.what()));
+        }
+        return std::make_pair(std::optional<ErrorCode>(), std::string());
+    };
+    SECTION("a normal request passes")
+    {
+        CHECK_FALSE(text_of(request(json::array({ one_support }), json::array({ one_load }))).first.has_value());
+    }
+    SECTION("too many regions are refused")
+    {
+        json many = json::array();
+        for (size_t i = 0; i <= STRESS_MAX_REGIONS; ++i)
+            many.push_back(one_support);
+        const auto result = text_of(request(many, json::array({ one_load })));
+        CHECK(result.first == ErrorCode::InvalidParams);
+        CHECK(result.second.find("at most 64") != std::string::npos);
+        json loads = json::array();
+        for (size_t i = 0; i <= STRESS_MAX_REGIONS; ++i)
+            loads.push_back(one_load);
+        CHECK(text_of(request(json::array({ one_support }), loads)).first == ErrorCode::InvalidParams);
+    }
+    SECTION("the indices of all regions together are bounded, even when each list is below its own limit")
+    {
+        // 3 lists of 7 million indices (each below the 10 million of one list, together above the 20 million total): the
+        // third is refused by its length alone, before it is copied.
+        json list = json::array();
+        for (size_t i = 0; i < 7000000; ++i)
+            list.push_back(size_t(0));
+        json a = one_support, b = one_support, c = one_load;
+        a["triangles"] = list;
+        b["triangles"] = list;
+        c["triangles"] = list;
+        const auto result = text_of(request(json::array({ a, b }), json::array({ c })));
+        CHECK(result.first == ErrorCode::InvalidParams);
+        CHECK(result.second.find("together") != std::string::npos);
+        // two such lists (14 million) pass the parser; the solver then judges the triangles.
+        CHECK_FALSE(text_of(request(json::array({ a, one_support }), json::array({ one_load }))).first.has_value());
+    }
+}
+
+// A slab whose top and bottom faces are cut into a grid of triangles whose edges and corners lie where the voxelizer's
+// vertical rays run (cell centre plus the nudge the voxelizer adds, rounded to float as a mesh stores it). A ray that
+// hit a shared edge twice, or in neither triangle, would show as an odd number of crossings ("not watertight") or as
+// missing cells. The nudge values are those of voxelize() in Stress.cpp.
+TEST_CASE("Stress: vertical rays that run along or across the edges and corners of the surface mesh", "[Engine][Stress][Limits]")
+{
+    const auto slab = [](double X, double Y, double Z, double h, bool diagonal_flip) {
+        const double ex = 0.000123456 * h, ey = 0.000234567 * h;
+        const size_t nx = size_t(std::ceil(X / h - 1e-6)), ny = size_t(std::ceil(Y / h - 1e-6));
+        std::vector<double> xs{ 0. }, ys{ 0. };
+        for (size_t i = 0; i < nx; ++i)
+            xs.push_back(double(float((double(i) + 0.5) * h + ex)));
+        xs.push_back(X);
+        for (size_t j = 0; j < ny; ++j)
+            ys.push_back(double(float((double(j) + 0.5) * h + ey)));
+        ys.push_back(Y);
+        const size_t cx = xs.size(), cy = ys.size();
+        indexed_triangle_set its;
+        for (int level = 0; level < 2; ++level)
+            for (size_t j = 0; j < cy; ++j)
+                for (size_t i = 0; i < cx; ++i)
+                    its.vertices.emplace_back(float(xs[i]), float(ys[j]), level ? float(Z) : 0.f);
+        const auto at = [&](int level, size_t i, size_t j) { return int(level * cx * cy + j * cx + i); };
+        for (size_t j = 0; j + 1 < cy; ++j)
+            for (size_t i = 0; i + 1 < cx; ++i) {
+                const bool flip = diagonal_flip ? ((i + j) % 2 == 0) : false;
+                // top (normal +z), counter-clockwise seen from above
+                if (flip) {
+                    its.indices.emplace_back(at(1, i, j), at(1, i + 1, j), at(1, i + 1, j + 1));
+                    its.indices.emplace_back(at(1, i, j), at(1, i + 1, j + 1), at(1, i, j + 1));
+                    its.indices.emplace_back(at(0, i, j), at(0, i + 1, j + 1), at(0, i + 1, j));
+                    its.indices.emplace_back(at(0, i, j), at(0, i, j + 1), at(0, i + 1, j + 1));
+                } else {
+                    its.indices.emplace_back(at(1, i, j), at(1, i + 1, j), at(1, i, j + 1));
+                    its.indices.emplace_back(at(1, i + 1, j), at(1, i + 1, j + 1), at(1, i, j + 1));
+                    its.indices.emplace_back(at(0, i, j), at(0, i, j + 1), at(0, i + 1, j));
+                    its.indices.emplace_back(at(0, i + 1, j), at(0, i, j + 1), at(0, i + 1, j + 1));
+                }
+            }
+        for (size_t i = 0; i + 1 < cx; ++i) { // walls y = 0 and y = Y
+            its.indices.emplace_back(at(0, i, 0), at(0, i + 1, 0), at(1, i + 1, 0));
+            its.indices.emplace_back(at(0, i, 0), at(1, i + 1, 0), at(1, i, 0));
+            its.indices.emplace_back(at(0, i + 1, cy - 1), at(0, i, cy - 1), at(1, i, cy - 1));
+            its.indices.emplace_back(at(0, i + 1, cy - 1), at(1, i, cy - 1), at(1, i + 1, cy - 1));
+        }
+        for (size_t j = 0; j + 1 < cy; ++j) { // walls x = 0 and x = X
+            its.indices.emplace_back(at(0, 0, j + 1), at(0, 0, j), at(1, 0, j));
+            its.indices.emplace_back(at(0, 0, j + 1), at(1, 0, j), at(1, 0, j + 1));
+            its.indices.emplace_back(at(0, cx - 1, j), at(0, cx - 1, j + 1), at(1, cx - 1, j + 1));
+            its.indices.emplace_back(at(0, cx - 1, j), at(1, cx - 1, j + 1), at(1, cx - 1, j));
+        }
+        return its;
+    };
+    const double X = 6., Y = 3., Z = 3.;
+    for (double h : { 1., 0.5, 0.25, 0.3, 0.2, 0.75, 1.5, 0.125, 0.1 })
+        for (bool flip : { false, true }) {
+            INFO("voxel " << h << (flip ? " alternating diagonals" : " one diagonal"));
+            const indexed_triangle_set mesh = slab(X, Y, Z, h, flip);
+            REQUIRE(its_volume(mesh) > 0.f);
+            StressInput in = base(mesh, h);
+            in.supports.push_back({ box(Vec3d::Zero(), Vec3d(0, Y, Z)), { true, true, true } });
+            in.loads.push_back({ box(Vec3d(X, 0, 0), Vec3d(X, Y, Z)), Vec3d(10, 0, 0) });
+            StressResult r;
+            std::string  text;
+            try {
+                r = solve_stress(in);
+            } catch (const EngineError& e) {
+                text = e.what();
+            }
+            CHECK(text.empty());
+            CHECK(r.solid_cells == size_t(std::ceil(X / h - 1e-6)) * size_t(std::ceil(Y / h - 1e-6)) * size_t(std::ceil(Z / h - 1e-6)));
+        }
 }

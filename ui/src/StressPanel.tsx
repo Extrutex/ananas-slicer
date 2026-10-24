@@ -1,6 +1,6 @@
 import { MATERIAL_PRESETS, CUSTOM_MATERIAL_ID, presetIdOf } from "./stress/materials.ts";
 import { NumberField } from "./stress/NumberField.tsx";
-import { INFILL_WARNING } from "./stress/texts.ts";
+import { CORNER_NOTE, INFILL_WARNING } from "./stress/texts.ts";
 import { checkSetup, hasPlace, regionName, type StressRegion, type Vec3 } from "./stress/setup.ts";
 import { formatValue } from "./stress/colors.ts";
 import { stressResultCurrent, type CockpitSession, type CockpitState } from "./state/session.ts";
@@ -318,6 +318,9 @@ export function StressPanel({ session, state }: { session: CockpitSession; state
                 ))}
               </ul>
             ) : null}
+            <p className="m-0 mt-1.5 text-ks-micro text-ink-muted" data-testid="stress-corner-note">
+              {CORNER_NOTE}
+            </p>
             <div className="mt-2 flex gap-1.5">
               <button type="button" disabled={stale} onClick={() => session.setStressDisplay({ shown: !stress.display.shown })} className={`${NEUTRAL} disabled:cursor-not-allowed disabled:text-ink-disabled`}>
                 {stress.display.shown && !stale ? "Modell zeigen" : "Heatmap zeigen"}

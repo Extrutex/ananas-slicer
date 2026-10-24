@@ -53,6 +53,7 @@ constexpr double STRESS_MAX_SECONDS    = 3600.;
 constexpr size_t STRESS_MAX_TRIANGLES  = 10000000;
 constexpr size_t STRESS_MAX_REGIONS    = 64;      // supports, and loads, each
 constexpr size_t STRESS_MAX_SELECTION_TRIANGLES = 2000000; // different triangles in one selection (duplicates count once)
+constexpr size_t STRESS_MAX_SELECTION_INDICES = 20000000; // triangle indices listed over all supports and loads together (8 bytes each; 160 MB)
 constexpr double STRESS_MAX_FORCE      = 1e12;    // N, per component of a load and of the sum of all loads
 // The result is fetched in chunks of whole grid layers, 25 bytes per cell (solid 1, von Mises 4, safety 4,
 // displacement 4, displacement vector 12) and at most STRESS_CHUNK_MAX_BYTES raw bytes per chunk. One layer of the
@@ -118,8 +119,9 @@ using StressProgress = std::function<void(int, const std::string&)>;
 // inside), meshes the solid with trilinear hexahedra, and solves K u = f with a matrix-free conjugate
 // gradient (Jacobi preconditioner). Stress is the value at the element centre. Throws EngineError: invalid
 // params for a bad input, engine error for a mesh that is not watertight, a model without volume or a solver
-// that does not converge (typically supports that leave the body free to move: the supports must hold all three
-// translations and rotations, which is checked up front, per piece). Limits on cells, grid layer size, memory (also
+// that does not converge (the supports must hold all three translations and rotations, which is checked up front, per
+// piece, so a failure to converge afterwards means a fine or slender grid, a joint the check cannot see, or too little
+// time or too few iterations, and the message says so). Limits on cells, grid layer size, memory (also
 // of the checks before the voxelization), number of supports, loads and selected triangles, force size, iterations,
 // stagnation and wall-clock time (from the call on, in every long phase) end in an error instead of a runaway;
 // running out of memory is an engine error too. A load is selected by its surface faces: a triangle takes the
