@@ -31,10 +31,7 @@ class PhysicalPrinterDialog : public DPIDialog
 
     Button*     m_printhost_browse_btn              {nullptr};
     Button*     m_printhost_test_btn                {nullptr};
-    Button*     m_printhost_generate_creds_btn      {nullptr};
-    Button*     m_printhost_logout_btn              {nullptr};
     Button*     m_printhost_cafile_browse_btn       {nullptr};
-    Button*     m_printhost_port_browse_btn         {nullptr};
 
     RoundedRectangle*   m_input_area                        {nullptr};
     wxStaticText*       m_valid_label                       {nullptr};
@@ -62,9 +59,6 @@ public:
     void        update_host_type(bool printer_change);
     void        update_preset_input();
     void        update_printhost_buttons();
-    void        update_printers();
-    void        update_ports();
-    void        update_webui();
 
 protected:
     void on_dpi_changed(const wxRect& suggested_rect) override;

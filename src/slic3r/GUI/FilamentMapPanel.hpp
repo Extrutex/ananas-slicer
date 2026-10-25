@@ -42,7 +42,6 @@ private:
     void OnSwitchFilament(wxCommandEvent &);
     void SyncPanelHeights();
     void OnDragDropCompleted(wxCommandEvent &evt);
-    void OnSuggestionClicked(wxCommandEvent &event);
 
     DragDropPanel          *m_left_panel;
     SeparatedDragDropPanel *m_right_panel;

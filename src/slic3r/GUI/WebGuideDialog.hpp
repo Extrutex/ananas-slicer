@@ -51,7 +51,6 @@ public:
 
     enum GuidePage {
         BBL_WELCOME,
-        BBL_REGION,
         BBL_MODELS,
         BBL_FILAMENTS,
         BBL_FILAMENT_ONLY,
@@ -103,11 +102,6 @@ public:
     void        GetStardardFilePath(std::string &FilePath);
     bool LoadFile(std::string jPath, std::string & sContent);
 
-    // install plugin
-    int DownloadPlugin();
-    int InstallPlugin();
-    int ShowPluginStatus(int status, int percent, bool &cancel);
-
     void on_dpi_changed(const wxRect &suggested_rect) {}
 
 private:
@@ -132,14 +126,6 @@ private:
     // lambdas so they don't touch `this` after the object is freed.
     std::shared_ptr<std::atomic<bool>> m_cancel_token{std::make_shared<std::atomic<bool>>(false)};
     std::unique_ptr<boost::thread> m_load_task;
-
-    // User Config
-    bool PrivacyUse;
-    bool StealthMode;
-    std::string m_Region;
-
-    bool InstallNetplugin;
-    bool network_plugin_ready {false};
 
     json m_ProfileJson;
     json m_OrcaFilaList;

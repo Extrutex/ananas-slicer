@@ -15,7 +15,7 @@
 	"bridge_density": "97%",
 	"brim_object_gap": "0.04",
 	"default_acceleration": "15000",
-	"default_jerk": "10",
+	"default_jerk": "0",
 	"detect_narrow_internal_solid_infill": "0",
 	"enable_support": "1",
 	"ensure_vertical_shell_thickness": "none",

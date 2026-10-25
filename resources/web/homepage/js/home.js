@@ -1,16 +1,12 @@
 //var TestData={"sequence_id":"0","command":"get_recent_projects","response":[{"path":"D:\\work\\Models\\Toy\\3d-puzzle-cube-model_files\\3d-puzzle-cube.3mf","time":"2022\/3\/24 20:33:10"},{"path":"D:\\work\\Models\\Art\\Carved Stone Vase - remeshed+drainage\\Carved Stone Vase.3mf","time":"2022\/3\/24 17:11:51"},{"path":"D:\\work\\Models\\Art\\Kity & Cat\\Cat.3mf","time":"2022\/3\/24 17:07:55"},{"path":"D:\\work\\Models\\Toy\\鐩村墤.3mf","time":"2022\/3\/24 17:06:02"},{"path":"D:\\work\\Models\\Toy\\minimalistic-dual-tone-whistle-model_files\\minimalistic-dual-tone-whistle.3mf","time":"2022\/3\/22 21:12:22"},{"path":"D:\\work\\Models\\Toy\\spiral-city-model_files\\spiral-city.3mf","time":"2022\/3\/22 18:58:37"},{"path":"D:\\work\\Models\\Toy\\impossible-dovetail-puzzle-box-model_files\\impossible-dovetail-puzzle-box.3mf","time":"2022\/3\/22 20:08:40"}]};
 
-var m_HotModelList=null;
-
 function OnInit()
 {
 	//-----Official-----
     TranslatePage();
 
 	SendMsg_GetLoginInfo();
-	SendMsg_GetBambuLoginInfo();
 	SendMsg_GetRecentFile();
-	SendMsg_GetStaffPick();
 
 	Set_AccountMenu_Event();
 }
@@ -93,12 +89,6 @@ function HandleStudio( pVal )
     SetOrcaLoginInfo(pVal["data"]["avatar"], pVal["data"]["name"], pVal["data"]["account"]);
   } else if (strCmd == "orca_useroffline") {
     SetOrcaUserOffline();
-  } else if (strCmd == "studio_bambu_userlogin") {
-    SetBambuLoginInfo(pVal["data"]["avatar"], pVal["data"]["name"]);
-  } else if (strCmd == "studio_bambu_useroffline") {
-    SetBambuUserOffline();
-  } else if (strCmd == "studio_set_mallurl") {
-    SetMallUrl(pVal["data"]["url"]);
   } else if (strCmd == "studio_clickmenu") {
     let strName = pVal["data"]["menu"];
 
@@ -106,36 +96,11 @@ function HandleStudio( pVal )
   } else if (strCmd == "cloud_providers_info") {
     var providers = (pVal["data"] && pVal["data"]["providers"]) || [];
 
-    if (providers.indexOf("bbl") >= 0) {
-      $("#BambuCloudSection").show();
-    } else {
-      SetBambuUserOffline();
-      $("#BambuCloudSection").hide();
-    }
-
     if (providers.indexOf("orca") >= 0) {
       $("#LeftBoard").show();
     } else {
       $("#LeftBoard").hide();
     }
-  } else if (strCmd == "network_plugin_installtip") {
-    // Bambu Cloud is unreachable without the network plugin, so its row only carries the tip.
-    let bMissing = pVal["show"] * 1 == 1;
-
-    $("#NoPluginTip").css("display", bMissing ? "block" : "none");
-    $("#BambuAccount").toggleClass("Disabled", bMissing).attr("aria-disabled", bMissing ? "true" : null);
-    if (bMissing) SetBambuSectionExpanded(true, false);
-  } else if (strCmd == "modelmall_model_advise_get") {
-    //alert('hot');
-    if (m_HotModelList != null) {
-      let SS1 = JSON.stringify(pVal["hits"]);
-      let SS2 = JSON.stringify(m_HotModelList);
-
-      if (SS1 == SS2) return;
-    }
-
-    m_HotModelList = pVal["hits"];
-    ShowStaffPick(m_HotModelList);
   } else if (strCmd == "SetLoginPanelVisibility") {
     SetLoginPanelVisibility(pVal["data"]["visible"]);
   }
@@ -164,15 +129,11 @@ function GotoMenu( strMenu )
 
 /*------Account rows------*/
 
-/*----Everything that differs between the two cloud providers lives here----*/
+/*----Everything that is specific to a cloud provider lives here----*/
 var AccountRows = {
   orca:  { row: "#OrcaAccount",  name: "#UserName",      avatar: "#UserAvatarIcon",  dot: null,
-           loginCmd: "homepage_orca_login_or_register",  logoutCmd: "homepage_orca_logout" },
-  bambu: { row: "#BambuAccount", name: "#BambuUserName", avatar: "#BambuAvatarIcon", dot: "#BambuStatusDot",
-           loginCmd: "homepage_bambu_login_or_register", logoutCmd: "homepage_bambu_logout" }
+           loginCmd: "homepage_orca_login_or_register",  logoutCmd: "homepage_orca_logout" }
 };
-
-var BAMBU_FOLD_KEY = "OrcaHome_BambuCloudExpanded";
 
 var m_OpenAccountMenu = null;
 
@@ -250,25 +211,7 @@ function OnAccountMenuLogout() {
   if (account) SendSimpleCommand(account.logoutCmd);
 }
 
-/*----Bambu Cloud is secondary, so its account folds away under the main one----*/
-function SetBambuSectionExpanded(bExpanded, bPersist) {
-  $("#BambuCloudBody").toggleClass("Expanded", bExpanded);
-  $("#BambuAccount").attr("tabindex", bExpanded ? "0" : "-1");  /*----keep the folded row out of the tab order----*/
-  $("#BambuCloudHeader").toggleClass("Expanded", bExpanded).attr("aria-expanded", bExpanded ? "true" : "false");
-  if (!bExpanded && m_OpenAccountMenu === "bambu") CloseAccountMenu();
-  // Best effort: the fold is a per-machine convenience, not a synced preference.
-  if (bPersist) { try { localStorage.setItem(BAMBU_FOLD_KEY, bExpanded ? "1" : "0"); } catch (e) {} }
-}
-
-function ToggleBambuSection() {
-  SetBambuSectionExpanded(!$("#BambuCloudBody").hasClass("Expanded"), true);
-}
-
 function Set_AccountMenu_Event() {
-  var bExpanded = false;
-  try { bExpanded = localStorage.getItem(BAMBU_FOLD_KEY) === "1"; } catch (e) {}
-  SetBambuSectionExpanded(bExpanded, false);
-
   $(document).mousedown(function (e) {
     if (m_OpenAccountMenu === null) return;
     if ($(e.target).closest("#AccountMenu, .AccountRow").length === 0) CloseAccountMenu();
@@ -285,12 +228,6 @@ function Set_AccountMenu_Event() {
     this.click();
   });
 }
-
-function SetMallUrl( strUrl )
-{
-	$("#MallWeb").prop("src",strUrl);
-}
-
 
 function ShowRecentFileList( pList )
 {
@@ -312,7 +249,7 @@ function ShowRecentFileList( pList )
 		//let sShortName=sPath.substring(index+1,sPath.length);
 		
 		let sBadge=sPublished? '<span class="FilePublishedBadge">PUB</span>':'';
-		let sLogoBadge=sPublished? '<img class="FileLogoBadge" src="../../images/OrcaSlicer_gradient_circle.svg" alt="" />':'';
+		let sLogoBadge=sPublished? '<img class="FileLogoBadge" src="../../images/AnanasSlicer_symbol_dark.svg" alt="" />':'';
 
 		let TmpHtml='<div class="FileItem"  fpath="'+sPath+'"  >'+
 				'<a class="FileTip" title="'+sPath+'"></a>'+
@@ -381,15 +318,6 @@ function SendMsg_GetRecentFile()
 	SendWXMessage( JSON.stringify(tSend) );
 }
 
-
-function OnClickModelDepot()
-{
-	var tSend={};
-	tSend['sequence_id']=Math.round(new Date() / 1000);
-	tSend['command']="homepage_modeldepot";
-	
-	SendWXMessage( JSON.stringify(tSend) );		
-}
 
 function OnClickNewProject()
 {
@@ -488,19 +416,6 @@ function OnExploreRecentFile( )
 
 function SetOrcaLoginInfo(strAvatar, strName, strAccount) { SetAccountSignedIn("orca", strAvatar, strName, strAccount); }
 function SetOrcaUserOffline() { SetAccountSignedOut("orca"); }
-function SetBambuLoginInfo(strAvatar, strName) { SetAccountSignedIn("bambu", strAvatar, strName, null); }
-function SetBambuUserOffline() { SetAccountSignedOut("bambu"); }
-
-function SendMsg_GetBambuLoginInfo() { SendSimpleCommand("get_bambu_login_info"); }
-
-function BeginDownloadNetworkPlugin()
-{
-	var tSend={};
-	tSend['sequence_id']=Math.round(new Date() / 1000);
-	tSend['command']="begin_network_plugin_download";
-	
-	SendWXMessage( JSON.stringify(tSend) );		
-}
 
 function OutputKey(keyCode, isCtrlDown, isShiftDown, isCmdDown) {
 	var tSend = {};
@@ -527,88 +442,6 @@ function OpenWikiUrl( strUrl )
 	
 	SendWXMessage( JSON.stringify(tSend) );	
 }
-
-//--------------Staff Pick-------
-var StaffPickSwiper=null;
-function InitStaffPick()
-{
-	if( StaffPickSwiper!=null )
-	{
-		StaffPickSwiper.destroy(true,true);
-		StaffPickSwiper=null;
-	}	
-	
-	StaffPickSwiper = new Swiper('#HotModel_Swiper.swiper', {
-            slidesPerView : 'auto',
-		    spaceBetween: 16,
-			navigation: {
-				nextEl: '.swiper-button-next',
-				prevEl: '.swiper-button-prev',
-			},
-		    slidesPerView : 'auto',
-		    slidesPerGroup : 3
-
-			});
-}
-
-function SendMsg_GetStaffPick()
-{
-	var tSend={};
-	tSend['sequence_id']=Math.round(new Date() / 1000);
-	tSend['command']="modelmall_model_advise_get";
-	
-	SendWXMessage( JSON.stringify(tSend) );
-	
-	setTimeout("SendMsg_GetStaffPick()",3600*1000*1);
-}
-
-function ShowStaffPick( ModelList )
-{
-	let PickTotal=ModelList.length;
-	if(PickTotal==0)
-	{
-		$('#HotModelList').html('');
-		$('#HotModelArea').hide();
-		
-		return;
-	}
-	
-	let strPickHtml='';
-	for(let a=0;a<PickTotal;a++)
-	{
-		let OnePickModel=ModelList[a];
-		
-		let ModelID=OnePickModel['design']['id'];
-		let ModelName=OnePickModel['design']['title'];
-		let ModelCover=OnePickModel['design']['cover']+'?image_process=resize,w_200/format,webp';
-		
-		let DesignerName=OnePickModel['design']['designCreator']['name'];
-		let DesignerAvatar=OnePickModel['design']['designCreator']['avatar']+'?image_process=resize,w_32/format,webp';
-		
-		strPickHtml+='<div class="HotModelPiece swiper-slide"  onClick="OpenOneStaffPickModel('+ModelID+')" >'+
-			    '<div class="HotModel_Designer_Info"><img src="'+DesignerAvatar+'" /><span class="TextS2">'+DesignerName+'</span></div>'+
-				'	<div class="HotModel_PrevBlock"><img class="HotModel_PrevImg" src="'+ModelCover+'" /></div>'+
-				'	<div  class="HotModel_NameText TextS1" title="'+ModelName+'">'+ModelName+'</div>'+
-				'</div>';
-	}
-	
-	$('#HotModelList').html(strPickHtml);
-	InitStaffPick();
-	$('#HotModelArea').show();
-}
-
-function OpenOneStaffPickModel( ModelID )
-{
-	//alert(ModelID);
-	var tSend={};
-	tSend['sequence_id']=Math.round(new Date() / 1000);
-	tSend['command']="modelmall_model_open";
-	tSend['data']={};
-	tSend['data']['id']=ModelID;
-	
-	SendWXMessage( JSON.stringify(tSend) );		
-}
-
 
 //---------------Global-----------------
 window.postMessage = HandleStudio;

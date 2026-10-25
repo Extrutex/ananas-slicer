@@ -1121,16 +1121,6 @@ void PartPlate::render_icons(bool bottom, bool only_name, int hover_id)
                     render_icon_texture(m_lock_icon.model, m_partplate_list->m_lockopen_texture);
             }
 
-            PresetBundle* preset = wxGetApp().preset_bundle;
-            bool dual_bbl = (preset->is_bbl_vendor() && preset->get_printer_extruder_count() == 2);
-            if (dual_bbl) {
-                if (hover_id == PLATE_FILAMENT_MAP_ID){
-                    render_icon_texture(m_plate_filament_map_icon.model, m_partplate_list->m_plate_set_filament_map_hovered_texture);
-                    set_hover_tooltip(_u8L("Filament grouping"));
-                } else
-                    render_icon_texture(m_plate_filament_map_icon.model, m_partplate_list->m_plate_set_filament_map_texture);
-            }
-
 			if (hover_id == 6) {
                 render_icon_texture(m_plate_name_edit_icon.model, m_partplate_list->m_plate_name_edit_hovered_texture);
                 set_hover_tooltip(_u8L("Edit current plate name"));
@@ -1453,12 +1443,6 @@ void PartPlate::register_raycasters_for_picking(GLCanvas3D &canvas)
 	if (m_plate_name_edit_icon.mesh_raycaster != nullptr)
 		register_model_for_picking(canvas, m_plate_name_edit_icon, picking_id_component(6));
     register_model_for_picking(canvas, m_move_front_icon, picking_id_component(7));
-
-    // Only register filament map button for H2D (dual-extruder Bambu Lab) printers
-    PresetBundle* preset = wxGetApp().preset_bundle;
-    bool dual_bbl = (preset && preset->is_bbl_vendor() && preset->get_printer_extruder_count() == 2);
-    if (dual_bbl)
-        register_model_for_picking(canvas, m_plate_filament_map_icon, picking_id_component(PLATE_FILAMENT_MAP_ID));
 }
 
 int PartPlate::picking_id_component(int idx) const
@@ -3175,23 +3159,11 @@ void PartPlate::generate_logo_polygon(ExPolygon &logo_polygon)
 {
 	if (m_shape.size() == 4)
 	{
-        bool is_bbl_vendor = false;
-
-		if (m_plater) {
-            if (auto preset_bundle = wxGetApp().preset_bundle; preset_bundle)
-                is_bbl_vendor = preset_bundle->is_bbl_vendor();
-		}
-
         //rectangle case
 		for (int i = 0; i < 4; i++)
 		{
 			const Vec2d& p = m_shape[i];
-			if ((i  == 0) || (i  == 1)) {
-                logo_polygon.contour.append({scale_(p(0)), scale_(is_bbl_vendor ? p(1) - 12.f : p(1))});
-            }
-			else {
-				logo_polygon.contour.append({ scale_(p(0)), scale_(p(1)) });
-			}
+			logo_polygon.contour.append({ scale_(p(0)), scale_(p(1)) });
 		}
 	}
 	else {
@@ -3364,11 +3336,8 @@ bool PartPlate::set_shape(const Pointfs& shape, const Pointfs& exclude_areas, co
 			calc_vertex_for_icons(3, m_lock_icon);
 			calc_vertex_for_icons(4, m_plate_settings_icon);
 			// ORCA also change bed_icon_count number in calc_vertex_for_icons() after adding or removing icons for circular shaped beds that uses vertical alingment for icons
-			bool dual_bbl = false;
-			PresetBundle* preset = wxGetApp().preset_bundle;
-			dual_bbl = (preset->is_bbl_vendor() && preset->get_printer_extruder_count() == 2);
-			calc_vertex_for_icons(dual_bbl ? 5 : 6, m_plate_filament_map_icon);
-			calc_vertex_for_icons(dual_bbl ? 6 : 5, m_move_front_icon);
+			calc_vertex_for_icons(6, m_plate_filament_map_icon);
+			calc_vertex_for_icons(5, m_move_front_icon);
 
 			calc_vertex_for_number(0, false, m_plate_idx_icon);
 			// calc vertex for plate name

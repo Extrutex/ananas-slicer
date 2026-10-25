@@ -851,7 +851,7 @@ std::string CoolingBuffer::apply_layer_cooldown(
             m_fan_speed = fan_speed_new;
             m_current_fan_speed = fan_speed_new;
             if (immediately_apply)
-                new_gcode  += GCodeWriter::set_fan(m_config.gcode_flavor, m_fan_speed, part_cooling_fan_min_pwm);
+                new_gcode  += GCodeWriter::format_fan(m_fan_speed, part_cooling_fan_min_pwm);
         }
         //BBS
         if (additional_fan_speed_new != m_additional_fan_speed) {
@@ -865,7 +865,7 @@ std::string CoolingBuffer::apply_layer_cooldown(
     int                 current_feedrate  = 0;
     change_extruder_set_fan(true);
 
-    // Orca: Reduce set fan commands by deferring the GCodeWriter::set_fan calls. Inspired by SuperSlicer
+    // Orca: Reduce set fan commands by deferring the GCodeWriter::format_fan calls. Inspired by SuperSlicer
     // define fan_speed_change_requests and initialize it with all possible types fan speed change requests
     std::unordered_map<int, bool> fan_speed_change_requests = {{CoolingLine::TYPE_OVERHANG_FAN_START, false},
                                                                {CoolingLine::TYPE_INTERNAL_BRIDGE_FAN_START, false}, // ORCA: Add support for separate internal bridge fan speed control
@@ -1026,7 +1026,7 @@ std::string CoolingBuffer::apply_layer_cooldown(
         if (need_set_fan) {
             const auto set_fan = [&](int speed) {
                 if (m_current_fan_speed != speed) {
-                    new_gcode += GCodeWriter::set_fan(m_config.gcode_flavor, speed, part_cooling_fan_min_pwm);
+                    new_gcode += GCodeWriter::format_fan(speed, part_cooling_fan_min_pwm);
                     m_current_fan_speed = speed;
                 }
             };
@@ -1042,7 +1042,7 @@ std::string CoolingBuffer::apply_layer_cooldown(
                 set_fan(ironing_fan_speed);
             }
             else if(fan_speed_change_requests[CoolingLine::TYPE_FORCE_RESUME_FAN] && m_current_fan_speed != -1){
-                new_gcode += GCodeWriter::set_fan(m_config.gcode_flavor, m_current_fan_speed, part_cooling_fan_min_pwm);
+                new_gcode += GCodeWriter::format_fan(m_current_fan_speed, part_cooling_fan_min_pwm);
                 fan_speed_change_requests[CoolingLine::TYPE_FORCE_RESUME_FAN] = false;
             }
             else {

@@ -1,6 +1,6 @@
 /**
  * KinematicsSidebar — the primary "Kinematics" parameter table of the
- * KLIPSLICE cockpit sidebar.
+ * ANANAS SLICER cockpit sidebar.
  *
  * Design reference implementation (React + Tailwind, no UI libraries). The
  * production app is wxWidgets; this file pins down the behaviour and the
@@ -25,7 +25,7 @@ import type { KeyboardEvent, PointerEvent } from "react";
  * Where a limit comes from, which decides how a violation is worded:
  * - machine:   printer.cfg envelope Klipper does not enforce at runtime
  * - firmware:  a bound Klipper itself enforces (the command errors out)
- * - profile:   a KLIPSLICE hardware profile value (e.g. hotend melt rate)
+ * - profile:   a ANANAS SLICER hardware profile value (e.g. hotend melt rate)
  * - reference: the printer.cfg value, shown for comparison only — a slicer
  *              override is legitimate and not a violation
  */

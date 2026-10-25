@@ -19,7 +19,7 @@ AboutDialogLogo::AboutDialogLogo(wxWindow* parent)
     : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize)
 {
     this->SetBackgroundColour(*wxWHITE);
-    this->logo = ScalableBitmap(this, Slic3r::var("OrcaSlicer_192px.png"), wxBITMAP_TYPE_PNG);
+    this->logo = ScalableBitmap(this, Slic3r::var("AnanasSlicer_192px.png"), wxBITMAP_TYPE_PNG);
     this->SetMinSize(this->logo.GetBmpSize());
 
     this->Bind(wxEVT_PAINT, &AboutDialogLogo::onRepaint, this);
@@ -141,6 +141,7 @@ wxString CopyrightsDialog::get_html_text()
                 "<font size=\"5\">%s</font>"
                 "<a href=\"%s\">%s.</a><br/>"
                 "<font size=\"5\">%s.</font><br/>"
+                "<font size=\"5\">%s</font><br/>"
                 "<br /><br />"
                 "<font size=\"5\">%s</font><br/>"
                 "<font size=\"5\">%s:</font><br/>"
@@ -148,9 +149,10 @@ wxString CopyrightsDialog::get_html_text()
                 "<font size=\"3\">",
          bgr_clr_str, text_clr_str, text_clr_str,
         _L("License"),
-        _L("Orca Slicer is licensed under "),
+        wxString::Format(_L("%s is licensed under "), SLIC3R_APP_NAME),
         "https://www.gnu.org/licenses/agpl-3.0.html",_L("GNU Affero General Public License, version 3"),
-        _L("Orca Slicer is based on PrusaSlicer and BambuStudio"),
+        _L("Based on OrcaSlicer by SoftFever and contributors, which is based on Bambu Studio (Bambu Lab), PrusaSlicer (Prusa Research) and Slic3r (Alessandro Ranellucci and the RepRap community)"),
+        wxString::Format(_L("%s is not affiliated with the Klipper project."), SLIC3R_APP_NAME),
         _L("Libraries"),
         _L("This software uses open source components whose copyright and other proprietary rights belong to their respective owners"));
 
@@ -228,10 +230,15 @@ AboutDialog::AboutDialog()
     main_sizer->Add(m_panel, 1, wxEXPAND | wxALL, 0);
     main_sizer->Add(ver_sizer, 0, wxEXPAND | wxALL, 0);
 
-	bool is_dark = wxGetApp().app_config->get("dark_color_mode") == "1";
+    // Header: the ANANAS SLICER banner (always dark, see docs/design/BRAND.md) with the
+    // version and build drawn over its right half in the banner's own colours.
+    const wxColour header_bg("#0B0E11");  // carbon-900
+    const wxColour header_fg("#B4C0C9");  // alu-200
+    const wxColour header_dim("#8B99A4"); // alu-300
+    m_panel->SetBackgroundColour(header_bg);
 
     // logo
-    m_logo_bitmap = ScalableBitmap(this, is_dark ? "OrcaSlicer_about_dark" : "OrcaSlicer_about", 125);
+    m_logo_bitmap = ScalableBitmap(this, "AnanasSlicer_about", 125);
     m_logo = new wxStaticBitmap(this, wxID_ANY, m_logo_bitmap.bmp(), wxDefaultPosition,wxDefaultSize, 0);
     m_logo->SetSizer(vesizer);
 
@@ -239,26 +246,21 @@ AboutDialog::AboutDialog()
 
     // version
     {
-
-        auto _build_string_font = Label::Body_12;
-        // _build_string_font.SetStyle(wxFONTSTYLE_ITALIC);
-
         vesizer->Add(0, 0, 1, wxEXPAND, FromDIP(5));
-        auto          version_string = std::string(SoftFever_VERSION); // _L("Orca Slicer ") + " " + std::string(SoftFever_VERSION);
-        wxStaticText* version = new wxStaticText(this, wxID_ANY, version_string.c_str(), wxDefaultPosition, wxDefaultSize);
-        wxStaticText* credits_string = new wxStaticText(this, wxID_ANY, wxString::Format("Build %s", build_commit_label), wxDefaultPosition, wxDefaultSize);
-        credits_string->SetFont(_build_string_font);
+        wxStaticText* version = new wxStaticText(this, wxID_ANY, wxString::FromUTF8(SoftFever_VERSION), wxDefaultPosition, wxDefaultSize);
+        wxStaticText* build_string = new wxStaticText(this, wxID_ANY, wxString::Format("Build %s", build_commit_label), wxDefaultPosition, wxDefaultSize);
+        build_string->SetFont(Label::Body_12);
         wxFont version_font = GetFont();
         version_font = version_font.Scaled(1.85f); // SetPointSize(20) not works on macOS because it uses a 72 PPI reference
         version->SetFont(version_font);
-        version->SetForegroundColour(wxColour("#949494"));
-        credits_string->SetForegroundColour(wxColour("#949494"));
-        version->SetBackgroundColour(wxColour("#FFFFFF"));
-        credits_string->SetBackgroundColour(wxColour("#FFFFFF"));
+        version->SetForegroundColour(header_fg);
+        build_string->SetForegroundColour(header_dim);
+        version->SetBackgroundColour(header_bg);
+        build_string->SetBackgroundColour(header_bg);
 
-        vesizer->Add(version, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(20));
+        vesizer->Add(version, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(24));
         vesizer->AddSpacer(FromDIP(5));
-        vesizer->Add(credits_string, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(20));
+        vesizer->Add(build_string, 0, wxRIGHT | wxALIGN_RIGHT, FromDIP(24));
         vesizer->Add(0, 0, 1, wxEXPAND, FromDIP(5));
     }
 
@@ -267,11 +269,13 @@ AboutDialog::AboutDialog()
     text_sizer_horiz->Add( 0, 0, 0, wxLEFT, FromDIP(20));
 
     std::vector<wxString> text_list;
-    text_list.push_back(_L("Open-source slicing stands on a tradition of collaboration and attribution. Slic3r, created by Alessandro Ranellucci and the RepRap community, laid the foundation. PrusaSlicer by Prusa Research built on that work, Bambu Studio forked from PrusaSlicer, and SuperSlicer extended it with community-driven enhancements. Each project carried the work of its predecessors forward, crediting those who came before."));
-    text_list.push_back(_L("OrcaSlicer began in that same spirit, drawing from PrusaSlicer, BambuStudio, SuperSlicer, and CuraSlicer. But it has since grown far beyond its origins — introducing advanced calibration tools, precise wall and seam control and hundreds of other features."));
-    text_list.push_back(_L("Today, OrcaSlicer is the most widely used and actively developed open-source slicer in the 3D printing community. Many of its innovations have been adopted by other slicers, making it a driving force for the entire industry."));
+    text_list.push_back(wxString::Format(_L("%s is an open-source slicer for printers running Klipper."), SLIC3R_APP_NAME));
+    // Required attribution (AGPL-3.0 appropriate legal notices). Do not remove.
+    text_list.push_back(_L("Based on OrcaSlicer by SoftFever and contributors, which is based on Bambu Studio (Bambu Lab), PrusaSlicer (Prusa Research) and Slic3r (Alessandro Ranellucci and the RepRap community)."));
+    text_list.push_back(wxString::Format(_L("%s is not affiliated with the Klipper project."), SLIC3R_APP_NAME));
+    text_list.push_back(wxString::Format(_L("%s is free software, licensed under the GNU Affero General Public License, version 3."), SLIC3R_APP_NAME));
 
-    text_sizer->Add( 0, 0, 0, wxTOP, FromDIP(33));
+    text_sizer->Add( 0, 0, 0, wxTOP, FromDIP(24));
     bool is_zh = wxGetApp().app_config->get("language") == "zh_CN";
     for (int i = 0; i < text_list.size(); i++)
     {
@@ -312,10 +316,16 @@ AboutDialog::AboutDialog()
 
     copyright_hor_sizer->Add(copyright_ver_sizer, 0, wxLEFT, FromDIP(20));
 
-    wxStaticText *html_text = new wxStaticText(this, wxID_ANY, "Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved", wxDefaultPosition, wxDefaultSize);
+    // Upstream copyright notice is kept as an appropriate legal notice (AGPL-3.0 section 5).
+    wxStaticText *html_text = new wxStaticText(this, wxID_ANY, wxString::Format("Copyright (C) 2026 %s contributors", SLIC3R_APP_NAME), wxDefaultPosition, wxDefaultSize);
     html_text->SetForegroundColour(wxColour(107, 107, 107));
+    wxStaticText *upstream_text = new wxStaticText(this, wxID_ANY, "Portions Copyright(C) 2026 OrcaSlicer Pte Ltd All Rights Reserved", wxDefaultPosition, wxDefaultSize);
+    upstream_text->SetForegroundColour(wxColour(107, 107, 107));
+    upstream_text->SetFont(Label::Body_12);
 
     copyright_ver_sizer->Add(html_text, 0, wxALL , 0);
+    copyright_ver_sizer->AddSpacer(FromDIP(2));
+    copyright_ver_sizer->Add(upstream_text, 0, wxALL , 0);
 
     m_html = new wxHtmlWindow(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxHW_SCROLLBAR_NEVER /*NEVER*/);
       {
@@ -323,18 +333,23 @@ AboutDialog::AboutDialog()
           const int fs = font.GetPointSize()-1;
           int size[] = {fs,fs,fs,fs,fs,fs,fs};
           m_html->SetFonts(font.GetFaceName(), font.GetFaceName(), size);
-          m_html->SetMinSize(wxSize(FromDIP(-1), FromDIP(16)));
+          m_html->SetMinSize(wxSize(FromDIP(-1), FromDIP(40)));
           m_html->SetBorders(2);
           wxColour   bgr_clr = GetBackgroundColour();
           const auto bgr_clr_str = encode_color(ColorRGB(bgr_clr.Red(), bgr_clr.Green(), bgr_clr.Blue()));
+          // signal-path on dark, path-ink on light (docs/design/BRAND.md)
+          const std::string link_clr = wxGetApp().dark_mode() ? "#4DB9FF" : "#1A86D6";
+          const std::string repo_url = "https://github.com/Extrutex/KlipSlice";
+          const std::string wiki_url = "https://extrutex.github.io/KlipSlice-Wiki/";
           const auto text = from_u8(
-              (boost::format(
               "<html>"
               "<body bgcolor= \"" + bgr_clr_str + "\" >"
-              "<p style=\"text-align:left\"><a style=\"color:#009789\" href=\"https://www.orcaslicer.com\">https://www.orcaslicer.com</ a></p>"
+              "<p style=\"text-align:left\">"
+              "<a style=\"color:" + link_clr + "\" href=\"" + repo_url + "\">" + repo_url + "</a><br/>"
+              "<a style=\"color:" + link_clr + "\" href=\"" + wiki_url + "\">" + wiki_url + "</a>"
+              "</p>"
               "</body>"
-              "</html>")
-            ).str());
+              "</html>");
           m_html->SetPage(text);
           copyright_ver_sizer->Add(m_html, 0, wxEXPAND, 0);
           m_html->Bind(wxEVT_HTML_LINK_CLICKED, &AboutDialog::onLinkClicked, this);

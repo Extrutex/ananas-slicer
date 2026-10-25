@@ -70,7 +70,7 @@ float FullTransparentModdifiedToFixAlpha = 0.3f;
 // Be careful changing this value because it could break thumbnail color due to rounding error!
 // The color rendering on BambuLab's "send to printer" screen relies on the assumption that this color can be accurately rendered by OpenGL,
 // value like 0.18f could not because in C++ (int)(0.18f * 255) == 45 however in OpenGL it renders this as 46
-// which breaks the `SelectMachineDialog::record_edge_pixels_data()` function!
+// which breaks edge pixel readback of the thumbnail!
 float FULL_BLACK_THRESHOLD = 0.2f;
 // Keep depth_tex away from texture unit 0 to avoid sampler-type aliasing with
 // shadow/environment samplers when realistic view is disabled.
@@ -1538,7 +1538,7 @@ bool GLVolumeCollection::check_outside_state(const BuildVolume &build_volume, Mo
                     {
                         std::vector<int> result_filaments;
                         //result_filaments.reserve(conflict_filaments.size());
-                        std::set_intersection (conflict_filament_vector.begin(), conflict_filament_vector.end(), unprintable_filament_vec[index].begin(), unprintable_filament_vec[index].end(), insert_iterator<vector<int>>(result_filaments, result_filaments.begin()));
+                        std::set_intersection (conflict_filament_vector.begin(), conflict_filament_vector.end(), unprintable_filament_vec[index].begin(), unprintable_filament_vec[index].end(), std::insert_iterator<std::vector<int>>(result_filaments, result_filaments.begin()));
                         conflict_filament_vector = result_filaments;
                     }
                 }

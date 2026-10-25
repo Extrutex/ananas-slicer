@@ -8,12 +8,26 @@
 
 //BBS set font size
 #include "Widgets/Label.hpp"
+#include "Widgets/ThemeTokens.hpp"
 
 #include <wx/button.h>
 #include <wx/dcclient.h>
 #include <wx/sizer.h>
 
 wxDEFINE_EVENT(wxCUSTOMEVT_NOTEBOOK_SEL_CHANGED, wxCommandEvent);
+
+// Main tab strip colours. The strip is chrome in both colour modes, so the tokens are
+// used directly; only the strip ground goes through the dark map.
+static void apply_tab_style(Button* btn, bool selected)
+{
+    using namespace Slic3r::GUI;
+    btn->SetBackgroundColor(StateColor(
+        std::pair{wxColour(selected ? Theme::CARBON_700 : Theme::CARBON_800), (int) StateColor::Hovered},
+        std::pair{selected ? wxColour(Theme::CARBON_700) : wxColour("#3B4446"), (int) StateColor::Normal}));
+    btn->SetTextColor(StateColor(
+        std::pair{wxColour(selected ? Theme::ALU_50 : Theme::ALU_100), (int) StateColor::Hovered},
+        std::pair{wxColour(selected ? Theme::ALU_50 : Theme::ALU_200), (int) StateColor::Normal}));
+}
 
 ButtonsListCtrl::ButtonsListCtrl(wxWindow *parent, wxBoxSizer* side_tools) :
     wxControl(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxBORDER_NONE | wxTAB_TRAVERSAL)
@@ -26,7 +40,7 @@ ButtonsListCtrl::ButtonsListCtrl(wxWindow *parent, wxBoxSizer* side_tools) :
 #ifdef __APPLE__
     default_btn_bg = wxColour("#3B4446"); // Gradient #414B4E
 #else
-    default_btn_bg = wxColour("#2D2D30"); // Gradient #414B4E
+    default_btn_bg = wxColour("#3B4446"); // Gradient #414B4E
 #endif
 
    
@@ -70,29 +84,29 @@ void ButtonsListCtrl::OnPaint(wxPaintEvent&)
     if (m_selection < 0 || m_selection >= (int)m_pageButtons.size())
         return;
 
-    wxColour selected_btn_bg("#1F8EEA");
-    wxColour default_btn_bg("#3B4446"); // Gradient #414B4E
-    const wxColour& btn_marker_color = Slic3r::GUI::wxGetApp().get_color_hovered_btn_label();
-
-    // highlight selected notebook button
+    // The tab strip is chrome: dark in both colour modes. The selected tab is marked by a
+    // 2 px aluminium edge, not by an accent fill (docs/design/BRAND.md §3.2).
+    const wxColour default_btn_bg = StateColor::darkModeColorFor(wxColour("#3B4446"));
+    const wxColour edge_color(Slic3r::GUI::Theme::ALU_50);
+    const wxColour line_color(Slic3r::GUI::Theme::LINE);
 
     for (int idx = 0; idx < int(m_pageButtons.size()); idx++) {
         Button* btn = m_pageButtons[idx];
-
-        btn->SetBackgroundColor(idx == m_selection ? selected_btn_bg : default_btn_bg);
-
         wxPoint pos = btn->GetPosition();
         wxSize size = btn->GetSize();
-        const wxColour& clr = idx == m_selection ? btn_marker_color : default_btn_bg;
-        dc.SetPen(clr);
-        dc.SetBrush(clr);
+        dc.SetPen(default_btn_bg);
+        dc.SetBrush(default_btn_bg);
         dc.DrawRectangle(pos.x, pos.y + size.y, size.x, sz.y - size.y);
     }
-    // Draw orange bottom line
+    dc.SetPen(line_color);
+    dc.SetBrush(line_color);
+    dc.DrawRectangle(0, sz.y - m_line_margin, sz.x, m_line_margin);
 
-    dc.SetPen(btn_marker_color);
-    dc.SetBrush(btn_marker_color);
-    dc.DrawRectangle(1, sz.y - m_line_margin, sz.x, m_line_margin);
+    Button* sel_btn = m_pageButtons[m_selection];
+    const int edge  = std::max(m_line_margin, FromDIP(2));
+    dc.SetPen(edge_color);
+    dc.SetBrush(edge_color);
+    dc.DrawRectangle(sel_btn->GetPosition().x, sz.y - edge, sel_btn->GetSize().x, edge);
 }
 
 void ButtonsListCtrl::UpdateMode()
@@ -123,18 +137,8 @@ void ButtonsListCtrl::SetSelection(int sel)
 {
     if (m_selection == sel && sel >= 0 && sel < static_cast<int>(m_pageButtons.size()))
         return;
-    // BBS: change button color
-    wxColour selected_btn_bg("#009688");    // Gradient #009688
-    if (m_selection >= 0 && m_selection < static_cast<int>(m_pageButtons.size())) {
-        StateColor bg_color = StateColor(
-        std::pair{wxColour(107, 107, 107), (int) StateColor::Hovered},
-        std::pair{wxColour(59, 68, 70), (int) StateColor::Normal});
-        m_pageButtons[m_selection]->SetBackgroundColor(bg_color);
-        StateColor text_color = StateColor(
-        std::pair{wxColour(254,254, 254), (int) StateColor::Normal}
-        );
-        m_pageButtons[m_selection]->SetTextColor(text_color);
-    }
+    if (m_selection >= 0 && m_selection < static_cast<int>(m_pageButtons.size()))
+        apply_tab_style(m_pageButtons[m_selection], false);
 
     if (sel < 0 || sel >= static_cast<int>(m_pageButtons.size())) {
         m_selection = -1;
@@ -144,15 +148,7 @@ void ButtonsListCtrl::SetSelection(int sel)
 
     m_selection = sel;
 
-    StateColor bg_color = StateColor(
-        std::pair{wxColour(0, 150, 136), (int) StateColor::Hovered},
-        std::pair{wxColour(0,150, 136), (int) StateColor::Normal});
-    m_pageButtons[m_selection]->SetBackgroundColor(bg_color);
-
-    StateColor text_color = StateColor(
-        std::pair{wxColour(254, 254, 254), (int) StateColor::Normal}
-        );
-    m_pageButtons[m_selection]->SetTextColor(text_color);
+    apply_tab_style(m_pageButtons[m_selection], true);
     
     Refresh();
 }
@@ -179,14 +175,7 @@ bool ButtonsListCtrl::InsertPage(size_t n, const wxString &text, bool bSelect /*
     //BBS set size for button
     btn->SetMinSize({(text.empty() ? 40 : 136) * em / 10, 36 * em / 10});
 
-    StateColor bg_color = StateColor(
-        std::pair{wxColour(107, 107, 107), (int) StateColor::Hovered},
-        std::pair{wxColour(59, 68, 70), (int) StateColor::Normal});
-
-    btn->SetBackgroundColor(bg_color);
-    StateColor text_color = StateColor(
-        std::pair{wxColour(254,254, 254), (int) StateColor::Normal});
-    btn->SetTextColor(text_color);
+    apply_tab_style(btn, false);
     btn->Bind(wxEVT_BUTTON, [this, btn](wxCommandEvent& event) {
         if (auto it = std::find(m_pageButtons.begin(), m_pageButtons.end(), btn); it != m_pageButtons.end()) {
             auto sel = it - m_pageButtons.begin();

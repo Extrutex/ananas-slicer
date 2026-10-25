@@ -17,7 +17,7 @@
 	"brim_ears_max_angle": "180",
 	"brim_object_gap": "0.02",
 	"default_acceleration": "15000",
-	"default_jerk": "5",
+	"default_jerk": "0",
 	"elefant_foot_compensation": "0.15",
 	"filter_out_gap_fill": "40",
 	"gap_infill_speed": "200",

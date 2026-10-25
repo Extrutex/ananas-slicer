@@ -7,12 +7,18 @@
 #include <boost/filesystem.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <fstream>
 #include <string>
+#include <thread>
+#include <system_error>
 
 #ifndef _WIN32
 #include <unistd.h>     // getuid
+#include <sys/resource.h> // setrlimit
+#include <sys/stat.h>     // mkfifo
+#include <csignal>
 #endif
 
 using namespace Slic3r;
@@ -60,6 +66,144 @@ TEST_CASE("per-user temp root is unchanged on Windows, isolated elsewhere", "[ut
     REQUIRE(root != base);
     REQUIRE_THAT(root, Catch::Matchers::StartsWith(base + "/orcaslicer_"));
 #endif
+}
+
+TEST_CASE("write_file_atomically replaces the target and leaves no temporary file", "[utils]") {
+    ScopedTemporaryDir dir;
+    const boost::filesystem::path target = dir.path() / "preset.json";
+
+    REQUIRE_FALSE(write_file_atomically(target.string(), "first"));
+    REQUIRE_FALSE(write_file_atomically(target.string(), "second"));
+
+    std::string content;
+    load_string_file(target, content);
+    REQUIRE(content == "second");
+    size_t entries = 0;
+    for (auto &entry : boost::filesystem::directory_iterator(dir.path())) {
+        (void) entry;
+        ++entries;
+    }
+    REQUIRE(entries == 1);
+}
+
+TEST_CASE("write_file_atomically reports a missing directory and writes nothing", "[utils]") {
+    ScopedTemporaryDir dir;
+    const boost::filesystem::path target = dir.path() / "missing" / "preset.json";
+
+    const std::error_code ec = write_file_atomically(target.string(), "x");
+    REQUIRE(ec == std::errc::no_such_file_or_directory);
+    REQUIRE_FALSE(boost::filesystem::exists(target));
+}
+
+#ifndef _WIN32
+// The read-only bit on a directory stops file creation only on POSIX.
+TEST_CASE("write_file_atomically writes in place when no temporary can be created beside an existing target", "[utils]") {
+    if (::geteuid() == 0)
+        SKIP("a read-only directory does not stop root");
+    ScopedTemporaryDir dir;
+    const boost::filesystem::path target = dir.path() / "preset.json";
+    REQUIRE_FALSE(write_file_atomically(target.string(), "first"));
+    boost::filesystem::permissions(dir.path(), boost::filesystem::owner_read | boost::filesystem::owner_exe);
+
+    const std::error_code replaced = write_file_atomically(target.string(), "second");
+    const std::error_code created  = write_file_atomically((dir.path() / "new.json").string(), "x");
+    // Restored before any assertion, so a failure never leaves an unremovable directory behind.
+    boost::filesystem::permissions(dir.path(), boost::filesystem::owner_all);
+
+    REQUIRE_FALSE(replaced);
+    REQUIRE(created == std::errc::permission_denied);
+    std::string content;
+    load_string_file(target, content);
+    REQUIRE(content == "second");
+}
+#endif
+
+#ifndef _WIN32
+// A temporary that is created but cannot be written in full (here: past the file size limit, as on a
+// full disk) must not make the save fall back to truncating the target and writing it in place.
+TEST_CASE("write_file_atomically keeps the target when the temporary cannot be written in full", "[utils]") {
+    ScopedTemporaryDir dir;
+    const boost::filesystem::path target = dir.path() / "preset.json";
+    REQUIRE_FALSE(write_file_atomically(target.string(), "old"));
+
+    struct rlimit saved {};
+    REQUIRE(::getrlimit(RLIMIT_FSIZE, &saved) == 0);
+    struct rlimit limited = saved;
+    limited.rlim_cur      = 64;
+    if (saved.rlim_max != RLIM_INFINITY && saved.rlim_max < limited.rlim_cur)
+        SKIP("the hard file size limit is below the test's limit");
+    // Writing past the limit raises SIGXFSZ, which would end the process; ignored, write() fails with EFBIG.
+    void (*previous_handler)(int) = std::signal(SIGXFSZ, SIG_IGN);
+    REQUIRE(::setrlimit(RLIMIT_FSIZE, &limited) == 0);
+    const std::error_code ec = write_file_atomically(target.string(), std::string(4096, 'x'));
+    // Restored before any assertion.
+    ::setrlimit(RLIMIT_FSIZE, &saved);
+    std::signal(SIGXFSZ, previous_handler);
+
+    CHECK(ec);
+    std::string content;
+    load_string_file(target, content);
+    CHECK(content == "old");
+    for (const auto &entry : boost::filesystem::directory_iterator(dir.path()))
+        CHECK(entry.path().filename() == "preset.json");
+}
+#endif
+
+TEST_CASE("write_file_atomically keeps bytes intact in binary mode", "[utils]") {
+    ScopedTemporaryDir dir;
+    const boost::filesystem::path target = dir.path() / "blob.bin";
+    const std::string bytes("a\r\nb\0c", 6);
+
+    REQUIRE_FALSE(write_file_atomically(target.string(), bytes, /*binary=*/true));
+    REQUIRE(boost::filesystem::file_size(target) == bytes.size());
+}
+
+#ifndef _WIN32
+TEST_CASE("write_file_atomically writes through a symlink and keeps the target's permissions", "[utils]") {
+    ScopedTemporaryDir dir;
+    const boost::filesystem::path real = dir.path() / "real.json";
+    const boost::filesystem::path link = dir.path() / "link.json";
+    REQUIRE_FALSE(write_file_atomically(real.string(), "first"));
+    boost::filesystem::permissions(real, boost::filesystem::owner_read | boost::filesystem::owner_write);
+    boost::filesystem::create_symlink(real, link);
+
+    REQUIRE_FALSE(write_file_atomically(link.string(), "second"));
+
+    REQUIRE(boost::filesystem::is_symlink(boost::filesystem::symlink_status(link)));
+    std::string content;
+    load_string_file(real, content);
+    REQUIRE(content == "second");
+
+    REQUIRE_FALSE(write_file_atomically(real.string(), "third"));
+    const auto perms = boost::filesystem::status(real).permissions() & boost::filesystem::all_all;
+    REQUIRE(perms == (boost::filesystem::owner_read | boost::filesystem::owner_write));
+}
+#endif
+
+TEST_CASE("write_file_atomically survives two threads writing one target", "[utils]") {
+    ScopedTemporaryDir dir;
+    const boost::filesystem::path target = dir.path() / "shared.json";
+    const std::string a(20000, 'a'), b(20000, 'b');
+
+    std::thread other([&] {
+        for (int i = 0; i < 50; ++i)
+            write_file_atomically(target.string(), a);
+    });
+    for (int i = 0; i < 50; ++i)
+        write_file_atomically(target.string(), b);
+    other.join();
+
+    std::string content;
+    load_string_file(target, content);
+    const bool whole = content == a || content == b;
+    REQUIRE(whole);
+    // No temporary may be left; a scanner on Windows may briefly hold the old
+    // file under another name, so only the temporaries are counted.
+    size_t temporaries = 0;
+    for (auto &entry : boost::filesystem::directory_iterator(dir.path()))
+        if (entry.path().extension() == ".tmp")
+            ++temporaries;
+    REQUIRE(temporaries == 0);
 }
 
 TEST_CASE("copy_file reports the OS error when the destination cannot be written", "[utils]") {
@@ -142,9 +286,8 @@ TEST_CASE("resolve_cli_input_path leaves inputs that must not be completed uncha
 #endif
     // These are downloaded rather than opened, and completing one would produce a path, not a URL.
     SECTION("a custom open protocol URL") {
-        for (const std::string url : {"orcaslicer://open/?file=https://example.com/model.3mf",
+        for (const std::string url : {"ananas-slicer://open/?file=https://example.com/model.3mf",
                                       "prusaslicer://open/?file=https://example.com/model.3mf",
-                                      "bambustudio://open/?file=https://example.com/model.3mf",
                                       "cura://open/?file=https://example.com/model.3mf"})
             REQUIRE(resolve_cli_input_path(url) == url);
     }
@@ -386,4 +529,288 @@ TEST_CASE("is_safe_to_open_file_name rejects programs and anything it does not k
         "readme", "pdf", "data.xyz", "", "...", "Manual.pdf.", "Manual.pdf ", "setup.exe:note.txt", "dir.pdf/readme");
     INFO(unsafe);
     CHECK_FALSE(is_safe_to_open_file_name(unsafe));
+}
+
+TEST_CASE("copy_legacy_data_dir copies the data directory of the previous app key once", "[utils]") {
+    namespace fs = boost::filesystem;
+    ScopedTemporaryDir root("datadir");
+    const fs::path legacy  = root.path() / "KLIPSLICE";
+    const fs::path current = root.path() / "AnanasSlicer";
+    const auto write = [](const fs::path &p, const std::string &text) {
+        fs::create_directories(p.parent_path());
+        std::ofstream(p.string()) << text;
+    };
+    const auto read = [](const fs::path &p) {
+        std::ifstream in(p.string());
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+
+    SECTION("nothing to copy without a legacy directory") {
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::NotNeeded);
+        CHECK_FALSE(fs::exists(current));
+    }
+
+    write(legacy / "KLIPSLICE.conf", "{\"app\":1}");
+    write(legacy / "KLIPSLICEGcodeViewer.conf", "viewer");
+    write(legacy / "user" / "default" / "filament" / "My PLA.json", "pla");
+    write(legacy / "user" / "KLIPSLICE.conf", "nested");
+
+    SECTION("copies everything and renames the top-level files of the old key") {
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
+        CHECK(read(current / "AnanasSlicerGcodeViewer.conf") == "viewer");
+        CHECK(read(current / "user" / "default" / "filament" / "My PLA.json") == "pla");
+        // Only the top-level files carry the app key; nested files keep their names.
+        CHECK(read(current / "user" / "KLIPSLICE.conf") == "nested");
+        CHECK_FALSE(fs::exists(current / "KLIPSLICE.conf"));
+        // The finished copy carries its marker.
+        CHECK(fs::exists(current / ".migrated-from-KLIPSLICE"));
+        // The legacy directory stays as it was.
+        CHECK(read(legacy / "KLIPSLICE.conf") == "{\"app\":1}");
+        CHECK(read(legacy / "user" / "default" / "filament" / "My PLA.json") == "pla");
+        // No temporary copy is left next to the data directory.
+        size_t entries = 0;
+        for (fs::directory_iterator it(root.path()), end; it != end; ++it)
+            ++entries;
+        CHECK(entries == 2);
+
+        SECTION("a second start leaves the new directory alone") {
+            write(current / "AnanasSlicer.conf", "changed");
+            CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::NotNeeded);
+            CHECK(read(current / "AnanasSlicer.conf") == "changed");
+        }
+    }
+
+    SECTION("an existing data directory is never overwritten") {
+        write(current / "AnanasSlicer.conf", "own");
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::NotNeeded);
+        CHECK(read(current / "AnanasSlicer.conf") == "own");
+        CHECK_FALSE(fs::exists(current / "user"));
+    }
+
+    SECTION("an empty data directory is filled") {
+        fs::create_directories(current);
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
+    }
+
+    SECTION("two instances starting at once copy once and leave no temporary copy") {
+        // Enough files that both copies run at the same time and race for the final rename.
+        for (int i = 0; i < 300; ++i)
+            write(legacy / "user" / "default" / "process" / ("p" + std::to_string(i) + ".json"), "{}");
+        for (int round = 0; round < 10; ++round) {
+            CAPTURE(round);
+            fs::remove_all(current);
+            std::atomic<int> copied { 0 }, not_needed { 0 }, failed { 0 };
+            const auto start = [&]() {
+                switch (copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer")) {
+                case LegacyDataDirCopy::Copied:    ++copied; break;
+                case LegacyDataDirCopy::NotNeeded: ++not_needed; break;
+                case LegacyDataDirCopy::Failed:    ++failed; break;
+                }
+            };
+            std::thread a(start), b(start);
+            a.join();
+            b.join();
+            CHECK(copied == 1);
+            CHECK(not_needed == 1);
+            CHECK(failed == 0);
+            CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
+            size_t entries = 0;
+            for (fs::directory_iterator it(root.path()), end; it != end; ++it)
+                ++entries;
+            CHECK(entries == 2);
+        }
+    }
+
+    SECTION("the regenerated cache and log directories are not copied") {
+        write(legacy / "cache" / "wizard_profile_data.json", "stale paths");
+        write(legacy / "log" / "debug.log", "old log");
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK_FALSE(fs::exists(current / "cache"));
+        CHECK_FALSE(fs::exists(current / "log"));
+        CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
+    }
+
+#ifndef _WIN32
+    SECTION("symbolic links are copied as links, never followed") {
+        const fs::path outside = root.path() / "outside";
+        write(outside / "external.json", "external");
+        fs::create_symlink("default/filament/My PLA.json", legacy / "user" / "internal.json");
+        fs::create_symlink(outside / "external.json", legacy / "user" / "external.json");
+        fs::create_symlink(outside, legacy / "user" / "external_dir");
+        fs::create_symlink("missing.json", legacy / "user" / "broken.json");
+        fs::create_symlink("loop_b", legacy / "user" / "loop_a");
+        fs::create_symlink("loop_a", legacy / "user" / "loop_b");
+
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        for (const char *name : {"internal.json", "external.json", "external_dir", "broken.json", "loop_a", "loop_b"}) {
+            CAPTURE(name);
+            const fs::path copied = current / "user" / name;
+            REQUIRE(fs::is_symlink(fs::symlink_status(copied)));
+            CHECK(fs::read_symlink(copied) == fs::read_symlink(legacy / "user" / name));
+        }
+        CHECK(read(current / "user" / "default" / "filament" / "My PLA.json") == "pla");
+        // Nothing was written outside the data directories.
+        size_t outside_entries = 0;
+        for (fs::directory_iterator it(outside), end; it != end; ++it)
+            ++outside_entries;
+        CHECK(outside_entries == 1);
+        CHECK(read(outside / "external.json") == "external");
+    }
+
+    SECTION("a marker name in the old directory is neither copied nor followed") {
+        const fs::path outside = root.path() / "outside.txt";
+        write(outside, "keep");
+        fs::create_symlink(outside, legacy / ".migrated-from-KLIPSLICE");
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK(read(outside) == "keep");
+        CHECK(fs::is_regular_file(fs::symlink_status(current / ".migrated-from-KLIPSLICE")));
+    }
+
+    SECTION("permissions are kept, plus write access for the owner") {
+        const fs::path script = legacy / "user" / "post.sh";
+        write(script, "#!/bin/sh");
+        fs::permissions(legacy, fs::owner_all);
+        fs::permissions(legacy / "user", fs::owner_all);
+        fs::permissions(legacy / "user" / "default", fs::owner_read | fs::owner_exe);
+        fs::permissions(legacy / "KLIPSLICE.conf", fs::owner_read | fs::owner_write);
+        fs::permissions(legacy / "KLIPSLICEGcodeViewer.conf", fs::owner_read | fs::group_read);
+        fs::permissions(script, fs::owner_all | fs::group_read | fs::group_exe | fs::others_read | fs::others_exe);
+
+        REQUIRE(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        const auto mode = [](const fs::path &p) { return fs::symlink_status(p).permissions() & fs::perms_mask; };
+        CHECK(mode(current) == fs::owner_all);
+        CHECK(mode(current / "user") == fs::owner_all);
+        // A read-only source would leave the app unable to write its presets and logs: the owner always
+        // gets write access, group and others never get more than they had.
+        CHECK(mode(current / "user" / "default") == fs::owner_all);
+        CHECK(mode(current / "AnanasSlicer.conf") == (fs::owner_read | fs::owner_write));
+        CHECK(mode(current / "AnanasSlicerGcodeViewer.conf") == (fs::owner_read | fs::owner_write | fs::group_read));
+        CHECK(mode(current / "user" / "post.sh") == mode(script));
+        CHECK(read(current / "user" / "default" / "filament" / "My PLA.json") == "pla");
+        fs::permissions(legacy / "user" / "default", fs::owner_all);
+    }
+
+    SECTION("a failed copy into an empty data directory is not taken for done") {
+        if (geteuid() == 0)
+            SKIP("root reads files without read permission");
+        fs::create_directories(current);
+        const fs::path unreadable = legacy / "user" / "KLIPSLICE.conf";
+        fs::permissions(unreadable, fs::no_perms);
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Failed);
+        fs::permissions(unreadable, fs::owner_read | fs::owner_write);
+        CHECK(fs::is_empty(current));
+        // The next start copies.
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Copied);
+        CHECK(read(current / "AnanasSlicer.conf") == "{\"app\":1}");
+    }
+
+    SECTION("a failed copy leaves no data directory behind") {
+        if (geteuid() == 0)
+            SKIP("root reads files without read permission");
+        const fs::path unreadable = legacy / "user" / "KLIPSLICE.conf";
+        fs::permissions(unreadable, fs::no_perms);
+        CHECK(copy_legacy_data_dir(legacy.string(), "KLIPSLICE", current.string(), "AnanasSlicer") == LegacyDataDirCopy::Failed);
+        fs::permissions(unreadable, fs::owner_read | fs::owner_write);
+        CHECK_FALSE(fs::exists(current));
+        size_t entries = 0;
+        for (fs::directory_iterator it(root.path()), end; it != end; ++it)
+            ++entries;
+        CHECK(entries == 1);
+    }
+#endif
+}
+
+TEST_CASE("legacy_data_dir_candidates looks next to the data directory and in the old Flatpak sandbox", "[utils]") {
+    namespace fs = boost::filesystem;
+    const std::string data_dir = (fs::path("home") / ".config" / "AnanasSlicer").string();
+    const auto native = legacy_data_dir_candidates(data_dir, "KLIPSLICE", "home", false);
+    REQUIRE(native.size() == 1);
+    CHECK(fs::path(native[0]) == fs::path("home") / ".config" / "KLIPSLICE");
+    const auto flatpak = legacy_data_dir_candidates(data_dir, "KLIPSLICE", "home", true);
+    REQUIRE(flatpak.size() == 2);
+    CHECK(fs::path(flatpak[0]) == fs::path("home") / ".config" / "KLIPSLICE");
+    CHECK(fs::path(flatpak[1]) == fs::path("home") / ".var" / "app" / "de._3dwindt.KLIPSLICE" / "config" / "KLIPSLICE");
+}
+
+TEST_CASE("start_data_dir keeps the data directory uncreated while the copy fails", "[utils]") {
+    namespace fs = boost::filesystem;
+    ScopedTemporaryDir root("startdir");
+    const fs::path legacy  = root.path() / "KLIPSLICE";
+    const fs::path current = root.path() / "AnanasSlicer";
+    fs::create_directories(legacy / "user");
+    std::ofstream((legacy / "KLIPSLICE.conf").string()) << "conf";
+    std::string error;
+
+    SECTION("without a legacy directory the data directory is used") {
+        CHECK(start_data_dir({ (root.path() / "missing").string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error) == current.string());
+        CHECK(error.empty());
+    }
+    SECTION("the first existing candidate is copied") {
+        CHECK(start_data_dir({ (root.path() / "missing").string(), legacy.string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error) == current.string());
+        CHECK(error.empty());
+        CHECK(fs::exists(current / "AnanasSlicer.conf"));
+    }
+#ifndef _WIN32
+    SECTION("a failed copy gives a session directory and the next start copies") {
+        if (geteuid() == 0)
+            SKIP("root reads files without read permission");
+        const fs::path unreadable = legacy / "KLIPSLICE.conf";
+        fs::permissions(unreadable, fs::no_perms);
+        const std::string session = start_data_dir({ legacy.string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error);
+        fs::permissions(unreadable, fs::owner_read | fs::owner_write);
+        CHECK(session != current.string());
+        // Created at once next to the data directory, in the user's own area, and private.
+        CHECK(fs::path(session).parent_path() == current.parent_path());
+        REQUIRE(fs::is_directory(session));
+        CHECK((fs::status(session).permissions() & fs::perms_mask) == fs::owner_all);
+        fs::remove_all(session);
+        CHECK_FALSE(error.empty());
+        CHECK_FALSE(fs::exists(current));
+
+        CHECK(start_data_dir({ legacy.string() }, "KLIPSLICE", current.string(), "AnanasSlicer", error) == current.string());
+        CHECK(error.empty());
+        CHECK(fs::exists(current / "AnanasSlicer.conf"));
+    }
+#endif
+}
+
+TEST_CASE("remove_orphaned_session_dirs removes only marked directories of ended processes", "[utils]") {
+    namespace fs = boost::filesystem;
+    ScopedTemporaryDir root("sessions");
+    const std::string data_dir = (root.path() / "AnanasSlicer").string();
+    const auto make = [&](const std::string &suffix, const std::string &pid) {
+        const fs::path dir = root.path() / ("AnanasSlicer-session-" + suffix);
+        fs::create_directories(dir);
+        if (!pid.empty())
+            std::ofstream((dir / ".session-of-AnanasSlicer").string()) << pid << "\n";
+        return dir;
+    };
+    const fs::path ended    = make("ended", "999999");
+    const fs::path running  = make("running", std::to_string(get_current_pid()));
+    const fs::path unmarked = make("unmarked", "");
+#ifndef _WIN32
+    // remove_all removes a link inside an ended session, never what it points to.
+    const fs::path outside = root.path() / "outside";
+    fs::create_directories(outside);
+    std::ofstream((outside / "keep.txt").string()) << "keep";
+    fs::create_symlink(outside, ended / "link");
+    // A FIFO under the marker name must neither hang the start nor count as a marker.
+    const fs::path fifo = make("fifo", "");
+    REQUIRE(::mkfifo((fifo / ".session-of-AnanasSlicer").c_str(), 0600) == 0);
+    // Neither does a link under the marker name.
+    const fs::path linked = make("linked", "");
+    std::ofstream((root.path() / "pid.txt").string()) << "999999\n";
+    fs::create_symlink(root.path() / "pid.txt", linked / ".session-of-AnanasSlicer");
+#endif
+    remove_orphaned_session_dirs(data_dir, "AnanasSlicer");
+    CHECK_FALSE(fs::exists(ended));
+    CHECK(fs::exists(running));
+    CHECK(fs::exists(unmarked));
+#ifndef _WIN32
+    CHECK(fs::exists(outside / "keep.txt"));
+    CHECK(fs::exists(fifo));
+    CHECK(fs::exists(linked));
+#endif
 }

@@ -2,8 +2,10 @@
 #define slic3r_GCodeWriter_hpp_
 
 #include "libslic3r.h"
-#include <string>
+#include <array>
 #include <charconv>
+#include <optional>
+#include <string>
 #include "Extruder.hpp"
 #include "Point.hpp"
 #include "Polygon.hpp"
@@ -22,7 +24,7 @@ public:
         m_curr_extruder_id (-1),
         m_cached_extruder_idx(0),
         m_single_extruder_multi_material(false),
-        m_last_acceleration(0), m_max_acceleration(0),m_last_travel_acceleration(0), m_max_travel_acceleration(0),
+        m_last_acceleration(0), m_max_acceleration(0),
         m_last_jerk(0), m_max_jerk_x(0), m_max_jerk_y(0),
         m_last_bed_temperature(0), m_last_bed_temperature_reached(true),
         m_lifted(0),
@@ -47,23 +49,18 @@ public:
         return out;
     }
     std::string preamble();
-    std::string postamble() const;
-    static std::string set_temperature(unsigned int temperature, GCodeFlavor flavor, bool wait = false, int tool = -1, std::string comment = std::string());
+    static std::string format_temperature(unsigned int temperature, bool wait = false, int tool = -1, std::string comment = std::string());
 
     std::string set_temperature(unsigned int temperature, bool wait = false, int tool = -1) const;
     std::string set_bed_temperature(int temperature, bool wait = false);
     std::string set_chamber_temperature(int temperature, bool wait = false);
-    std::string set_print_acceleration(unsigned int acceleration)   { return set_acceleration_internal(Acceleration::Print, acceleration); }
-    std::string set_travel_acceleration(unsigned int acceleration)  { return set_acceleration_internal(Acceleration::Travel, acceleration); }
+    std::string set_print_acceleration(unsigned int acceleration);
     std::string set_jerk_xy(double jerk);
     // Orca: set acceleration and jerk in one command for Klipper
     std::string set_accel_and_jerk(unsigned int acceleration, double jerk);
-    std::string set_junction_deviation(double junction_deviation); 
     std::string set_pressure_advance(double pa) const;
     std::string set_input_shaping(char axis, float damp, float freq, std::string type) const;
     std::string reset_e(bool force = false);
-    std::string update_progress(unsigned int num, unsigned int tot, bool allow_100 = false) const;
-    std::string enable_power_loss_recovery(PowerLossRecoveryMode mode);
     // return false if this extruder was already selected
     bool        need_toolchange(unsigned int filament_id) const;
     std::string set_extruder(unsigned int filament_id);
@@ -107,7 +104,7 @@ public:
     // To be called by the CoolingBuffer from another thread.
     // ORCA: `part_cooling_fan_min_pwm` (0-100, default 0) is a floor applied only when `speed` is non-zero, used to overcome
     // PWM start-up thresholds on fans that won't spool below a certain duty cycle. A `speed` of 0 is always honoured.
-    static std::string set_fan(const GCodeFlavor gcode_flavor, unsigned int speed, unsigned int part_cooling_fan_min_pwm = 0);
+    static std::string format_fan(unsigned int speed, unsigned int part_cooling_fan_min_pwm = 0);
     // To be called by the main thread. It always emits the G-code, it does not remember the previous state.
     // Keeping the state is left to the CoolingBuffer, which runs asynchronously on another thread.
     std::string set_fan(unsigned int speed) const;
@@ -128,16 +125,15 @@ public:
     bool is_current_position_clear() const { return m_is_current_pos_clear; };
     //BBS:
     static bool full_gcode_comment;
-    //SoftFever
-    void set_is_bbl_machine(bool bval) {m_is_bbl_printers = bval;}
-    const bool is_bbl_printers() const {return m_is_bbl_printers;}
     void set_is_first_layer(bool bval) { m_is_first_layer = bval; }
-    GCodeFlavor get_gcode_flavor() const { return config.gcode_flavor; }
-    void invalidate_acceleration() { m_last_acceleration = 0; m_last_travel_acceleration = 0; }
+    void invalidate_acceleration() { m_last_acceleration = 0; }
     void invalidate_jerk() { m_last_jerk = 0; }
-
-    // Returns whether this flavor supports separate print and travel acceleration.
-    static bool supports_separate_travel_acceleration(GCodeFlavor flavor);
+    // ANANAS SLICER: custom G-code sent its own SET_RETRACTION, so the values the writer sent last are
+    // no longer the active ones; the next G10 sends the active filament's values again.
+    void invalidate_firmware_retraction_values() { m_firmware_retraction_sent.reset(); }
+    // ANANAS SLICER: custom G-code left Klipper's [firmware_retraction] retracted (G10) or not
+    // (G11, SET_RETRACTION). The writer must not send SET_RETRACTION while it is retracted.
+    void set_firmware_retracted(bool retracted) { m_firmware_retracted = retracted; }
   private:
 	// Extruders are sorted by their ID, so that binary search is possible.
     std::vector<Extruder> m_filament_extruders;
@@ -147,21 +143,13 @@ public:
     // Motion uses the global/base process variant until a filament becomes active.
     size_t     m_cached_extruder_idx;
     unsigned int              m_last_acceleration;
-    unsigned int              m_last_travel_acceleration;
-    std::vector<unsigned int> m_max_travel_acceleration;
 
-    // Limit for setting the acceleration, to respect the machine limits set for the Marlin firmware.
+    // Limit for setting the acceleration and the square corner velocity, from the machine limits.
     // If set to zero, the limit is not in action. Indexed by 0-based physical nozzle id.
     std::vector<unsigned int> m_max_acceleration;
     std::vector<double>       m_max_jerk_x;
     std::vector<double>       m_max_jerk_y;
     double                    m_last_jerk;
-    std::vector<double>       m_max_jerk_z;
-    std::vector<double>       m_max_jerk_e;
-    std::vector<double>       m_max_junction_deviation;
-
-    // unsigned int  m_travel_acceleration;
-    // unsigned int  m_travel_jerk;
 
 
     //BBS
@@ -195,15 +183,8 @@ public:
     std::string m_gcode_label_objects_start;
     std::string m_gcode_label_objects_end;
 
-    //SoftFever
-    bool            m_is_bbl_printers = false;
     double          m_current_speed;
     bool            m_is_first_layer = true;
-
-    enum class Acceleration {
-        Travel,
-        Print
-    };
 
     std::string _travel_to_z(double z, const std::string &comment);
     std::string _spiral_travel_to_z(double z, const Vec2d &ij_offset, const std::string &comment);
@@ -212,7 +193,16 @@ public:
     // Orca: true if a full spiral-lift circle (center in bed coordinates, mm) fits inside the active printable area.
     bool spiral_lift_fits_printable_area(const Vec2d &center, double radius) const;
     std::string _retract(double length, double restart_extra, const std::string &comment);
-    std::string set_acceleration_internal(Acceleration type, unsigned int acceleration);
+    // ANANAS SLICER: SET_RETRACTION with the active filament's values when the slicer owns Klipper's
+    // firmware retraction values. Empty if they are already active, the firmware owns them, or
+    // Klipper is retracted.
+    std::string set_firmware_retraction();
+
+    // Retraction values last sent with SET_RETRACTION: length, retract speed, extra restart length,
+    // unretract speed. Empty until the first command of the file.
+    std::optional<std::array<double, 4>> m_firmware_retraction_sent;
+    // Mirrors the global "retracted" flag of Klipper's [firmware_retraction]: set by G10, cleared by G11.
+    bool m_firmware_retracted = false;
 
 };
 

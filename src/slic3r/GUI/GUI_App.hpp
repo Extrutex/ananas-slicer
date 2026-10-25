@@ -7,13 +7,16 @@
 #include <string>
 #include "ActionRegistry.hpp"
 #include "ImGuiWrapper.hpp"
-#include "ConfigWizard.hpp"
+#include "WizardTypes.hpp"
+#include "GUI_Utils.hpp"
 #include "OpenGLManager.hpp"
 #include "libslic3r/Preset.hpp"
 #include "libslic3r/PresetBundle.hpp"
 #include "slic3r/GUI/UserNotification.hpp"
 #include "slic3r/Utils/CloudProvider.hpp"
-#include "slic3r/GUI/Jobs/UpgradeNetworkJob.hpp"
+#include "slic3r/GUI/Jobs/Job.hpp"
+#include <boost/filesystem.hpp>
+#include <boost/log/trivial.hpp>
 #include "slic3r/GUI/HttpServer.hpp"
 #include "../Utils/PrintHost.hpp"
 
@@ -26,6 +29,9 @@
 
 #include <mutex>
 #include <stack>
+
+// Many GUI sources reach boost::filesystem through this header as fs::.
+namespace fs = boost::filesystem;
 
 //#define BBL_HAS_FIRST_PAGE          1
 #define STUDIO_INACTIVE_TIMEOUT     15*60*1000
@@ -57,12 +63,7 @@ class PresetBundle;
 class PresetUpdater;
 class ModelObject;
 class Model;
-class UserManager;
-class DeviceManager;
-class MachineObject;
 class NetworkAgent;
-class IPrinterAgent;
-class TaskManager;
 
 // Same typedef as in bambu_networking.hpp, so this header need not include it.
 typedef std::function<bool()> WasCancelledFn;
@@ -85,9 +86,6 @@ class NotificationManager;
 class Downloader;
 struct GUI_InitParams;
 class ParamsDialog;
-class HMSQuery;
-class ModelMallDialog;
-class PingCodeBindDialog;
 class PresetBundleDialog;
 class ZUserLogin;
 class NetworkErrorDialog;
@@ -152,7 +150,6 @@ enum CameraMenuIDs {
 
 
 class Tab;
-class ConfigWizard;
 class GizmoObjectManipulation;
 
 static wxString dots("...", wxConvUTF8);
@@ -188,7 +185,7 @@ public:
         if (items.size() == VERSION_LEN) {
             try {
                 for (int i = 0; i < VERSION_LEN; i++) {
-                    ver_items[i] = stoi(items[i]);
+                    ver_items[i] = std::stoi(items[i]);
                 }
             }
             catch (...) {
@@ -212,7 +209,7 @@ public:
         if (items.size() == VERSION_LEN) {
             try {
                 for (int i = 0; i < VERSION_LEN; i++) {
-                    ver_target[i] = stoi(items[i]);
+                    ver_target[i] = std::stoi(items[i]);
                     if (ver_target[i] < ver_items[i]) {
                         return 1;
                     }
@@ -302,17 +299,10 @@ private:
 
     //BBS
     std::atomic<bool> m_is_closing {false};
-    Slic3r::DeviceManager* m_device_manager { nullptr };
-    Slic3r::UserManager* m_user_manager { nullptr };
-    Slic3r::TaskManager* m_task_manager { nullptr };
     NetworkAgent* m_agent { nullptr };
     std::map<std::string, std::string> need_delete_presets;   // store setting ids of preset
     std::vector<bool> m_create_preset_blocked { false, false, false, false, false, false }; // excceed limit
     std::vector<std::string> m_pending_conflict_setting_ids; // setting_id from the most recent 409 conflict
-    bool m_networking_compatible { false };
-    bool m_networking_need_update { false };
-    bool m_networking_cancel_update { false };
-    std::shared_ptr<UpgradeNetworkJob> m_upgrade_network_job;
 
     // ORCA: for installing vendors on the main thread when presets to be synced requires it
     // vendor structure is:
@@ -328,7 +318,6 @@ private:
     VersionInfo version_info;
     VersionInfo privacy_version_info;
     static std::string version_display;
-    HMSQuery    *hms_query { nullptr };
     FilamentColorCodeQuery* m_filament_color_code_query{ nullptr };
 
     boost::thread    m_sync_update_thread;
@@ -342,20 +331,16 @@ private:
     bool             m_side_popup_status{false};
     bool             m_show_http_error_msgdlg{false};
     std::chrono::steady_clock::time_point m_last_401_error_time;
-    bool             m_show_error_msgdlg{false};
     wxString         m_info_dialog_content;
     HttpServer       m_http_server;
     bool             m_show_gcode_window{true};
     boost::thread    m_check_network_thread;
 public:
-    //try again when subscription fails
-    void            on_start_subscribe_again(std::string dev_id);
     void            reset_unsigned_plugin_warning() { m_unsigned_plugin_warning_shown = false; }
     std::string     get_local_models_path();
     bool            OnInit() override;
     int             OnExit() override;
     bool            initialized() const { return m_initialized; }
-    inline bool     is_enable_multi_machine() { return this->app_config&& this->app_config->get("enable_multi_machine") == "true"; }
 #ifdef SLIC3R_CAD
     inline bool     is_enable_cad_feature() { return this->app_config && this->app_config->get_bool("enable_cad_feature"); }
     inline bool     is_auto_close_sketch_loops() { return !this->app_config
@@ -371,19 +356,7 @@ public:
 
     void show_message_box(std::string msg) { wxMessageBox(msg); }
     EAppMode get_app_mode() const { return m_app_mode; }
-    Slic3r::DeviceManager* getDeviceManager() { return m_device_manager; }
-    bool                   is_blocking_printing(MachineObject *obj_ = nullptr);
-    Slic3r::TaskManager*   getTaskManager() { return m_task_manager; }
-    HMSQuery* get_hms_query() { return hms_query; }
     NetworkAgent* getAgent() { return m_agent; }
-
-    // Reconcile the live printer agent with the stored preset selection.
-    void switch_printer_agent();
-
-    std::string resolve_printer_agent_id(const std::string& stored_id);
-    // ORCA TODO: in the future, bbl presets should specify "bbl" printer agent id
-    // then, all resolve and canonical would just be ORCA<->""
-    std::string canonical_printer_agent_id(const std::string& picked_id);
 
     FilamentColorCodeQuery* get_filament_color_code_query();
     bool is_editor() const { return m_app_mode == EAppMode::Editor; }
@@ -394,7 +367,9 @@ public:
     int  FilterEvent(wxEvent& event) override;
     // The Preferences "Default page" choice, stored as its index: 0 Home, 1 Prepare.
     bool starts_on_prepare() const;
-    std::string logo_name() const { return is_editor() ? "OrcaSlicer" : "OrcaSlicer-gcodeviewer"; }
+    std::string logo_name() const { return "AnanasSlicer_symbol_dark"; }
+    // The product symbol drawn for the current light/dark mode (dialogs, wizard, update prompts).
+    static std::string symbol_name() { return dark_mode() ? "AnanasSlicer_symbol_dark" : "AnanasSlicer_symbol_light"; }
 
     bool is_closing() const { return m_is_closing.load(std::memory_order_acquire); }
     void set_closing(bool closing) { m_is_closing.store(closing, std::memory_order_release); }
@@ -439,13 +414,13 @@ public:
     const wxColour  get_label_default_clr_modified();
     void            init_label_colours();
     void            update_label_colours_from_appconfig();
-    void            update_publish_status();
-    bool            has_model_mall();
     void            update_label_colours();
     // update color mode for window
     void            UpdateDarkUI(wxWindow *window, bool highlited = false, bool just_font = false);
     void            UpdateDarkUIWin(wxWindow* win);
     void            Update_dark_mode_flag();
+    // Forces the native appearance (macOS/GTK) to the app colour mode.
+    void            apply_app_appearance();
     // update color mode for whole dialog including all children
     void            UpdateDlgDarkUI(wxDialog* dlg);
     void            UpdateFrameDarkUI(wxFrame* dlg);
@@ -501,9 +476,7 @@ public:
     void            import_zip(wxWindow* parent, wxString& input_file) const;
     void            load_gcode(wxWindow* parent, wxString& input_file) const;
 
-    wxString        transition_tridid(int trid_id) const;
     void            ShowUserGuide();
-    void            ShowDownNetPluginDlg();
     void            ShowUserLogin(bool show = true, const std::string& provider = ORCA_CLOUD_PROVIDER);
     void            ShowOnlyFilament();
     // Orca auth
@@ -511,16 +484,13 @@ public:
     bool            check_login(const std::string& provider = ORCA_CLOUD_PROVIDER);
     void            get_login_info(const std::string& provider = ORCA_CLOUD_PROVIDER);
     bool            is_user_login(const std::string& provider = ORCA_CLOUD_PROVIDER);
-    const std::string& get_printer_cloud_provider() const;
 
     void            request_user_login(int online_login = 0, const std::string& provider = ORCA_CLOUD_PROVIDER);
     void            request_user_handle(int online_login = 0, const std::string& provider = ORCA_CLOUD_PROVIDER);
     void            request_user_logout(const std::string& provider = ORCA_CLOUD_PROVIDER);
     void            post_logout_to_webview(const std::string& provider);
-    int             request_user_unbind(std::string dev_id, const std::string& provider = ORCA_CLOUD_PROVIDER);
     std::string     handle_web_request(std::string cmd);
     void            handle_script_message(std::string msg, const std::string& provider = ORCA_CLOUD_PROVIDER);
-    void            request_model_download(wxString url);
     void            download_project(std::string project_id);
     void            request_project_download(std::string project_id);
     void            request_open_project(std::string project_id);
@@ -528,7 +498,6 @@ public:
 
     void            handle_http_error(unsigned int status, std::string body, const std::string& provider = "");
     void            on_http_error(wxCommandEvent &evt);
-    void            on_update_machine_list(wxCommandEvent& evt);
     void            on_user_login(wxCommandEvent &evt);
     void            on_user_login_handle(wxCommandEvent& evt);
     void            enable_user_preset_folder(bool enable);
@@ -536,13 +505,11 @@ public:
     // BBS
     bool            is_studio_active();
     void            reset_to_active();
-    bool            m_studio_active = true;
     std::chrono::system_clock::time_point  last_active_point;
 
     void            check_update(bool show_tips, int by_user);
     void            check_new_version(bool show_tips = false, int by_user = 0);
     void            check_new_version_sf(bool show_tips = false, int by_user = 0);
-    bool            process_network_msg(std::string dev_id, std::string msg);
     void            request_new_version(int by_user);
     void            enter_force_upgrade();
     void            set_skip_version(bool skip = true);
@@ -550,7 +517,6 @@ public:
     static std::string format_display_version();
     std::string     format_IP(const std::string& ip);
     void            show_dialog(wxString msg);
-    void            push_notification(const MachineObject* obj, wxString msg, wxString title = wxEmptyString, UserNotificationStyle style = UserNotificationStyle::UNS_NORMAL);
     void            reload_settings();
     void            remove_user_presets();
 
@@ -592,7 +558,6 @@ public:
     void            on_check_privacy_update(wxCommandEvent &evt);
     bool            check_privacy_update();
     void            check_privacy_version(int online_login = 0, const std::string& provider = ORCA_CLOUD_PROVIDER);
-    void            check_track_enable();
 
     static bool     catch_error(std::function<void()> cb, const std::string& err);
 
@@ -617,9 +582,6 @@ public:
     void            enable_developer_mode();
     void            update_mode();
     void            update_internal_development();
-    void            show_ip_address_enter_dialog(wxString title = wxEmptyString);
-    void            show_ip_address_enter_dialog_handler(wxCommandEvent &evt);
-    bool            show_modal_ip_address_enter_dialog(bool input_sn, wxString title = wxEmptyString);
 
     // BBS
     //void            add_config_menu(wxMenuBar *menu);
@@ -685,26 +647,14 @@ public:
     Downloader*          downloader();
 
 
-    std::string         m_mall_model_download_url;
-    std::string         m_mall_model_download_name;
-    ModelMallDialog*    m_mall_publish_dialog{ nullptr };
-    PingCodeBindDialog* m_ping_code_binding_dialog{ nullptr };
 
-    NetworkErrorDialog* m_server_error_dialog { nullptr };
 
-    void            set_download_model_url(std::string url) {m_mall_model_download_url = url;}
-    void            set_download_model_name(std::string name) {m_mall_model_download_name = name;}
-    std::string     get_download_model_url() {return m_mall_model_download_url;}
-    std::string     get_download_model_name() {return m_mall_model_download_name;}
 
 #if defined(__WINDOWS__)
     bool            is_running_on_arm64() { return m_is_arm64; }
 #endif
 
     void            load_url(wxString url);
-    void            open_mall_page_dialog();
-    void            open_publish_page_dialog();
-    void            remove_mall_system_dialog();
     void            run_script(wxString js);
     bool            is_adding_script_handler() { return m_adding_script_handler; }
     void            set_adding_script_handler(bool status) { m_adding_script_handler = status; }
@@ -713,8 +663,6 @@ public:
     std::string     url_encode(std::string value);
     std::string     url_decode(std::string value);
 
-    void            popup_ping_bind_dialog();
-    void            remove_ping_bind_dialog();
 
     // Parameters extracted from the command line to be passed to GUI after initialization.
     GUI_InitParams* init_params { nullptr };
@@ -757,7 +705,7 @@ public:
 
     void            open_web_page_localized(const std::string &http_address);
     bool            may_switch_to_SLA_preset(const wxString& caption);
-    bool            run_wizard(ConfigWizard::RunReason reason, ConfigWizard::StartPage start_page = ConfigWizard::SP_WELCOME);
+    bool            run_wizard(Wizard::RunReason reason, Wizard::StartPage start_page = Wizard::SP_WELCOME);
     void            show_desktop_integration_dialog();
 
 #if ENABLE_THUMBNAIL_GENERATOR_DEBUG
@@ -783,45 +731,20 @@ public:
     // URL download - PrusaSlicer gets system call to open prusaslicer:// URL which should contain address of download
     void            start_download(std::string url);
 
-    std::string     get_plugin_url(std::string name, std::string country_code);
-    int             download_plugin(std::string name, std::string package_name, InstallProgressFn pro_fn = nullptr, WasCancelledFn cancel_fn = nullptr);
-    int             install_plugin(std::string name, std::string package_name, InstallProgressFn pro_fn = nullptr, WasCancelledFn cancel_fn = nullptr);
     std::string     get_http_url(std::string country_code, std::string path = {});
-    std::string     get_model_http_url(std::string country_code);
-    bool            use_legacy_network_plugin() const;
-    bool            is_compatibility_version();
-    bool            check_networking_version();
-    void            cancel_networking_install();
-    void            restart_networking();
     void            check_config_updates_from_updater() { check_updates(false); }
 
-    void            show_network_plugin_download_dialog(bool is_update = false);
-    // One-time normalization of an older full-version identity (config 02.08.01.53 + file
-    // ..._02.08.01.53.dylib) to the AA.BB.CC series form, with no re-download. Runs at startup
-    // before the plug-in is loaded.
-    void            migrate_network_plugin_config();
-    bool            hot_reload_network_plugin();
-    bool            install_network_plugin_from_ota(bool& had_cache);
-    std::string     get_latest_network_version() const;
-    bool            has_network_update_available() const;
-    // Orca: return the client version to report to Bambu servers. Pinned to
-    // 01.10.01.50 when the legacy network plugin lacks get_my_token support
-    // so the auth server stays on the ?access_token= redirect path.
+    // Client version reported in the web views' user agent.
     std::string     get_bbl_client_version();
 
 private:
-    int             updating_bambu_networking();
     bool            on_init_inner();
-    void            copy_network_if_available();
-    bool            on_init_network(bool try_backup = false);
+    bool            on_init_network();
     void            init_networking_callbacks();
     void            init_app_config();
     // GUI-side subscriptions to plugin loader events (dialog refresh,
     // network-agent registration, plate revalidation).
     void            init_plugin_gui_wiring();
-    void            remove_old_networking_plugins();
-    void            drain_pending_events(int timeout_ms);
-    bool            wait_for_network_idle(int timeout_ms);
     bool            check_older_app_config(Semver current_version, bool backup);
     void            copy_older_config();
     void            window_pos_save(wxTopLevelWindow* window, const std::string &name);
@@ -829,16 +752,8 @@ private:
     void            window_pos_sanitize(wxTopLevelWindow* window);
     void            window_pos_center(wxTopLevelWindow *window);
 
-    // Dynamic printer agent selection - internal helpers for switch_printer_agent
-    // and the plugin load/unload callbacks (init_plugin_gui_wiring).
-    void refresh_printer_agent_dropdown();
-    void set_live_printer_agent(std::shared_ptr<IPrinterAgent> agent); // null clears the selection
-
     bool            config_wizard_startup();
 	void            check_updates(const bool verbose);
-
-    // select or add MachineObject
-    void            select_machine(const std::string& agent_id);
 
     bool                    m_init_app_config_from_older { false };
     bool                    m_datadir_redefined { false };
@@ -846,11 +761,17 @@ private:
     bool                    m_unsigned_plugin_warning_shown { false };
     boost::optional<Semver> m_last_config_version;
     bool                    m_config_corrupted { false };
+    // Taking over the KLIPSLICE data directory (see init_app_config()): what the user is told after the
+    // start (the reason of a failure, or links left out), the data directory the copy was meant for, and
+    // the temporary data directory this session uses when the copy failed.
+    std::string             m_legacy_copy_message;
+    std::string             m_legacy_copy_target;
+    std::string             m_session_data_dir;
+    void                    remove_session_data_dir();
     std::string             m_open_method;
 };
 
 DECLARE_APP(GUI_App)
-wxDECLARE_EVENT(EVT_CONNECT_LAN_MODE_PRINT, wxCommandEvent);
 wxDECLARE_EVENT(EVT_UPDATE_PRESET_BUNDLE, wxCommandEvent);
 wxDECLARE_EVENT(EVT_UPDATE_BUNDLE_COMPLETE, wxCommandEvent);
 

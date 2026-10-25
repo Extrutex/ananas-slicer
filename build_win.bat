@@ -794,8 +794,8 @@ REM worked out the same way in either run.
 :summary
     for %%p in ("!DEP_TREE!") do set "dep_full=%%~fp"
     REM The binary only leaves the build tree when it is installed.
-    set "slicer_exe=%build_dir%\src\%build_type%\orca-slicer.exe"
-    if "%install_slicer%" == "ON" set "slicer_exe=%build_dir%\OrcaSlicer\orca-slicer.exe"
+    set "slicer_exe=%build_dir%\src\%build_type%\ananas-slicer.exe"
+    if "%install_slicer%" == "ON" set "slicer_exe=%build_dir%\OrcaSlicer\ananas-slicer.exe"
     for %%p in ("!slicer_exe!") do set "slicer_full=%%~fp"
     REM The 2026 generator writes OrcaSlicer.slnx, the releases before it
     REM OrcaSlicer.sln. A file already there wins, in case an older CMake

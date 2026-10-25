@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <filesystem>
 #include <sstream>
+#include <cerrno>
+#include <mutex>
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
@@ -33,6 +35,9 @@
 	#include <io.h>  // for _access
 #else
 	#include <unistd.h>
+	#include <signal.h>
+	#include <fcntl.h>
+	#include <sys/stat.h>
 	#include <sys/types.h>
 	#include <sys/param.h>
     #include <sys/resource.h>
@@ -322,6 +327,267 @@ void set_data_dir(const std::string &dir)
 const std::string& data_dir()
 {
     return g_data_dir;
+}
+
+// Written last into a finished copy, right before it is renamed into place: a data directory holding it
+// is a complete copy. Nothing else counts as one.
+static std::string legacy_copy_marker(const std::string &legacy_key) { return ".migrated-from-" + legacy_key; }
+
+// Flushes a copied file or directory to disk, so a crash cannot leave a renamed copy whose marker made it
+// to disk but whose contents did not. POSIX only; on Windows NTFS journals the metadata and the copy relies
+// on the OS write-back like every other file the app writes.
+static void sync_to_disk(const boost::filesystem::path &path)
+{
+#ifndef _WIN32
+    const int fd = ::open(path.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0 || ::fsync(fd) != 0) {
+        const int err = errno;
+        if (fd >= 0)
+            ::close(fd);
+        throw boost::filesystem::filesystem_error("fsync", path, boost::system::error_code(err, boost::system::system_category()));
+    }
+    ::close(fd);
+#else
+    (void)path;
+#endif
+}
+
+// Creates path holding text: fails when anything, a link included, is there already, and never follows a
+// link. Flushed to disk on POSIX.
+static void write_new_file(const boost::filesystem::path &path, const std::string &text)
+{
+#ifndef _WIN32
+    const int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+    bool ok = fd >= 0 && ::write(fd, text.data(), text.size()) == ssize_t(text.size()) && ::fsync(fd) == 0;
+    const int err = errno;
+    if (fd >= 0)
+        ok = ::close(fd) == 0 && ok;
+    if (!ok)
+        throw boost::filesystem::filesystem_error("create", path, boost::system::error_code(err, boost::system::system_category()));
+#else
+    boost::system::error_code ec;
+    if (boost::filesystem::exists(boost::filesystem::symlink_status(path, ec)))
+        throw Slic3r::RuntimeError("already exists: " + path.string());
+    boost::nowide::ofstream os(path.string());
+    os << text;
+    if (!os.good())
+        throw Slic3r::RuntimeError("cannot write " + path.string());
+#endif
+}
+
+LegacyDataDirCopy copy_legacy_data_dir(const std::string &legacy_dir, const std::string &legacy_key,
+                                       const std::string &data_dir, const std::string &new_key,
+                                       std::string *message)
+{
+    namespace fs = boost::filesystem;
+    boost::system::error_code ec;
+    const fs::path source(legacy_dir);
+    const fs::path target(data_dir);
+    const fs::path marker = target / legacy_copy_marker(legacy_key);
+    const auto     copied = [&marker]() { boost::system::error_code e; return fs::exists(fs::symlink_status(marker, e)); };
+    if (!fs::is_directory(source, ec))
+        return LegacyDataDirCopy::NotNeeded;
+    // An existing data directory is kept if it is a finished copy or holds the user's own settings. Only an
+    // empty one (made by hand, or left by a start that never wrote anything) is replaced by the copy.
+    // symlink_status: a dangling symlink at the target counts as existing.
+    const fs::file_status target_status = fs::symlink_status(target, ec);
+    const bool            target_empty  = fs::is_directory(target_status) && fs::is_empty(target, ec) && !ec;
+    if (fs::exists(target_status) && !target_empty)
+        return LegacyDataDirCopy::NotNeeded;
+
+    // Unique per process, so two instances starting at once never share a temporary copy.
+    std::vector<std::string> skipped_links;
+    fs::path                 temp;
+    try {
+        temp = fs::unique_path(target.string() + ".copy-%%%%-%%%%-%%%%");
+        // Permissions are kept, except that the owner always gets write access: the app writes presets and
+        // logs into this directory even when the old one was read-only. Group and others never get more.
+        const auto keep = [](fs::perms p, fs::perms owner) { return (p & fs::perms_mask) | owner; };
+        fs::create_directories(temp);
+        fs::permissions(temp, keep(fs::status(source).permissions(), fs::owner_all));
+        std::vector<fs::path> dirs { temp };
+        for (fs::recursive_directory_iterator it(source), end; it != end; ++it) {
+            // Lexical: resolving the entry would follow a symlink out of the directory or into a loop.
+            const fs::path rel  = it->path().lexically_relative(source);
+            const fs::path dest = temp / rel;
+            // The free function: directory_entry::symlink_status() also stats the link target and throws
+            // on a link loop.
+            const fs::file_status st = fs::symlink_status(it->path());
+            // cache and log hold data the app regenerates; the cache stores absolute paths into the old directory.
+            if (it.depth() == 0 && fs::is_directory(st) && (rel == "cache" || rel == "log")) {
+                it.disable_recursion_pending();
+                continue;
+            }
+            // The marker name is reserved for the finished copy, whatever the old directory holds under it.
+            if (it.depth() == 0 && rel == legacy_copy_marker(legacy_key)) {
+                it.disable_recursion_pending();
+                continue;
+            }
+            if (fs::is_symlink(st) || st.type() == fs::reparse_file) {
+#ifdef _WIN32
+                // Windows needs to know whether a link points to a directory, and junctions are no
+                // symlinks at all. Data directories hold no links in practice, so they are left out and named.
+                skipped_links.emplace_back(rel.string());
+#else
+                // Copied as a link with the same target, never followed (recursive_directory_iterator
+                // does not descend into directory links either).
+                fs::copy_symlink(it->path(), dest);
+#endif
+            } else if (fs::is_directory(st)) {
+                fs::create_directory(dest);
+                fs::permissions(dest, keep(st.permissions(), fs::owner_all));
+                dirs.emplace_back(dest);
+            } else if (fs::is_regular_file(st)) {
+                fs::copy_file(it->path(), dest);
+                fs::permissions(dest, keep(st.permissions(), fs::owner_read | fs::owner_write));
+                sync_to_disk(dest);
+            }
+        }
+        for (fs::directory_iterator it(temp), end; it != end; ++it) {
+            const std::string name = it->path().filename().string();
+            if (fs::is_regular_file(fs::symlink_status(it->path())) && boost::starts_with(name, legacy_key))
+                fs::rename(it->path(), temp / (new_key + name.substr(legacy_key.size())));
+        }
+        // Everything is on disk before the marker, the marker before the rename, the rename before success.
+        for (auto it = dirs.rbegin(); it != dirs.rend(); ++it)
+            sync_to_disk(*it);
+        write_new_file(temp / legacy_copy_marker(legacy_key), source.string() + "\n");
+        sync_to_disk(temp);
+        if (target_empty)
+            fs::remove(target); // only ever removes an empty directory, throws on a non-empty one
+        fs::rename(temp, target);
+        sync_to_disk(target.parent_path());
+    } catch (const std::exception &ex) {
+        if (!temp.empty())
+            fs::remove_all(temp, ec);
+        if (copied()) {
+            // Another instance started at the same time and moved its finished copy into place first.
+            BOOST_LOG_TRIVIAL(info) << "copy_legacy_data_dir: " << target << " was copied meanwhile, keeping it";
+            return LegacyDataDirCopy::NotNeeded;
+        }
+        BOOST_LOG_TRIVIAL(error) << "copy_legacy_data_dir: copying " << source << " to " << target << " failed: " << ex.what();
+        if (message)
+            *message = ex.what();
+        return LegacyDataDirCopy::Failed;
+    }
+    BOOST_LOG_TRIVIAL(info) << "copy_legacy_data_dir: copied " << source << " to " << target;
+    if (!skipped_links.empty()) {
+        const std::string list = boost::algorithm::join(skipped_links, ", ");
+        BOOST_LOG_TRIVIAL(warning) << "copy_legacy_data_dir: links not copied: " << list;
+        if (message)
+            *message = "Links not copied: " + list;
+    }
+    return LegacyDataDirCopy::Copied;
+}
+
+std::vector<std::string> legacy_data_dir_candidates(const std::string &data_dir, const std::string &legacy_key,
+                                                    const std::string &home, bool flatpak)
+{
+    namespace fs = boost::filesystem;
+    std::vector<std::string> out { (fs::path(data_dir).parent_path() / legacy_key).string() };
+    if (flatpak && !home.empty())
+        out.emplace_back((fs::path(home) / ".var" / "app" / SLIC3R_LEGACY_FLATPAK_ID / "config" / legacy_key).string());
+    return out;
+}
+
+// Marks a temporary session data directory of start_data_dir() and names the process using it.
+static std::string session_marker(const std::string &new_key) { return ".session-of-" + new_key; }
+
+static bool process_running(unsigned pid)
+{
+#ifdef _WIN32
+    HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, pid);
+    if (process == nullptr)
+        return GetLastError() == ERROR_ACCESS_DENIED;
+    const bool running = WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
+    CloseHandle(process);
+    return running;
+#else
+    return ::kill(pid_t(pid), 0) == 0 || errno == EPERM;
+#endif
+}
+
+// The pid in the marker of a session directory, 0 when there is no usable marker. On POSIX the directory
+// and the marker must belong to this user, and the marker must be a regular file: it is opened without
+// following a link and without blocking (a FIFO would otherwise hang the start).
+static unsigned session_owner_pid(const boost::filesystem::path &dir, const std::string &new_key)
+{
+    const boost::filesystem::path marker = dir / session_marker(new_key);
+    char buf[32] = {};
+#ifndef _WIN32
+    struct stat st;
+    if (::lstat(dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode) || st.st_uid != ::geteuid())
+        return 0;
+    const int fd = ::open(marker.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0)
+        return 0;
+    const bool    own = ::fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_uid == ::geteuid();
+    const ssize_t n   = own ? ::read(fd, buf, sizeof(buf) - 1) : -1;
+    ::close(fd);
+    if (n <= 0)
+        return 0;
+#else
+    boost::system::error_code ec;
+    if (!boost::filesystem::is_directory(boost::filesystem::symlink_status(dir, ec)) ||
+        !boost::filesystem::is_regular_file(boost::filesystem::symlink_status(marker, ec)))
+        return 0;
+    boost::nowide::ifstream is(marker.string());
+    is.read(buf, sizeof(buf) - 1);
+#endif
+    return unsigned(std::strtoul(buf, nullptr, 10));
+}
+
+std::string start_data_dir(const std::vector<std::string> &legacy_dirs, const std::string &legacy_key,
+                           const std::string &data_dir, const std::string &new_key, std::string &message)
+{
+    namespace fs = boost::filesystem;
+    message.clear();
+    boost::system::error_code ec;
+    for (const std::string &legacy : legacy_dirs) {
+        if (!fs::is_directory(legacy, ec))
+            continue;
+        if (copy_legacy_data_dir(legacy, legacy_key, data_dir, new_key, &message) != LegacyDataDirCopy::Failed)
+            return data_dir;
+        // A private directory for this session next to data_dir, in the user's own area rather than a
+        // shared temp directory, created at once with owner-only access.
+        const fs::path base = fs::path(data_dir).parent_path();
+        fs::path       session;
+#ifdef _WIN32
+        session = base / fs::unique_path(new_key + "-session-%%%%-%%%%-%%%%");
+        if (!fs::create_directory(session, ec))
+            session.clear();
+#else
+        std::string tmpl = (base / (new_key + "-session-XXXXXX")).string();
+        if (::mkdtemp(tmpl.data()) != nullptr)
+            session = tmpl;
+#endif
+        if (session.empty())
+            throw Slic3r::RuntimeError("cannot create a temporary data directory in " + base.string());
+        write_new_file(session / session_marker(new_key), std::to_string(get_current_pid()) + "\n");
+        BOOST_LOG_TRIVIAL(warning) << "start_data_dir: using " << session << " for this session, " << data_dir << " is left for the next start";
+        return session.string();
+    }
+    return data_dir;
+}
+
+void remove_orphaned_session_dirs(const std::string &data_dir, const std::string &new_key)
+{
+    namespace fs = boost::filesystem;
+    boost::system::error_code ec;
+    const fs::path    base   = fs::path(data_dir).parent_path();
+    const std::string prefix = new_key + "-session-";
+    for (fs::directory_iterator it(base, ec), end; !ec && it != end; it.increment(ec)) {
+        const fs::path dir = it->path();
+        if (!boost::starts_with(dir.filename().string(), prefix))
+            continue;
+        const unsigned pid = session_owner_pid(dir, new_key);
+        if (pid == 0 || pid == get_current_pid() || process_running(pid))
+            continue;
+        // remove_all removes links, it never follows them.
+        boost::system::error_code remove_ec;
+        fs::remove_all(dir, remove_ec);
+        BOOST_LOG_TRIVIAL(info) << "remove_orphaned_session_dirs: removed " << dir;
+    }
 }
 
 std::string custom_shapes_dir()
@@ -703,11 +969,104 @@ namespace WindowsSupport
 std::error_code rename_file(const std::string &from, const std::string &to)
 {
 #ifdef _WIN32
+	// Retries and moves an open destination aside itself.
 	return WindowsSupport::rename(from, to);
 #else
-	boost::nowide::remove(to.c_str());
-	return std::make_error_code(static_cast<std::errc>(boost::nowide::rename(from.c_str(), to.c_str())));
+	// rename(2) replaces an existing target atomically; removing it first would
+	// leave a window in which the file does not exist at all.
+	if (boost::nowide::rename(from.c_str(), to.c_str()) == 0)
+		return {};
+	const int err = errno;
+	// Some mounts (sshfs, gvfs, MTP and a few SMB setups) refuse to replace an
+	// existing target in one step, each with the error it sees fit; every error
+	// is worth the remove-then-rename this always did, except the ones no retry
+	// can help: nothing at the source, a different device, or a directory where
+	// a file was expected and the reverse.
+	const bool worth_retrying = err != ENOENT && err != EXDEV && err != ENOTDIR && err != EISDIR;
+	if (worth_retrying && boost::nowide::remove(to.c_str()) == 0 && boost::nowide::rename(from.c_str(), to.c_str()) == 0)
+		return {};
+	return std::make_error_code(static_cast<std::errc>(err));
 #endif
+}
+
+// opened, if given, tells whether the file could be created at all, as opposed to failing while it was written.
+static std::error_code write_whole_file(const std::string &path, std::initializer_list<std::string_view> chunks, bool binary, bool *opened = nullptr)
+{
+	errno = 0;
+	FILE *file = boost::nowide::fopen(path.c_str(), binary ? "wb" : "w");
+	if (opened != nullptr)
+		*opened = file != nullptr;
+	if (file == nullptr)
+		return std::make_error_code(errno != 0 ? static_cast<std::errc>(errno) : std::errc::io_error);
+	bool ok = true;
+	for (const std::string_view chunk : chunks)
+		ok = ok && std::fwrite(chunk.data(), 1, chunk.size(), file) == chunk.size();
+	ok = ok && std::fflush(file) == 0;
+	const int err = ok ? 0 : errno;
+	ok = std::fclose(file) == 0 && ok;
+	if (ok)
+		return {};
+	return std::make_error_code(err != 0 ? static_cast<std::errc>(err) : std::errc::io_error);
+}
+
+// The in-place fallback truncates the target, so two threads of this process
+// on the same file must not both be in it. One mutex for all such writes: they
+// are the rare case. Never freed, like the InstanceLock registry, so a save
+// during static destruction still finds it.
+static std::error_code write_in_place(const std::string &path, std::initializer_list<std::string_view> chunks, bool binary)
+{
+	static auto *mutex = new std::mutex();
+	std::lock_guard<std::mutex> guard(*mutex);
+	return write_whole_file(path, chunks, binary);
+}
+
+std::error_code write_file_atomically(const std::string &path, std::initializer_list<std::string_view> chunks, bool binary)
+{
+	boost::system::error_code bec;
+	const boost::filesystem::file_status target = boost::filesystem::symlink_status(path, bec);
+	const bool target_exists = ! bec && boost::filesystem::exists(target);
+	if (target_exists && boost::filesystem::is_symlink(target)) {
+		// A config or preset kept in a dotfiles repository: the link stays,
+		// the file it points to is replaced like any other.
+		const boost::filesystem::path resolved = boost::filesystem::canonical(path, bec);
+		if (! bec && boost::filesystem::is_regular_file(resolved, bec))
+			return write_file_atomically(resolved.string(), chunks, binary);
+	}
+	if (target_exists && ! boost::filesystem::is_regular_file(target))
+		return write_in_place(path, chunks, binary);
+
+	// Unique per process and per call, so two threads writing one target
+	// without a lock never share a temporary.
+	static std::atomic<unsigned> counter{0};
+	const std::string tmp_path = path + "." + std::to_string(get_current_pid()) + "." + std::to_string(counter++) + ".tmp";
+	bool tmp_opened = false;
+	if (const std::error_code ec = write_whole_file(tmp_path, chunks, binary, &tmp_opened)) {
+		boost::nowide::remove(tmp_path.c_str());
+		// Only a temporary that could not be created falls back to writing in place. One that failed
+		// while it was written (a full disk, a file size limit) would fail the same way in place, after
+		// the target had been truncated: the old file is kept instead.
+		if (! target_exists || tmp_opened)
+			return ec;
+		// A directory that lets this process write its files but not create
+		// one: losing the save is worse than a reader seeing a partial file.
+		BOOST_LOG_TRIVIAL(warning) << "Cannot create a temporary beside " << path << " (" << ec.message() << "); writing in place";
+		return write_in_place(path, chunks, binary);
+	}
+#ifndef _WIN32
+	// Not on Windows, where a read-only bit on the temporary would stop the rename itself.
+	if (target_exists)
+		boost::filesystem::permissions(tmp_path, target.permissions(), bec);
+#endif
+	if (const std::error_code ec = rename_file(tmp_path, path)) {
+		boost::nowide::remove(tmp_path.c_str());
+		// A reader on Windows holding the target open without FILE_SHARE_DELETE,
+		// or a mount that cannot replace a file at all. Losing the save is worse
+		// than a reader seeing a partial file, so write in place the way this
+		// used to work before the atomic path existed.
+		BOOST_LOG_TRIVIAL(warning) << "Cannot replace " << path << " (" << ec.message() << "); writing in place";
+		return write_in_place(path, chunks, binary);
+	}
+	return {};
 }
 
 #ifdef __linux__
@@ -1342,7 +1701,7 @@ std::string string_printf(const char *format, ...)
 
 std::string header_slic3r_generated()
 {
-	return std::string(SLIC3R_APP_NAME " " SoftFever_VERSION);
+	return std::string(SLIC3R_GCODE_PRODUCER " " SoftFever_VERSION);
 }
 
 std::string header_gcodeviewer_generated()

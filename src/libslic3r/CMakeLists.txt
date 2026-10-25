@@ -46,6 +46,8 @@ set(lisbslic3r_sources
     Arachne/BeadingStrategy/DistributedBeadingStrategy.hpp
     Arachne/BeadingStrategy/LimitedBeadingStrategy.cpp
     Arachne/BeadingStrategy/LimitedBeadingStrategy.hpp
+    Arachne/BeadingStrategy/InnerWallShiftBeadingStrategy.cpp
+    Arachne/BeadingStrategy/InnerWallShiftBeadingStrategy.hpp
     Arachne/BeadingStrategy/OuterWallInsetBeadingStrategy.cpp
     Arachne/BeadingStrategy/OuterWallInsetBeadingStrategy.hpp
     Arachne/BeadingStrategy/RedistributeBeadingStrategy.cpp
@@ -205,6 +207,8 @@ set(lisbslic3r_sources
     Format/3mf.hpp
     Format/AMF.cpp
     Format/AMF.hpp
+    Format/AssembleList.cpp
+    Format/AssembleList.hpp
     Format/DRC.cpp
     Format/DRC.hpp
     Format/bbs_3mf.cpp
@@ -245,6 +249,8 @@ set(lisbslic3r_sources
     GCode/FanMover.hpp
     GCode/GCodeProcessor.cpp
     GCode/GCodeProcessor.hpp
+    GCode/KlipperMotionModel.cpp
+    GCode/KlipperMotionModel.hpp
     GCode/ElegooGCodeProcessorHelper.cpp
     GCode.hpp
     GCode/PchipInterpolatorHelper.cpp
@@ -306,8 +312,12 @@ set(lisbslic3r_sources
     Geometry/VoronoiUtils.cpp
     Geometry/VoronoiUtils.hpp
     Geometry/VoronoiVisualUtils.hpp
+    InstanceLock.cpp
+    InstanceLock.hpp
     Int128.hpp
     KDTreeIndirect.hpp
+    KlipperLimits.cpp
+    KlipperLimits.hpp
     Layer.cpp
     Layer.hpp
     LayerRegion.cpp

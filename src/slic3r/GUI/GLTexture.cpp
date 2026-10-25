@@ -11,6 +11,7 @@
 #include "GUI_App.hpp"
 #include "GUI.hpp"
 #include "GLModel.hpp"
+#include "BitmapCache.hpp"
 
 #include <glad/gl.h>
 
@@ -908,7 +909,7 @@ bool GLTexture::load_from_svg(const std::string& filename, bool use_mipmaps, boo
 {
     const bool compression_enabled = compress && OpenGLManager::are_compressed_textures_supported();
 
-    NSVGimage* image = nsvgParseFromFile(filename.c_str(), "px", 96.0f);
+    NSVGimage* image = BitmapCache::nsvgParseThemed(filename.c_str(), "px", 96.0f, wxGetApp().dark_mode());
     if (image == nullptr) {
         reset();
         return false;

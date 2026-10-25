@@ -113,7 +113,7 @@
 	"xy_hole_compensation": "0",
 	"xy_contour_compensation": "0",
 	"gcode_label_objects": "0",
-	"default_jerk": "12",
+	"default_jerk": "0",
 	"outer_wall_jerk": "8",
 	"inner_wall_jerk": "8",
 	"infill_jerk": "12",

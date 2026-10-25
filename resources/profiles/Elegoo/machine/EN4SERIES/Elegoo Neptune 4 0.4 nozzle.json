@@ -6,7 +6,7 @@
 	"from": "system",
 	"setting_id": "69QdWuRQwAZk9rFu",
 	"instantiation": "true",
-	"host_type": "elegoolink",
+	"host_type": "moonraker",
 	"printer_model": "Elegoo Neptune 4",
 	"default_print_profile": "0.20mm Standard @Elegoo N4 0.4 nozzle",
 	"gcode_flavor": "klipper",
@@ -96,7 +96,6 @@
 	"retract_length_toolchange": [
 		"2"
 	],
-	"scan_first_layer": "0",
 	"auxiliary_fan": "0",
 	"single_extruder_multi_material": "1",
 	"change_filament_gcode": "M600",

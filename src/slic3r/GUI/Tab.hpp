@@ -160,7 +160,6 @@ protected:
 	wxBoxSizer* m_select_sizer;
 	wxBoxSizer* m_tree_sizer;
 
-	ScalableButton*		m_btn_compare_preset;
 	ScalableButton*		m_btn_save_preset;
 	ScalableButton*		m_btn_delete_preset;
 	//ScalableButton*		m_btn_edit_ph_printer {nullptr};
@@ -227,14 +226,12 @@ protected:
 	wxColour			m_default_text_clr;
 
 	// Tooltip text for reset buttons (for whole options group)
-	wxString			m_ttg_value_lock;
 	wxString			m_ttg_value_unlock;
 	wxString			m_ttg_white_bullet_ns;
 	// The following text points to either m_ttg_value_unlock or m_ttg_white_bullet_ns, depending on whether the current preset has a parent preset.
 	wxString			*m_ttg_non_system;
 	// Tooltip text to be shown on the "Undo user changes" button next to each input field.
 	wxString			m_ttg_white_bullet;
-	wxString			m_ttg_value_revert;
 
 	// Tooltip text for reset buttons (for each option in group)
 	wxString			m_tt_value_lock;
@@ -482,7 +479,6 @@ protected:
 	// return true if cancelled
 	bool			tree_sel_change_delayed(wxCommandEvent& event);
 	void			on_presets_changed();
-	void			update_printer_agent_if_needed();
 	void			build_preset_description_line(ConfigOptionsGroup* optgroup);
 	void			update_preset_description_line();
 	void			update_frequently_changed_parameters();
@@ -696,7 +692,6 @@ public:
 	wxSizer*	create_bed_shape_widget(wxWindow* parent);
 	void		cache_extruder_cnt(const DynamicPrintConfig* config = nullptr);
 	bool		apply_extruder_cnt_from_cache();
-	void		refresh_printer_agent_dropdown() const;
 };
 
 class TabSLAMaterial : public Tab

@@ -103,7 +103,7 @@ public:
     bool switch_right{false};
     bool is_enable {true};
 
-    void* client_data = nullptr;/*MachineObject* in StatusPanel*/
+    void* client_data = nullptr;
 
 public:
     bool Enable(bool enable = true) override;

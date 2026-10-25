@@ -3,7 +3,7 @@
 	"name": "fdm_machine_common",
 	"from": "system",
 	"instantiation": "false",
-	"gcode_flavor": "marlin",
+	"gcode_flavor": "klipper",
 	"machine_start_gcode": "",
 	"machine_end_gcode": "",
 	"extruder_colour": [

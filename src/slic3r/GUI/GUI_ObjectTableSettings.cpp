@@ -300,9 +300,6 @@ bool ObjectTableSettings::update_settings_list(bool is_object, bool is_multiple_
         };
         ConfigManipulation config_manipulation(nullptr, toggle_field, toggle_line, nullptr, &m_current_config);
 
-        bool is_BBL_printer = wxGetApp().preset_bundle->is_bbl_vendor();
-        config_manipulation.set_is_BBL_Printer(is_BBL_printer);
-
         printer_technology == ptFFF  ?  config_manipulation.toggle_print_fff_options(&m_current_config, 0) :
                                         config_manipulation.toggle_print_sla_options(&m_current_config) ;
         optgroup->update_visibility(wxGetApp().get_mode());
@@ -403,8 +400,6 @@ void ObjectTableSettings::update_config_values(bool is_object, ModelObject* obje
     };
 
     ConfigManipulation config_manipulation(nullptr, toggle_field, toggle_line, nullptr, &m_current_config);
-
-    config_manipulation.set_is_BBL_Printer(wxGetApp().preset_bundle->is_bbl_vendor());
 
     if (printer_technology == ptFFF && changed_opt_key == "layer_height")
         config_manipulation.check_layer_height(&main_config);

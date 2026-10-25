@@ -94,7 +94,7 @@
 	"infill_layer_acceleration": "1500",
 	"top_surface_acceleration": "1000",
 	"travel_acceleration": "5000",
-	"accel_to_decel_enable": "1",
+	"accel_to_decel_enable": "0",
 	"top_shell_thickness": "1",
 	"infill_anchor": "400%",
 	"infill_anchor_max": "20",

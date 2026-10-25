@@ -5,6 +5,7 @@
 #include "ClipperUtils.hpp"
 #include "ElephantFootCompensation.hpp"
 #include "Exception.hpp"
+#include "format.hpp"
 #include "I18N.hpp"
 #include "Layer.hpp"
 #include "MultiMaterialSegmentation.hpp"
@@ -813,6 +814,18 @@ void groupingVolumesForBrim(PrintObject* object, LayerPtrs& layers, int firstLay
     reGroupingLayerPolygons(object->firstLayerObjGroupsMod(), layers.front()->lslices, scaled_resolution);
 }
 
+// Whether a sliced object covers roughly its own height. slice_volumes() drops the trailing layers
+// without a closed contour silently, so an open mesh (a triangle soup, missing faces) that happens to
+// close on a few layers near the bed would otherwise go through as a short job with no error at all.
+// The check is deliberately loose: it is a sanity gate, not a layer-count assertion. The thickest
+// layer the profile allows is assumed for every layer, and two layers of slack cover the first layer
+// and a dropped empty top layer, so a legitimate object one layer tall passes.
+bool PrintObject::layer_count_covers_object_height(size_t layer_count, double object_height, double max_layer_height)
+{
+    const double covered = double(layer_count + 2) * max_layer_height;
+    return covered >= 0.5 * object_height;
+}
+
 // Called by make_perimeters()
 // 1) Decides Z positions of the layers,
 // 2) Initializes layers and their regions
@@ -872,6 +885,16 @@ void PrintObject::slice()
         });
     if (m_layers.empty())
         throw Slic3r::SlicingError(L("No layers were detected. You might want to repair your STL file(s) or check their size or thickness and retry.\n"));
+    // A negative volume can cut the top off an object, and its height then says nothing about the layers to expect.
+    const ModelVolumePtrs &volumes = this->model_object()->volumes;
+    const bool has_negative_volume = std::any_of(volumes.begin(), volumes.end(), [](const ModelVolume *volume) { return volume->is_negative_volume(); });
+    if (! has_negative_volume && ! layer_count_covers_object_height(m_layers.size(), m_slicing_params.object_print_z_height(), m_slicing_params.max_layer_height))
+        throw Slic3r::SlicingError(Slic3r::format(
+            L("Slicing produced only %1% layer(s) for an object %2$.2f mm tall (about %3% expected). "
+              "Most of the mesh has no closed contour: it is probably not watertight (open edges, unconnected triangles, missing faces). "
+              "Repair the mesh and retry."),
+            m_layers.size(), m_slicing_params.object_print_z_height(),
+            size_t(std::ceil(m_slicing_params.object_print_z_height() / m_slicing_params.layer_height))));
 
     // BBS
     this->set_done(posSlice);
@@ -1346,7 +1369,9 @@ void PrintObject::slice_volumes()
                         if (min_growth < 0.f || elfoot > 0.f) {
                             // Apply the negative XY compensation. (the ones that is <0)
                             ExPolygons trimming;
-                            static const float eps = float(scale_(m_config.slice_closing_radius.value) * 1.5);
+                            // Per object: slice_closing_radius is an object setting, and a static here would freeze the
+                            // first object's value for every object sliced afterwards in the process.
+                            const float eps = float(scale_(m_config.slice_closing_radius.value) * 1.5);
                             if (elfoot > 0.f) {
                                 ExPolygons expolygons_to_compensate = offset_ex(layer->merged(eps), -eps);
                                 lslices_elfoot_uncompensated[layer_id] = expolygons_to_compensate;

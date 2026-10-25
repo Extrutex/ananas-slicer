@@ -1,0 +1,126 @@
+name: Virtual printer
+
+# End-to-end check of ANANAS SLICER G-code against upstream Klipper and Moonraker,
+# run in local Docker containers (tests/virtual-printer). Nothing is built
+# here: the Linux x86_64 AppImage comes from a successful "Build all" run.
+#
+# - after every successful "Build all" run triggered by a push to dev
+# - on demand, for a given "Build all" run or the latest successful one on dev
+#
+# workflow_run only fires for workflow files on the default branch.
+
+on:
+  workflow_run:
+    workflows: ["Build all"]
+    types: [completed]
+    branches: [dev]
+  workflow_dispatch:
+    inputs:
+      build-run-id:
+        description: 'Run ID of a successful "Build all" run to take the Linux AppImage from (empty: latest successful push run on dev)'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  virtual_printer:
+    name: Klipper + Moonraker acceptance
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Resolve the "Build all" run
+        id: build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          WR_ID: ${{ github.event.workflow_run.id }}
+          WR_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_RUN: ${{ inputs.build-run-id }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "workflow_run" ]; then
+            run_id="$WR_ID"
+            sha="$WR_SHA"
+          elif [ -n "$INPUT_RUN" ]; then
+            case "$INPUT_RUN" in *[!0-9]*) echo "build-run-id must be numeric" >&2; exit 1 ;; esac
+            run_id="$INPUT_RUN"
+            conclusion="$(gh api "repos/$REPO/actions/runs/$run_id" --jq .conclusion)" || exit 1
+            [ "$conclusion" = "success" ] || { echo "run $run_id concluded '$conclusion'" >&2; exit 1; }
+            sha="$(gh api "repos/$REPO/actions/runs/$run_id" --jq .head_sha)" || exit 1
+          else
+            latest="$(gh run list -R "$REPO" --workflow "Build all" --branch dev --event push \
+              --status success --limit 1 --json databaseId,headSha \
+              --jq '.[0] | "\(.databaseId) \(.headSha)"')" || exit 1
+            [ -n "$latest" ] || { echo "no successful 'Build all' push run on dev" >&2; exit 1; }
+            read -r run_id sha <<< "$latest"
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Testing the AppImage of run $run_id (commit $sha)"
+
+      - name: Checkout the tested commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.build.outputs.sha }}
+          lfs: 'false'
+
+      # Push builds name it AnanasSlicer_Linux_ubuntu_2404_V<version>; the aarch64
+      # leg's _2404_aarch64_ name does not match.
+      - name: Download the Linux AppImage
+        uses: actions/download-artifact@v8
+        with:
+          pattern: AnanasSlicer_Linux_ubuntu_2404_V*
+          run-id: ${{ steps.build.outputs.run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: appimage
+
+      # The same system packages the Linux build links against.
+      - name: Install runtime dependencies
+        uses: ./.github/actions/apt-install-deps
+
+      - name: Extract the AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t images < <(find appimage -maxdepth 1 -name 'AnanasSlicer_Linux_AppImage*.AppImage')
+          [ "${#images[@]}" -eq 1 ] || { echo "expected one AppImage, found ${#images[@]}" >&2; exit 1; }
+          chmod +x "${images[0]}"
+          (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/${images[0]}" --appimage-extract > /dev/null)
+          test -x "$RUNNER_TEMP/squashfs-root/AppRun"
+          echo "ANANAS_SLICER_BIN=$RUNNER_TEMP/squashfs-root/AppRun" >> "$GITHUB_ENV"
+
+      - name: Slice, run through Klipper, print through Moonraker
+        shell: bash
+        run: tests/virtual-printer/run.sh
+
+      - name: Report
+        if: always()
+        shell: bash
+        run: |
+          if [ -f tests/virtual-printer/out/report.md ]; then
+            cat tests/virtual-printer/out/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No report was written." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: virtual-printer-${{ steps.build.outputs.sha }}
+          path: tests/virtual-printer/out
+          retention-days: 14
+          if-no-files-found: warn

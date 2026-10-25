@@ -4,8 +4,10 @@
 #include "../Utils/MacDarkMode.hpp"
 #include "GUI.hpp"
 #include "GUI_Utils.hpp"
+#include "Widgets/ThemeTokens.hpp"
 
 #include <boost/nowide/cstdio.hpp>
+#include <regex>
 #include <boost/filesystem.hpp>
 
 #ifdef __WXGTK2__
@@ -270,7 +272,7 @@ wxBitmap* BitmapCache::load_png(const std::string &bitmap_name, unsigned width, 
     return this->insert(bitmap_key, wxImage_to_wxBitmap_with_alpha(std::move(image)));
 }
 
-NSVGimage* BitmapCache::nsvgParseFromFileWithReplace(const char* filename, const char* units, float dpi, const std::map<std::string, std::string>& replaces)
+NSVGimage* BitmapCache::nsvgParseFromFileWithReplace(const char* filename, const char* units, float dpi, const std::map<std::string, std::string>& replaces, const std::string& on_accent_ink)
 {
     std::string str;
     FILE* fp = NULL;
@@ -289,10 +291,14 @@ NSVGimage* BitmapCache::nsvgParseFromFileWithReplace(const char* filename, const
     data[size] = '\0';	// Must be null terminated.
     fclose(fp);
 
-    if (replaces.empty())
+    if (replaces.empty() && on_accent_ink.empty())
         image = nsvgParse(data, units, dpi);
     else {
         str.assign(data);
+        if (!on_accent_ink.empty() && str.find("#009688") != std::string::npos) {
+            static const std::regex white_ink("#(?:ffffff|FFFFFF|fff|FFF)(?![0-9a-fA-F])|\\bwhite\\b");
+            str = std::regex_replace(str, white_ink, on_accent_ink);
+        }
         for (auto val : replaces)
             boost::replace_all(str, val.first, val.second);
         image = nsvgParse(str.data(), units, dpi);
@@ -305,6 +311,29 @@ error:
     if (data) free(data);
     if (image) nsvgDelete(image);
     return NULL;
+}
+
+std::map<std::string, std::string> BitmapCache::theme_accent_replaces(bool dark_mode)
+{
+    const std::string accent       = dark_mode ? Theme::ALU_50 : Theme::LIGHT_ACCENT;
+    const std::string accent_hover = dark_mode ? Theme::ALU_100 : Theme::LIGHT_ACCENT_HOVER;
+    const std::string accent_tint  = dark_mode ? Theme::CARBON_750 : Theme::LIGHT_ACCENT_FOCUSED;
+    std::map<std::string, std::string> replaces;
+    replaces["#009688"]         = accent;
+    replaces["#26a69a"]         = accent_hover;
+    replaces["#26A69A"]         = accent_hover;
+    replaces["#e5f0ee"]         = accent_tint;
+    replaces["#E5F0EE"]         = accent_tint;
+    replaces["#00AE42"]         = accent;
+    replaces["\"#0x00AE42\""] = "\"" + accent + "\"";
+    replaces["\"#00FF00\""]   = "\"" + accent + "\"";
+    return replaces;
+}
+
+NSVGimage* BitmapCache::nsvgParseThemed(const char* filename, const char* units, float dpi, bool dark_mode)
+{
+    return nsvgParseFromFileWithReplace(filename, units, dpi, theme_accent_replaces(dark_mode),
+                                        dark_mode ? std::string(Theme::CARBON_950) : std::string());
 }
 
 wxBitmap* BitmapCache::load_svg(const std::string &bitmap_name, unsigned target_width, unsigned target_height, 
@@ -323,36 +352,39 @@ wxBitmap* BitmapCache::load_svg(const std::string &bitmap_name, unsigned target_
         return it->second;
 
     // map of color replaces
-    std::map<std::string, std::string> replaces;
-    replaces["\"#0x00AE42\""] = "\"#009688\"";
-    replaces["\"#00FF00\""] = "\"#52c7b8\"";
+    // The bundled icons were drawn with Orca's teal accent (#009688, ~400 files). They are
+    // recoloured here to the theme accent instead of editing every asset
+    // (docs/design/BRAND.md §6.3): aluminium in dark mode, steel in light mode.
+    std::map<std::string, std::string> replaces = theme_accent_replaces(dark_mode);
     if (dark_mode) {
-        replaces["\"#262E30\""] = "\"#EFEFF0\"";
-        replaces["\"#323A3D\""] = "\"#B3B3B5\"";
-        replaces["\"#808080\""] = "\"#818183\"";
-        //replaces["\"#ACACAC\""] = "\"#54545A\"";
-        replaces["\"#CECECE\""] = "\"#54545B\"";
-        replaces["\"#6B6B6B\""] = "\"#818182\"";
+        replaces["\"#262E30\""] = std::string("\"") + Theme::ALU_100 + "\"";
+        replaces["\"#323A3D\""] = std::string("\"") + Theme::ALU_200 + "\"";
+        replaces["\"#808080\""] = std::string("\"") + Theme::ALU_300 + "\"";
+        replaces["\"#CECECE\""] = std::string("\"") + Theme::STEEL_400 + "\"";
+        replaces["\"#6B6B6B\""] = std::string("\"") + Theme::ALU_300 + "\"";
         replaces["\"#909090\""] = "\"#FFFFFF\"";
-        replaces["\"#00FF00\""] = "\"#FF0000\"";
-        replaces["\"#009688\""] = "\"#00675b\"";
-        replaces["\"#F1F1F1\""] = "\"#36363B\"";
-        replaces["#DBDBDB"] = "#4A4A51"; // ORCA border color
-        replaces["#F0F0F1"] = "#333337"; // ORCA disabled background color
-        replaces["#262E30"] = "#EFEFF0"; // ORCA
+        replaces["\"#00FF00\""] = std::string("\"") + Theme::SIGNAL_LIMIT + "\"";
+        replaces["\"#F1F1F1\""] = std::string("\"") + Theme::CARBON_800 + "\"";
+        replaces["#DBDBDB"]     = Theme::STEEL_400;  // border color
+        replaces["#F0F0F1"]     = Theme::CARBON_800; // disabled background color
+        replaces["#262E30"]     = Theme::ALU_100;
     } else {
         replaces["#949494"] = "#7C8282"; // ORCA replace icon line color for light theme
     }
 
-    if (strstr(bitmap_name.c_str(), "toggle_on") != NULL && dark_mode) // ORCA only replace color of toggle button
-        replaces["#009688"] = "#00675b";
+    if (dark_mode && bitmap_name.find("toggle_on") != std::string::npos)
+        replaces["#e6e6e6"] = Theme::CARBON_950; // knob on the aluminium track
 
+    // The quoted key sorts before the bare "#009688" key, so a requested colour wins for
+    // attribute values and the theme accent catches the rest.
     if (!new_color.empty())
         replaces["\"#009688\""] = "\"" + new_color + "\"";
 
      NSVGimage *image = nullptr;
     if (strstr(bitmap_name.c_str(), "printer_thumbnail") == NULL) {
-        image =  nsvgParseFromFileWithReplace(Slic3r::var(bitmap_name + ".svg").c_str(), "px", 96.0f, replaces);
+        // In dark mode the accent is aluminium, so white glyphs drawn on it would vanish.
+        image =  nsvgParseFromFileWithReplace(Slic3r::var(bitmap_name + ".svg").c_str(), "px", 96.0f, replaces,
+                                              dark_mode && new_color.empty() ? std::string(Theme::CARBON_950) : std::string());
     }
     else {
         std::map<std::string, std::string> temp_replaces;
@@ -567,7 +599,7 @@ bool BitmapCache::load_from_svg_file_change_color(const std::string &filename, u
     temp_color[7]             = '\0';
     unsigned int change_color = nsvg__parseColorHex(temp_color);
     change_color |= (unsigned int) (1.0f * 255) << 24; // opacity
-    unsigned int green_color = 0xFF889600; // #009688
+    unsigned int green_color = 0xFF889600; // #009688, the accent the bundled icons were drawn with
     for (NSVGshape* shape = image->shapes; shape != nullptr; shape = shape->next) {
         // find green color
         if (shape->fill.color == green_color) {

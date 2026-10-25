@@ -5,6 +5,7 @@
 #include "GLCanvas3D.hpp"
 #include "GUI_App.hpp"
 #include "Plater.hpp"
+#include "ImGuiWrapper.hpp"
 #include <igl/project.h>
 
 #include <glad/gl.h>
@@ -172,7 +173,7 @@ namespace GUI {
             }
 #endif // !SLIC3R_OPENGL_ES
 
-            m_rectangle.set_color(ColorRGBA::ORCA()); // ORCA: use orca color for selection rectangle
+            m_rectangle.set_color(ImGuiWrapper::from_ImVec4(ImGuiWrapper::accent())); // theme accent, follows the colour mode
             m_rectangle.render();
             shader->stop_using();
         }

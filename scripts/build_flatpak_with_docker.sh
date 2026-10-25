@@ -84,7 +84,7 @@ if [ -z "$VER_PURE" ]; then
 fi
 VER="V${VER_PURE}"
 GIT_COMMIT_HASH=$(git rev-parse HEAD)
-BUNDLE_NAME="OrcaSlicer-Linux-flatpak_${VER}_${ARCH}.flatpak"
+BUNDLE_NAME="AnanasSlicer-Linux-flatpak_${VER}_${ARCH}.flatpak"
 
 echo "=== OrcaSlicer Flatpak Build ==="
 echo "  Version:    ${VER} (${VER_PURE})"
@@ -98,8 +98,8 @@ echo "  ccache:     enabled"
 echo ""
 
 # ---------- prepare manifest ----------
-MANIFEST_SRC="scripts/flatpak/com.orcaslicer.OrcaSlicer.yml"
-MANIFEST_DOCKER="scripts/flatpak/com.orcaslicer.OrcaSlicer.docker.yml"
+MANIFEST_SRC="scripts/flatpak/de._3dwindt.AnanasSlicer.yml"
+MANIFEST_DOCKER="scripts/flatpak/de._3dwindt.AnanasSlicer.docker.yml"
 # Ensure cleanup on exit (success or failure)
 trap 'rm -f "$PROJECT_ROOT/$MANIFEST_DOCKER"' EXIT
 
@@ -204,7 +204,7 @@ flatpak-builder $FORCE_CLEAN_FLAG \
     --arch="$BUILD_ARCH" \
     --repo=flatpak-repo \
     flatpak-build \
-    scripts/flatpak/com.orcaslicer.OrcaSlicer.docker.yml
+    scripts/flatpak/de._3dwindt.AnanasSlicer.docker.yml
 builder_end=$(date +%s)
 builder_duration=$((builder_end - builder_start))
 
@@ -213,7 +213,7 @@ flatpak build-bundle \
     --arch="$BUILD_ARCH" \
     flatpak-repo \
     "$BUNDLE_NAME" \
-    com.orcaslicer.OrcaSlicer
+    de._3dwindt.AnanasSlicer
 bundle_end=$(date +%s)
 bundle_duration=$((bundle_end - bundle_start))
 

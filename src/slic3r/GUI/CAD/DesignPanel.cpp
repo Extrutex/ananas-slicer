@@ -6464,7 +6464,7 @@ void DesignPanel::show_offer_menu(const wxPoint& screen_pos)
     // means these strings are translated by OUR catalogue or not at all, which is consistent
     // either way.
     auto tr = [](const char* s) {
-        return wxGetTranslation(wxString::FromUTF8(s), SLIC3R_APP_KEY);
+        return wxGetTranslation(wxString::FromUTF8(s), SLIC3R_L10N_DOMAIN);
     };
     auto label = [&](const OfferVerb& v) {
         wxString s = tr(v.name);

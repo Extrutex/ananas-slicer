@@ -41,7 +41,13 @@ public:
 	// Parses SVG file from a file, returns SVG image as paths.
 	// And makes replases befor parsing
 	// replace_map containes old_value->new_value
-	static NSVGimage* nsvgParseFromFileWithReplace(const char* filename, const char* units, float dpi, const std::map<std::string, std::string>& replaces);
+	// Replaces that recolour the accent the bundled icons were drawn with (#009688) to the theme accent.
+	static std::map<std::string, std::string> theme_accent_replaces(bool dark_mode);
+	// Parses an SVG with the theme accent applied (for GL / ImGui textures).
+	static NSVGimage* nsvgParseThemed(const char* filename, const char* units, float dpi, bool dark_mode);
+	// on_accent_ink: when not empty and the file uses the accent (#009688), white ink in it
+	// (glyphs drawn on an accent fill) is replaced by this colour before the other replaces.
+	static NSVGimage* nsvgParseFromFileWithReplace(const char* filename, const char* units, float dpi, const std::map<std::string, std::string>& replaces, const std::string& on_accent_ink = std::string());
 	// Load svg from resources/icons. bitmap_key is given without the .svg suffix. SVG will be rasterized to provided height/width.
     wxBitmap* 		load_svg(const std::string &bitmap_key, unsigned width = 0, unsigned height = 0, const bool grayscale = false, const bool dark_mode = false, const std::string& new_color = "", const float scale_in_center = 0.f);
     //Load background image of semi transparent material with color,

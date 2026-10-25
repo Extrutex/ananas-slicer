@@ -1,0 +1,4 @@
+# Only the constraint files are copied into the image.
+*
+!klippy-constraints.txt
+!moonraker-constraints.txt

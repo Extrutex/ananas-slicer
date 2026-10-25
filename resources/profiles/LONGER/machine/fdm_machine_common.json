@@ -4,7 +4,7 @@
 	"from": "system",
 	"instantiation": "false",
 	"printer_technology": "FFF",
-	"gcode_flavor": "marlin",
+	"gcode_flavor": "klipper",
 	"machine_max_acceleration_e": [
 		"5000"
 	],

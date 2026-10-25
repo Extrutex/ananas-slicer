@@ -2,6 +2,7 @@
 #define slic3r_AppConfig_hpp_
 
 #include <set>
+#include <chrono>
 #include <map>
 #include <string>
 #include "nlohmann/json.hpp"
@@ -67,30 +68,6 @@ using namespace nlohmann;
 namespace Slic3r {
 
 
-// Connected LAN mode BambuLab printer
-struct BBLocalMachine
-{
-    std::string dev_name;
-    std::string dev_ip;
-    std::string dev_id; /* serial number */
-    std::string printer_type; /* model_id */
-    std::string printer_agent_id; /* id of the IPrinterAgent that discovered/bound this device, e.g. "bbl"; empty for entries persisted before this field existed */
-    // Access code, scoped to printer_agent_id above - so a code saved while bound under one
-    // printer agent isn't treated as valid for a different, independent agent talking to the
-    // same physical dev_id. Empty for entries persisted before this field existed; those fall
-    // back to the legacy flat "access_code"/"user_access_code" AppConfig sections (BBL-only,
-    // since BBL was the only agent when they were saved) - see
-    // get_access_code_with_legacy_fallback() in DevManager.cpp.
-    std::string access_code;
-
-    bool operator==(const BBLocalMachine& other) const
-    {
-        return dev_name == other.dev_name && dev_ip == other.dev_ip && dev_id == other.dev_id && printer_type == other.printer_type &&
-               printer_agent_id == other.printer_agent_id && access_code == other.access_code;
-    }
-    bool operator!=(const BBLocalMachine& other) const { return !operator==(other); }
-};
-
 class AppConfig
 {
 public:
@@ -122,14 +99,18 @@ public:
 
 	// Load the slic3r.ini from a user profile directory (or a datadir, if configured).
 	// Return an error string, or an empty string on success.
-	std::string         load();
+	std::string         load(bool read_only = false);
 	// Treat a missing config as default state; otherwise load it normally.
+	// The CLI's load: it never saves, so it takes no lock and creates no lock file.
 	std::string         load_if_exists();
 	// Store the slic3r.ini into a user profile directory (or a datadir, if configured).
 	void 			   	save();
 
 	// Does this config need to be saved?
 	bool 				dirty() const { return m_dirty; }
+	// False for ten seconds after a failed write, so the idle handler does not
+	// repeat a hopeless attempt on every event; an explicit save() always tries.
+	bool 				save_due() const { return std::chrono::steady_clock::now() >= m_retry_save_at; }
 
 
 	void				set_dirty() { m_dirty = true; }
@@ -152,7 +133,7 @@ public:
 	std::string 		get(const std::string &key) const
 		{ std::string value; this->get("app", key, value); return value; }
 	bool				get_bool(const std::string &section, const std::string &key) const
-		{ return this->get(section, key) == "true" || this->get(key) == "1"; }
+		{ const std::string value = this->get(section, key); return value == "true" || value == "1"; }
 	bool				get_bool(const std::string &key) const
 		{ return this->get_bool("app", key); }
 	void			    set(const std::string &section, const std::string &key, const std::string &value)
@@ -188,6 +169,9 @@ public:
 			m_dirty = true;
 		}
 	}
+
+	void                set(const std::string& section, const std::string& key, const char* value)
+		{ this->set(section, key, std::string(value)); }
 
 	void				set(const std::string& section, const std::string &key, bool value)
 	{
@@ -270,29 +254,6 @@ public:
         m_dirty = true;
     }
 
-	const std::map<std::string, BBLocalMachine>& get_local_machines() const { return m_local_machines; }
-	void erase_local_machine(std::string dev_id)
-    {
-        auto it = m_local_machines.find(dev_id);
-        if (it != m_local_machines.end()) {
-            m_local_machines.erase(it);
-            m_dirty = true;
-        }
-    }
-    void update_local_machine(const BBLocalMachine& machine)
-    {
-        auto it = m_local_machines.find(machine.dev_id);
-        if (it != m_local_machines.end()) {
-            const auto& current = it->second;
-            if (machine != current) {
-                m_local_machines[machine.dev_id] = machine;
-                m_dirty = true;
-            }
-        } else {
-            m_local_machines[machine.dev_id] = machine;
-            m_dirty = true;
-        }
-    }
 
     const std::vector<std::string> &get_filament_presets() const { return m_filament_presets; }
     void set_filament_presets(const std::vector<std::string> &filament_presets){
@@ -339,6 +300,8 @@ public:
 
 	// Get the default config path from Slic3r::data_dir().
 	std::string			config_path();
+	// Lock file guarding config_path() against other running instances; empty without a data dir.
+	std::string			lock_path();
 
 	// Returns true if the user's data directory comes from before Slic3r 1.40.0 (no updating)
 	bool 				legacy_datadir() const { return m_legacy_datadir; }
@@ -449,8 +412,16 @@ private:
 
 	// Preset for each machine
 	MachineSettingMap											m_printer_settings;
+	// Writes the assembled config text, and on Windows its checksum and a backup copy; false when the
+	// config itself could not be written, in which case the caller stays dirty and retries. `checksum_source`
+	// is the text load() will verify, which for the JSON config ends before the trailing newline.
+	bool												write_config_file(const std::string &path, std::string body, const std::string &checksum_source);
+
 	// Has any value been modified since the config.ini has been last saved or loaded?
 	bool														m_dirty;
+	// After a failed write, save_due() is false for the next ten seconds, so the
+	// idle handler does not repeat a hopeless write on every event.
+	std::chrono::steady_clock::time_point						m_retry_save_at{};
 	// Original version found in the ini file before it was overwritten
 	Semver                                                      m_orig_version;
 	// Whether the existing version is before system profiles & configuration updating
@@ -465,7 +436,6 @@ private:
 
 	std::vector<PrinterCaliInfo>								m_printer_cali_infos;
 
-	std::map<std::string, BBLocalMachine>						m_local_machines;
 };
 
 } // namespace Slic3r

@@ -213,7 +213,10 @@ DynamicPrintConfig multifilament_config(unsigned int filaments, std::initializer
 	// These are read by filament id during export but absent from filament_option_keys(),
 	// so set_num_filaments leaves them size 1; size them too, else out-of-range access.
 	const auto &defaults = FullPrintConfig::defaults();
-	for (const char *key : { "filament_type", "filament_vendor", "filament_start_gcode" })
+	for (const char *key : { "filament_type", "filament_vendor", "filament_start_gcode", "filament_change_length", "filament_change_length_nc",
+	                         "filament_ramming_travel_time", "filament_ramming_travel_time_nc",
+	                         "filament_ramming_volumetric_speed", "filament_ramming_volumetric_speed_nc",
+	                         "nozzle_temperature", "nozzle_temperature_initial_layer" })
 		static_cast<ConfigOptionVectorBase *>(config.option(key, true))->resize(filaments, defaults.option(key));
 
 	// flush_volumes_matrix must be sized filaments*filaments or export rejects it.
@@ -225,7 +228,7 @@ DynamicPrintConfig multifilament_config(unsigned int filaments, std::initializer
 }
 
 void init_print(std::vector<TriangleMesh> &&meshes, Slic3r::Print &print, Slic3r::Model &model, const DynamicPrintConfig &config_in,
-                const std::vector<std::vector<ConfigBase::SetDeserializeItem>> *per_object_overrides, bool arrange)
+                const std::vector<std::vector<ConfigBase::SetDeserializeItem>> *per_object_overrides, bool arrange, size_t instances)
 {
 	DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
     config.apply(config_in);
@@ -236,7 +239,8 @@ void init_print(std::vector<TriangleMesh> &&meshes, Slic3r::Print &print, Slic3r
 		ModelObject *object = model.add_object();
 		object->name += "object.stl";
 		object->add_volume(std::move(t));
-		object->add_instance();
+		for (size_t i = 0; i < instances; ++i)
+			object->add_instance();
 
 		if (per_object_overrides && object_idx < per_object_overrides->size() && !(*per_object_overrides)[object_idx].empty()) {
 			DynamicPrintConfig oc;

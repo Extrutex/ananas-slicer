@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="Top view of an AWD CoreXY motion system: four stationary steppers at the frame corners, two driving each belt, with the standard CoreXY belt paths.">
+  <title>Top view of an AWD CoreXY: each of the two CoreXY belts is a single loop driven by two stationary steppers at the frame corners, so the belt path and motion math are unchanged while torque doubles.</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#4db9ff"/>
+    </marker>
+  </defs>
+
+  <!-- ground + inner frame -->
+  <rect x="0" y="0" width="800" height="480" fill="#0b0e11"/>
+  <rect x="0.5" y="0.5" width="799" height="479" fill="none" stroke="#262f37" stroke-width="1"/>
+
+  <!-- title block -->
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif">
+    <text x="40" y="44" font-size="18" font-weight="600" letter-spacing="2" fill="#eef3f6">COREXY AWD</text>
+  </g>
+  <text x="40" y="66" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#8b99a4">kinematics: corexy + [stepper_x1] [stepper_y1]</text>
+
+  <!-- fixed structure: frame, bed, Y rails -->
+  <rect x="80" y="100" width="360" height="300" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
+  <rect x="160" y="180" width="200" height="140" fill="#141a1f" stroke="#3d4953" stroke-width="2"/>
+  <line fill="none" x1="140" y1="160" x2="140" y2="340" stroke="#3d4953" stroke-width="4"/>
+  <line fill="none" x1="380" y1="160" x2="380" y2="340" stroke="#3d4953" stroke-width="4"/>
+
+  <!-- moving X gantry (rides the Y rails) -->
+  <rect x="118" y="232" width="284" height="16" fill="#d8e0e6"/>
+
+  <!-- belt A: one loop, driven by A (rear-left) and A1 (front-left) -->
+  <polyline fill="none" stroke="#eef3f6" stroke-width="2"
+    points="88,140 88,360 100,372 112,360 112,232 118,226 394,226 400,220 400,134 394,128 100,128 88,140"/>
+  <!-- gaps where belt B passes over belt A -->
+  <line fill="none" x1="124" y1="123" x2="124" y2="133" stroke="#0b0e11" stroke-width="4"/>
+  <line fill="none" x1="124" y1="221" x2="124" y2="231" stroke="#0b0e11" stroke-width="4"/>
+  <!-- belt B: one loop, driven by B (rear-right) and B1 (front-right) -->
+  <polyline fill="none" stroke="#eef3f6" stroke-width="2" stroke-dasharray="6 3"
+    points="432,140 432,360 420,372 408,360 408,260 402,254 130,254 124,248 124,120 130,114 420,114 432,126 432,140"/>
+
+  <!-- idlers: gantry ends (stacked, offset) and rear corners -->
+  <g fill="#0b0e11" stroke="#5c6b77" stroke-width="2">
+    <circle cx="118" cy="232" r="6"/>
+    <circle cx="130" cy="248" r="6"/>
+    <circle cx="394" cy="220" r="6"/>
+    <circle cx="402" cy="260" r="6"/>
+    <circle cx="130" cy="120" r="6"/>
+    <circle cx="394" cy="134" r="6"/>
+  </g>
+
+  <!-- four stationary motors, one per frame corner -->
+  <g fill="#222a31" stroke="#5c6b77" stroke-width="2">
+    <circle cx="100" cy="140" r="12"/>
+    <circle cx="100" cy="360" r="12"/>
+    <circle cx="420" cy="140" r="12"/>
+    <circle cx="420" cy="360" r="12"/>
+  </g>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6" text-anchor="middle">
+    <text x="100" y="144">A</text>
+    <text x="100" y="364">A1</text>
+    <text x="420" y="144">B</text>
+    <text x="420" y="364">B1</text>
+  </g>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="11" fill="#8b99a4" text-anchor="middle">
+    <text x="100" y="390">x1</text>
+    <text x="420" y="390">y1</text>
+  </g>
+
+  <!-- toolhead on the gantry, belts attach to its rear and front faces -->
+  <rect x="248" y="224" width="24" height="32" fill="#eef3f6"/>
+  <line fill="none" x1="260" y1="256" x2="260" y2="262" stroke="#eef3f6" stroke-width="3"/>
+
+  <!-- motion arrows -->
+  <line fill="none" x1="290" y1="300" x2="336" y2="300" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <line fill="none" x1="290" y1="300" x2="290" y2="266" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#4db9ff">
+    <text x="344" y="304">X</text>
+    <text x="297" y="270">Y</text>
+  </g>
+
+  <!-- part labels -->
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11">
+    <text x="166" y="218" fill="#eef3f6">belt A</text>
+    <text x="166" y="270" fill="#eef3f6">belt B</text>
+    <text x="260" y="214" fill="#d8e0e6" text-anchor="middle">toolhead</text>
+    <text x="330" y="244" fill="#0b0e11">gantry</text>
+    <text x="132" y="152" fill="#8b99a4">Y rail</text>
+    <text x="392" y="152" fill="#8b99a4" text-anchor="end">Y rail</text>
+  </g>
+  <text x="170" y="310" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#8b99a4">bed</text>
+
+  <!-- motor-turn table -->
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13">
+    <text x="500" y="160" fill="#b4c0c9">move: motor turns</text>
+    <text x="500" y="184" fill="#eef3f6">X: A+ A1+ B+ B1+</text>
+    <text x="500" y="208" fill="#eef3f6">Y: A+ A1+ B- B1-</text>
+    <text x="500" y="252" fill="#8b99a4">two steppers per belt:</text>
+    <text x="500" y="272" fill="#8b99a4">double torque, same belt path</text>
+  </g>
+
+  <!-- legend -->
+  <rect x="680" y="440" width="14" height="8" fill="#d8e0e6"/>
+  <rect x="680" y="458" width="14" height="8" fill="#0f1317" stroke="#3d4953" stroke-width="1"/>
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">
+    <text x="700" y="448">moves</text>
+    <text x="700" y="466">fixed</text>
+  </g>
+
+  <!-- caption -->
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">
+    <text x="40" y="448">Each CoreXY belt is driven at both ends by two synchronised steppers; the belt path is</text>
+    <text x="40" y="466">the same, so the motion math is unchanged and the available acceleration roughly doubles.</text>
+  </g>
+</svg>

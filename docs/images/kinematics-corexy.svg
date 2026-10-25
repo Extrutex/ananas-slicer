@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="CoreXY kinematics, top view: two stationary motors on the rear of the frame drive one moving gantry and toolhead through two crossed belt loops.">
+  <title>CoreXY kinematics, top view: two stationary rear motors drive the gantry and toolhead through two crossed belt loops.</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#4db9ff"/>
+    </marker>
+  </defs>
+
+  <!-- canvas -->
+  <rect x="0" y="0" width="800" height="480" fill="#0b0e11"/>
+  <rect x="0.5" y="0.5" width="799" height="479" fill="none" stroke="#262f37" stroke-width="1"/>
+  <text x="40" y="44" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" letter-spacing="2" fill="#eef3f6">COREXY</text>
+  <text x="40" y="66" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#8b99a4">kinematics: corexy</text>
+
+  <!-- fixed frame with left/right Y rails -->
+  <rect x="100" y="100" width="300" height="300" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
+  <line x1="106" y1="140" x2="106" y2="392" stroke="#3d4953" stroke-width="4" fill="none"/>
+  <line x1="394" y1="140" x2="394" y2="392" stroke="#3d4953" stroke-width="4" fill="none"/>
+
+  <!-- moving X gantry with its X rail, and the toolhead carriage -->
+  <rect x="104" y="236" width="292" height="8" fill="#d8e0e6"/>
+  <line x1="120" y1="240" x2="380" y2="240" stroke="#3d4953" stroke-width="4" fill="none"/>
+  <rect x="244" y="220" width="32" height="40" fill="#d8e0e6" stroke="#eef3f6" stroke-width="1"/>
+  <rect x="254" y="234" width="12" height="12" fill="#eef3f6" stroke="#0b0e11" stroke-width="1"/>
+  <rect x="259" y="248" width="2" height="3" fill="#0b0e11"/>
+
+  <!-- belt A: carriage, left gantry idler, motor A, front-left idler, front run, front-right idler, right gantry idler, carriage -->
+  <g fill="none" stroke="#0b0e11" stroke-width="4">
+    <line x1="112" y1="234" x2="112" y2="246"/>
+    <line x1="136" y1="234" x2="136" y2="246"/>
+    <line x1="388" y1="234" x2="388" y2="246"/>
+  </g>
+  <polyline points="244,256 136,256 136,112 112,112 112,388 388,388 388,224 276,224" fill="none" stroke="#eef3f6" stroke-width="2"/>
+
+  <!-- belt B: carriage, right gantry idler, motor B, front-right idler, front run, front-left idler, left gantry idler, carriage -->
+  <g fill="none" stroke="#0b0e11" stroke-width="4">
+    <line x1="142" y1="234" x2="142" y2="262"/>
+    <line x1="358" y1="218" x2="358" y2="246"/>
+    <line x1="382" y1="234" x2="382" y2="246"/>
+  </g>
+  <polyline points="276,256 358,256 358,112 382,112 382,368 142,368 142,224 244,224" fill="none" stroke="#eef3f6" stroke-width="2"/>
+
+  <!-- idlers: front corners (two per corner) and gantry ends (two per end) -->
+  <g fill="#0b0e11" stroke="#5c6b77" stroke-width="2">
+    <circle cx="118" cy="382" r="6"/>
+    <circle cx="148" cy="362" r="6"/>
+    <circle cx="382" cy="382" r="6"/>
+    <circle cx="376" cy="362" r="6"/>
+    <circle cx="130" cy="250" r="6"/>
+    <circle cx="148" cy="230" r="6"/>
+    <circle cx="382" cy="230" r="6"/>
+    <circle cx="364" cy="250" r="6"/>
+  </g>
+
+  <!-- stationary motors on the rear frame corners -->
+  <circle cx="124" cy="124" r="12" fill="#222a31" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="370" cy="124" r="12" fill="#222a31" stroke="#5c6b77" stroke-width="2"/>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6" text-anchor="middle">
+    <text x="124" y="128">A</text>
+    <text x="370" y="128">B</text>
+  </g>
+
+  <!-- labels -->
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#b4c0c9">
+    <text x="148" y="128">belt A</text>
+    <text x="346" y="128" text-anchor="end">belt B</text>
+  </g>
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#b4c0c9">
+    <text x="160" y="212">gantry</text>
+    <text x="260" y="276" text-anchor="middle">toolhead</text>
+  </g>
+
+  <!-- motion arrows -->
+  <line x1="270" y1="340" x2="320" y2="340" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <line x1="270" y1="340" x2="270" y2="300" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)" fill="none"/>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#4db9ff">
+    <text x="328" y="344">X</text>
+    <text x="278" y="308">Y</text>
+  </g>
+
+  <!-- truth table: which motors turn for each pure move -->
+  <rect x="440" y="180" width="200" height="80" fill="#0f1317" stroke="#262f37" stroke-width="1"/>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13">
+    <text x="460" y="200" fill="#8b99a4">move: motor turns</text>
+    <text x="460" y="220" fill="#eef3f6">X: A+ B+</text>
+    <text x="460" y="240" fill="#eef3f6">Y: A+ B-</text>
+  </g>
+
+  <!-- legend -->
+  <rect x="680" y="392" width="14" height="8" fill="#d8e0e6"/>
+  <rect x="680" y="408" width="14" height="8" fill="none" stroke="#3d4953" stroke-width="1"/>
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">
+    <text x="700" y="400">moves</text>
+    <text x="700" y="416">fixed</text>
+  </g>
+
+  <!-- caption -->
+  <text x="40" y="448" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">Both motors stay on the frame, so moving XY mass is low; every XY move splits across motors A and B.</text>
+</svg>

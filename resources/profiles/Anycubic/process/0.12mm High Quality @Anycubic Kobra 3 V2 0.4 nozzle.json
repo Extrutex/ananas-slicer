@@ -16,7 +16,7 @@
 	"bridge_speed": "30",
 	"brim_type": "auto_brim",
 	"default_acceleration": "5000",
-	"default_jerk": "9",
+	"default_jerk": "0",
 	"gap_infill_speed": "180",
 	"initial_layer_infill_speed": "50",
 	"initial_layer_speed": "50",

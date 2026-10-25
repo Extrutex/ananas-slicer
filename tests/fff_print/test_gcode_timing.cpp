@@ -2,12 +2,16 @@
 
 #include "libslic3r/libslic3r.h"
 #include "libslic3r/GCode/GCodeProcessor.hpp"
+#include "libslic3r/KlipperLimits.hpp"
 #include "libslic3r/MultiNozzleUtils.hpp"
 #include "libslic3r/PrintConfig.hpp"
 
 #include "test_utils.hpp"
 
+#include "nlohmann/json.hpp"
+
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <map>
@@ -612,5 +616,276 @@ TEST_CASE("How fast a corner is taken does not depend on how much is extruded th
         REQUIRE(marlin > 0.0);
         REQUIRE_THAT(planned_corner_speed(gcfMarlinFirmware, scv, 0.05, turn, 0.0, 0.029),
                      Catch::Matchers::WithinRel(marlin, 0.02));
+    }
+}
+
+// The Klipper time model (time_model = klipper_v013): GCodeProcessor hands Klipper-flavor moves to
+// KlipperMotionModel and times them with its plan. These tests drive it through G-code.
+namespace {
+
+void set_klipper_snapshot(FullPrintConfig& config, const KlipperLimits& l)
+{
+    config.klipper_limits_source.value                 = KlipperLimitsSource::PrinterCfg;
+    config.klipper_max_velocity.value                  = l.max_velocity;
+    config.klipper_max_accel.value                     = l.max_accel;
+    config.klipper_minimum_cruise_ratio.value          = l.minimum_cruise_ratio;
+    config.klipper_square_corner_velocity.value        = l.square_corner_velocity;
+    config.klipper_max_z_velocity.value                = l.max_z_velocity;
+    config.klipper_max_z_accel.value                   = l.max_z_accel;
+    config.klipper_max_extrude_only_velocity.value     = l.max_extrude_only_velocity;
+    config.klipper_max_extrude_only_accel.value        = l.max_extrude_only_accel;
+    config.klipper_instantaneous_corner_velocity.value = l.instantaneous_corner_velocity;
+    config.klipper_pressure_advance.value              = l.pressure_advance;
+    config.klipper_pressure_advance_smooth_time.value  = l.pressure_advance_smooth_time;
+}
+
+// Klipper flavor, Klipper time model, limits imported with no cruise ratio so move times have the
+// closed form d / v + v / a from rest to rest.
+FullPrintConfig make_klipper_model_config(double max_accel, double minimum_cruise_ratio)
+{
+    FullPrintConfig config;
+    config.gcode_flavor.value = gcfKlipper;
+    config.time_model.value   = TimeModel::KlipperV013;
+    config.filament_diameter.values = {1.75};
+    config.filament_map.values      = {1};
+    config.nozzle_diameter.values   = {0.4};
+    KlipperLimits l;
+    l.max_velocity                  = 300.0;
+    l.max_accel                     = max_accel;
+    l.minimum_cruise_ratio          = minimum_cruise_ratio;
+    l.square_corner_velocity        = 5.0;
+    l.max_z_velocity                = 15.0;
+    l.max_z_accel                   = 350.0;
+    l.max_extrude_only_velocity     = 80.0;
+    l.max_extrude_only_accel        = 1800.0;
+    l.instantaneous_corner_velocity = 1.0;
+    l.pressure_advance              = 0.0;
+    l.pressure_advance_smooth_time  = 0.04;
+    set_klipper_snapshot(config, l);
+    return config;
+}
+
+double estimated_time(const FullPrintConfig& config, const std::string& gcode)
+{
+    GCodeProcessor proc;
+    run_processor(proc, config, gcode.c_str());
+    return proc.get_result().print_statistics.modes[NORMAL].time;
+}
+
+double rest_to_rest(double d, double v, double a) { return d / v + v / a; }
+
+} // namespace
+
+TEST_CASE("The Klipper time model times moves the way Klipper plans them", "[GCodeTiming][KlipperModel]")
+{
+    // 1000 mm/s^2, no cruise ratio. Two 100 mm moves at 100 mm/s separated by M400, which stops
+    // Klipper's toolhead, so each takes 100 / 100 + 100 / 1000.
+    const FullPrintConfig config = make_klipper_model_config(1000.0, 0.0);
+    const double t = estimated_time(config, "G1 X100 F6000\nM400\nG1 X200\n");
+    REQUIRE_THAT(t, Catch::Matchers::WithinRel(2.0 * rest_to_rest(100.0, 100.0, 1000.0), 1e-5));
+}
+
+TEST_CASE("SET_VELOCITY_LIMIT in the G-code changes the acceleration the Klipper model plans with",
+          "[GCodeTiming][KlipperModel]")
+{
+    const FullPrintConfig config = make_klipper_model_config(1000.0, 0.0);
+    const double t = estimated_time(config, "SET_VELOCITY_LIMIT ACCEL=4000\nG1 X100 F6000\n");
+    REQUIRE_THAT(t, Catch::Matchers::WithinRel(rest_to_rest(100.0, 100.0, 4000.0), 1e-5));
+}
+
+TEST_CASE("The Klipper model clamps travel to max_velocity", "[GCodeTiming][KlipperModel]")
+{
+    // F21000 is 350 mm/s against an imported max_velocity of 300.
+    const FullPrintConfig config = make_klipper_model_config(1000.0, 0.0);
+    const double t = estimated_time(config, "G1 X200 F21000\n");
+    REQUIRE_THAT(t, Catch::Matchers::WithinRel(rest_to_rest(200.0, 300.0, 1000.0), 1e-5));
+}
+
+TEST_CASE("A Klipper dwell adds P milliseconds and ignores S", "[GCodeTiming][KlipperModel]")
+{
+    // toolhead.py cmd_G4 reads only P.
+    const FullPrintConfig config = make_klipper_model_config(1000.0, 0.0);
+    const double move = rest_to_rest(100.0, 100.0, 1000.0);
+    REQUIRE_THAT(estimated_time(config, "G1 X100 F6000\nG4 P500\n"), Catch::Matchers::WithinRel(move + 0.5, 1e-5));
+    REQUIRE_THAT(estimated_time(config, "G1 X100 F6000\nG4 S5\n"), Catch::Matchers::WithinRel(move, 1e-5));
+}
+
+TEST_CASE("Retractions are timed with the imported extrude-only limits", "[GCodeTiming][KlipperModel]")
+{
+    // 0.8 mm at 30 mm/s with max_extrude_only_accel 1800, not the profile's retraction acceleration.
+    FullPrintConfig config = make_klipper_model_config(7000.0, 0.5);
+    config.machine_max_acceleration_retracting.values = {5000.0, 5000.0};
+    REQUIRE_THAT(estimated_time(config, "M83\nG1 E-0.8 F1800\n"),
+                 Catch::Matchers::WithinRel(rest_to_rest(0.8, 30.0, 1800.0), 1e-5));
+}
+
+TEST_CASE("The legacy model stays selectable for Klipper and other flavors ignore time_model",
+          "[GCodeTiming][KlipperModel]")
+{
+    const std::string gcode = corner_gcode(90.0, 0.0, 0.03);
+
+    FullPrintConfig klipper_legacy = make_klipper_model_config(1000.0, 0.5);
+    klipper_legacy.time_model.value = TimeModel::Legacy;
+    FullPrintConfig klipper_model = make_klipper_model_config(1000.0, 0.5);
+    REQUIRE_THAT(estimated_time(klipper_legacy, gcode),
+                 !Catch::Matchers::WithinRel(estimated_time(klipper_model, gcode), 1e-6));
+
+    // Marlin 2: byte-identical estimates whatever time_model says.
+    FullPrintConfig marlin_legacy = make_junction_config(gcfMarlinFirmware, 8.0, 0.0);
+    marlin_legacy.time_model.value = TimeModel::Legacy;
+    FullPrintConfig marlin_model = make_junction_config(gcfMarlinFirmware, 8.0, 0.0);
+    marlin_model.time_model.value = TimeModel::KlipperV013;
+    REQUIRE_THAT(estimated_time(marlin_legacy, gcode), Catch::Matchers::WithinAbs(estimated_time(marlin_model, gcode), 0.0));
+}
+
+TEST_CASE("The Klipper model gives finite times on G-code it cannot fully model", "[GCodeTiming][KlipperModel]")
+{
+    const FullPrintConfig config = make_klipper_model_config(3000.0, 0.5);
+    const char* gcode = GENERATE(
+        // Unknown macros and extended commands.
+        "PRINT_START BED=60\nCLEAN_NOZZLE\nG1 X10 Y10 F6000\nMY_MACRO A=1\nG1 X20\n",
+        // Extrusion only.
+        "M83\nG1 E5 F300\nG1 E-1 F2400\nG1 E1\n",
+        // Zero-length moves.
+        "G1 X10 F6000\nG1 X10\nG1 X10 E0\nG1 X20\n",
+        // Arcs.
+        "G1 X10 Y10 F6000\nG2 X20 Y10 I5 J0 E1\nG3 X10 Y10 I-5 J0\n",
+        // Nothing to do.
+        "M117 hello\n");
+    const double t = estimated_time(config, gcode);
+    REQUIRE(std::isfinite(t));
+    REQUIRE(t >= 0.0);
+}
+
+// Regression gate against upstream Klipper. tests/data/klipper_timing holds real ANANAS SLICER slices,
+// reduced to the commands Klipper executes, and reference.json the print time Klipper v0.13 batch
+// mode reached at every marker command of each file, measured on tests/virtual-printer/printer.cfg
+// by tests/virtual-printer/timing-gate.sh. The estimate has to match Klipper over the whole print
+// (first layer start to PRINT_END) and over the first layer.
+namespace {
+
+constexpr double PRINT_TOLERANCE       = 0.015;
+constexpr double FIRST_LAYER_TOLERANCE = 0.02;
+
+std::string klipper_timing_dir()
+{
+    // timing-gate.sh points this at a corpus it has just regenerated; the committed one otherwise.
+    if (const char* dir = std::getenv("KLIPPER_TIMING_DIR"); dir != nullptr && *dir != '\0')
+        return dir;
+    return std::string(TEST_DATA_DIR) + "/klipper_timing";
+}
+
+std::string read_text(const std::string& path)
+{
+    std::ifstream in(path, std::ios::binary);
+    REQUIRE(in.good());
+    std::stringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+// The rig's printer.cfg, imported the way a user imports theirs.
+FullPrintConfig make_virtual_printer_config()
+{
+    FullPrintConfig config;
+    config.gcode_flavor.value       = gcfKlipper;
+    config.time_model.value         = TimeModel::KlipperV013;
+    config.filament_diameter.values = {1.75};
+    config.filament_map.values      = {1};
+    config.nozzle_diameter.values   = {0.4};
+    set_klipper_snapshot(config,
+                         parse_klipper_printer_cfg(read_text(std::string(TEST_DATA_DIR) + "/../virtual-printer/printer.cfg")).limits);
+    return config;
+}
+
+struct TimedMarker
+{
+    unsigned int line;
+    std::string  command;
+    double       klipper_s;
+    double       estimate_s;
+};
+
+// Estimated time at each marker line: everything the processor timed on earlier lines.
+std::vector<TimedMarker> time_markers(const nlohmann::json& model, const std::string& dir)
+{
+    const std::string path = dir + "/" + model["gcode"].get<std::string>();
+    const std::string text = read_text(path);
+    std::vector<std::string> lines;
+    {
+        std::istringstream in(text);
+        for (std::string line; std::getline(in, line);)
+            lines.push_back(line);
+    }
+
+    std::vector<TimedMarker> markers;
+    for (const auto& m : model["markers"]) {
+        const unsigned int line = m["line"].get<unsigned int>();
+        REQUIRE(line >= 1);
+        REQUIRE(line <= lines.size());
+        // The reference was built against this very file.
+        REQUIRE(lines[line - 1] == m["command"].get<std::string>());
+        markers.push_back({line, m["command"].get<std::string>(), m["time_s"].get<double>(), 0.0});
+    }
+
+    GCodeProcessor proc;
+    GCodeProcessor::s_IsBBLPrinter = true;
+    proc.apply_config(make_virtual_printer_config());
+    proc.process_file(path);
+    const GCodeProcessorResult& result = proc.get_result();
+    // One processed line per file line, so a move's gcode_id is its line number.
+    REQUIRE(result.lines_ends.size() == lines.size());
+
+    double elapsed = 0.0;
+    size_t move    = 0;
+    for (TimedMarker& marker : markers) {
+        for (; move < result.moves.size() && result.moves[move].gcode_id < marker.line; ++move)
+            elapsed += result.moves[move].time[NORMAL];
+        marker.estimate_s = elapsed;
+    }
+    return markers;
+}
+
+const TimedMarker& find_marker(const std::vector<TimedMarker>& markers, const std::string& prefix)
+{
+    for (const TimedMarker& m : markers)
+        if (m.command.rfind(prefix, 0) == 0)
+            return m;
+    FAIL("no marker starting with " << prefix);
+    return markers.front();
+}
+
+double relative_error(double estimate, double klipper) { return estimate / klipper - 1.0; }
+
+} // namespace
+
+TEST_CASE("The Klipper time model matches Klipper batch mode on the timing corpus",
+          "[GCodeTiming][KlipperModel][KlipperTimingGate]")
+{
+    const std::string dir = klipper_timing_dir();
+    const nlohmann::json reference = nlohmann::json::parse(read_text(dir + "/reference.json"));
+    REQUIRE_FALSE(reference["models"].empty());
+
+    for (const auto& model : reference["models"]) {
+        const std::string name = model["name"].get<std::string>();
+        DYNAMIC_SECTION(name)
+        {
+            const std::vector<TimedMarker> markers = time_markers(model, dir);
+            const TimedMarker& layer1 = find_marker(markers, "SET_PRINT_STATS_INFO CURRENT_LAYER=1");
+            const TimedMarker& layer2 = find_marker(markers, "SET_PRINT_STATS_INFO CURRENT_LAYER=2");
+            const TimedMarker& end    = find_marker(markers, "PRINT_END");
+
+            const double klipper_print  = end.klipper_s - layer1.klipper_s;
+            const double estimate_print = end.estimate_s - layer1.estimate_s;
+            const double klipper_first  = layer2.klipper_s - layer1.klipper_s;
+            const double estimate_first = layer2.estimate_s - layer1.estimate_s;
+            const double print_error    = relative_error(estimate_print, klipper_print);
+            const double first_error    = relative_error(estimate_first, klipper_first);
+            INFO(name << ": print " << estimate_print << " s vs Klipper " << klipper_print << " s (" << 100.0 * print_error
+                      << " %), first layer " << estimate_first << " s vs " << klipper_first << " s (" << 100.0 * first_error
+                      << " %)");
+            CHECK(std::abs(print_error) <= PRINT_TOLERANCE);
+            CHECK(std::abs(first_error) <= FIRST_LAYER_TOLERANCE);
+        }
     }
 }

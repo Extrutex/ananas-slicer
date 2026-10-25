@@ -987,6 +987,9 @@ void PrintObject::generate_support_material()
             this->_generate_support_material();
             m_print->throw_if_canceled();
         }
+        // Orca: the tree support collision/avoidance caches and support nodes are only used while this step runs
+        // (detect_overhangs() rebuilds them from scratch), so don't keep them resident until the next slice.
+        this->clear_tree_support_preview_cache();
         this->set_done(posSupportMaterial);
     }
 }
@@ -1264,7 +1267,7 @@ bool PrintObject::invalidate_state_by_config_options(
             // Filtering of unprintable regions in multi-material segmentation depends on if gap-fill is enabled or not.
             // So step posSlice is invalidated when gap-fill was enabled/disabled by option "filter_out_gap_fill" or by
             // changing "gap_infill_speed" to force recomputation of the multi-material segmentation.
-            if (this->is_mm_painted() && (opt_key == "filter_out_gap_fill" && (opt_key == "gap_infill_speed" && is_gap_fill_changed_state_due_to_speed())))
+            if (this->is_mm_painted() && (opt_key == "filter_out_gap_fill" || (opt_key == "gap_infill_speed" && is_gap_fill_changed_state_due_to_speed())))
                 steps.emplace_back(posSlice);
             steps.emplace_back(posPerimeters);
         } else if (
@@ -1508,7 +1511,8 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "wall_direction"
             || opt_key == "enable_overhang_speed"
             || opt_key == "detect_thin_wall"
-            || opt_key == "precise_outer_wall") {
+            || opt_key == "precise_outer_wall"
+            || opt_key == "precise_outer_wall_method") {
             steps.emplace_back(posPerimeters);
             steps.emplace_back(posSupportMaterial);
         } else if (opt_key == "bridge_flow" || opt_key == "internal_bridge_flow") {
@@ -1585,6 +1589,30 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "flush_into_objects"
             || opt_key == "flush_into_support") {
             invalidated |= m_print->invalidate_step(psWipeTower);
+            invalidated |= m_print->invalidate_step(psGCodeExport);
+        } else if (
+               opt_key == "default_acceleration"
+            || opt_key == "initial_layer_acceleration"
+            || opt_key == "travel_acceleration") {
+            // Motion-only, but the wipe tower bakes these three into its own toolpaths (Print::_make_wipe_tower).
+            invalidated |= m_print->invalidate_step(psWipeTower);
+            invalidated |= m_print->invalidate_step(psGCodeExport);
+        } else if (
+               opt_key == "outer_wall_acceleration"
+            || opt_key == "inner_wall_acceleration"
+            || opt_key == "top_surface_acceleration"
+            || opt_key == "bridge_acceleration"
+            || opt_key == "sparse_infill_acceleration"
+            || opt_key == "internal_solid_infill_acceleration"
+            || opt_key == "default_jerk"
+            || opt_key == "outer_wall_jerk"
+            || opt_key == "inner_wall_jerk"
+            || opt_key == "infill_jerk"
+            || opt_key == "top_surface_jerk"
+            || opt_key == "initial_layer_jerk"
+            || opt_key == "travel_jerk"
+            || opt_key == "default_junction_deviation") {
+            // Motion planning only: read by the G-code generator, by nothing that produces geometry.
             invalidated |= m_print->invalidate_step(psGCodeExport);
         } else {
             // for legacy, if we can't handle this option let's invalidate all steps
@@ -3408,23 +3436,23 @@ void PrintObject::bridge_over_infill()
                     const bool turning_pattern = region_config.sparse_infill_pattern == ipHilbertCurve ||
                                                  region_config.sparse_infill_pattern == ipOctagramSpiral;
                     const Flow &flow              = candidate.region->bridging_flow(frSolidInfill, true);
-                    Polygons    area_to_be_bridge = expand(candidate.new_polys, flow.scaled_spacing());
-                    area_to_be_bridge             = intersection(area_to_be_bridge, deep_infill_area);
-
-                    area_to_be_bridge.erase(std::remove_if(area_to_be_bridge.begin(), area_to_be_bridge.end(),
-                                                           [internal_unsupported_area](const Polygon &p) {
-                                                               return intersection({p}, internal_unsupported_area).empty();
+                    ExPolygons bridge_components = intersection_ex(expand(candidate.new_polys, flow.scaled_spacing()), deep_infill_area);
+                    // Orca: Filter whole bridge areas so their holes remain holes.
+                    bridge_components.erase(std::remove_if(bridge_components.begin(), bridge_components.end(),
+                                                           [&internal_unsupported_area](const ExPolygon &component) {
+                                                               return intersection_ex(component, internal_unsupported_area).empty();
                                                            }),
-                                            area_to_be_bridge.end());
+                                            bridge_components.end());
+                    Polygons area_to_be_bridge = to_polygons(std::move(bridge_components));
 
                     Polygons limiting_area = union_(area_to_be_bridge, expansion_area);
 
                     if (area_to_be_bridge.empty())
                         continue;
 
-                    Polylines boundary_plines = to_polylines(expand(total_fill_area, 1.3 * flow.scaled_spacing()));
+                    Polylines boundary_plines = to_polylines(expand(total_fill_area, 1.3f * flow.scaled_spacing()));
                     {
-                        Polylines limiting_plines = to_polylines(expand(limiting_area, 0.3*flow.spacing()));
+                        Polylines limiting_plines = to_polylines(expand(limiting_area, 0.3f * flow.scaled_spacing()));
                         boundary_plines.insert(boundary_plines.end(), limiting_plines.begin(), limiting_plines.end());
                     }
 
@@ -3498,7 +3526,7 @@ void PrintObject::bridge_over_infill()
                     // Check collision with other expanded surfaces
                     {
                         bool     reconstruct       = false;
-                        Polygons tmp_expanded_area = expand(bridging_area, 3.0 * flow.scaled_spacing());
+                        Polygons tmp_expanded_area = expand(bridging_area, 3.0f * flow.scaled_spacing());
                         for (const CandidateSurface &s : expanded_surfaces) {
                             if (!intersection(s.new_polys, tmp_expanded_area).empty()) {
                                 bridging_angle = s.bridge_angle;
@@ -3515,7 +3543,7 @@ void PrintObject::bridge_over_infill()
 
                     // Orca: Keep fine details for better anchoring
                     // bridging_area         = opening(bridging_area, flow.scaled_spacing());
-                    bridging_area          = opening(bridging_area, flow.scaled_spacing() * 0.75);
+                    bridging_area          = opening(bridging_area, flow.scaled_spacing() * 0.75f);
                     bridging_area          = closing(bridging_area, flow.scaled_spacing());
                     // Orca: Opening/closing can pull rounded bridge ends away from their real
                     // supports. Restore those contacts after smoothing, preserving the cleaned

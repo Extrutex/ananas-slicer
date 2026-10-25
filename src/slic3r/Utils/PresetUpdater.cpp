@@ -36,7 +36,6 @@
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/I18N.hpp"
 #include "slic3r/GUI/UpdateDialogs.hpp"
-#include "slic3r/GUI/ConfigWizard.hpp"
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/Plater.hpp"
 #include "slic3r/GUI/format.hpp"
@@ -256,9 +255,7 @@ struct PresetUpdater::priv
     void check_new_vendors(const std::set<std::string>& system_vendors,
                             std::function<void(std::vector<std::string>, bool)> callback);
     void sync_tooltip(std::string http_url, std::string language);
-    void sync_plugins(std::string http_url, std::string plugin_version);
     void sync_printer_config(std::string http_url);
-    bool get_cached_plugins_version(std::string &cached_version, bool& force);
 
 	//BBS: refine preset update logic
 	bool install_bundles_rsrc(const std::vector<std::string>& bundles, bool snapshot) const;
@@ -782,169 +779,6 @@ void PresetUpdater::priv::sync_tooltip(std::string http_url, std::string languag
     }
 }
 
-// return true means there are plugins files
-bool PresetUpdater::priv::get_cached_plugins_version(std::string& cached_version, bool &force)
-{
-    // The OTA plugin cache lives in its own ota/plugins subfolder; the update dialog
-    // (Plater::priv::update_plugin_when_launch) reads the changelog from the same place.
-    auto cache_folder = cache_path / "plugins";
-    std::string network_library, player_library, live555_library;
-    bool has_plugins = false;
-
-#if defined(_MSC_VER) || defined(_WIN32)
-    network_library = cache_folder.string() + "/bambu_networking.dll";
-    player_library  = cache_folder.string() + "/BambuSource.dll";
-    live555_library = cache_folder.string() + "/live555.dll";
-#elif defined(__WXMAC__)
-    network_library = cache_folder.string() + "/libbambu_networking.dylib";
-    player_library  = cache_folder.string() + "/libBambuSource.dylib";
-    live555_library = cache_folder.string() + "/liblive555.dylib";
-#else
-    network_library = cache_folder.string() + "/libbambu_networking.so";
-    player_library  = cache_folder.string() + "/libBambuSource.so";
-    live555_library = cache_folder.string() + "/liblive555.so";
-#endif
-
-    std::string changelog_file = cache_folder.string() + "/network_plugins.json";
-    if (boost::filesystem::exists(network_library)
-        && boost::filesystem::exists(player_library)
-        && boost::filesystem::exists(live555_library)
-        && boost::filesystem::exists(changelog_file))
-    {
-        has_plugins = true;
-        try {
-            boost::nowide::ifstream ifs(changelog_file);
-            json j;
-            ifs >> j;
-
-            if (j.contains("version"))
-                cached_version = j["version"];
-            if (j.contains("force"))
-                force = j["force"];
-
-            BOOST_LOG_TRIVIAL(info) << __FUNCTION__<< ": cached_version = "<<cached_version<<", force = " << force;
-        }
-        catch(nlohmann::detail::parse_error &err) {
-            BOOST_LOG_TRIVIAL(error) << __FUNCTION__<< ": parse "<<changelog_file<<" got a nlohmann::detail::parse_error, reason = " << err.what();
-            //throw ConfigurationError(format("Failed loading json file \"%1%\": %2%", file_path, err.what()));
-        }
-    }
-
-    return has_plugins;
-}
-
-void PresetUpdater::priv::sync_plugins(std::string http_url, std::string plugin_version)
-{
-    if (plugin_version == "00.00.00.00") {
-        BOOST_LOG_TRIVIAL(info) << "non need to sync plugins for there is no plugins currently.";
-        return;
-    }
-    std::string curr_version = GUI::wxGetApp().use_legacy_network_plugin() ? BAMBU_NETWORK_AGENT_VERSION_LEGACY : get_latest_network_version();
-    std::string using_version = curr_version.substr(0, 9) + "00";
-    auto cache_plugin_folder = cache_path / "plugins";
-
-    // Orca: drop leftovers from the old flat ota/ cache layout (pre ota/plugins) so the
-    // stale files cannot linger forever after this layout migration.
-    {
-#if defined(_MSC_VER) || defined(_WIN32)
-        const char* legacy_names[] = {"bambu_networking.dll", "BambuSource.dll", "live555.dll", "network_plugins.json"};
-#elif defined(__WXMAC__)
-        const char* legacy_names[] = {"libbambu_networking.dylib", "libBambuSource.dylib", "liblive555.dylib", "network_plugins.json"};
-#else
-        const char* legacy_names[] = {"libbambu_networking.so", "libBambuSource.so", "liblive555.so", "network_plugins.json"};
-#endif
-        for (const char* name : legacy_names) {
-            boost::system::error_code ec;
-            auto legacy_file = cache_path / name;
-            if (boost::filesystem::exists(legacy_file, ec))
-                boost::filesystem::remove(legacy_file, ec);
-        }
-    }
-
-    std::string cached_version;
-    bool force_upgrade = false;
-    get_cached_plugins_version(cached_version, force_upgrade);
-    if (!cached_version.empty()) {
-        bool need_delete_cache = false;
-        Semver current_semver = curr_version;
-        Semver cached_semver = cached_version;
-
-        int curent_patch_cc = current_semver.patch()/100;
-        int cached_patch_cc = cached_semver.patch()/100;
-        int curent_patch_dd = current_semver.patch()%100;
-        int cached_patch_dd = cached_semver.patch()%100;
-        if ((cached_semver.maj() != current_semver.maj())
-            || (cached_semver.min() != current_semver.min())
-            || (curent_patch_cc != cached_patch_cc))
-        {
-            need_delete_cache = true;
-            BOOST_LOG_TRIVIAL(info) << boost::format("cached plugins version %1% not match with current %2%")%cached_version%curr_version;
-        }
-        else if (cached_patch_dd <= curent_patch_dd) {
-            need_delete_cache = true;
-            BOOST_LOG_TRIVIAL(info) << boost::format("cached plugins version %1% not newer than current %2%")%cached_version%curr_version;
-        }
-        else {
-            BOOST_LOG_TRIVIAL(info) << boost::format("cached plugins version %1% newer than current %2%")%cached_version%curr_version;
-            plugin_version = cached_version;
-        }
-
-        if (need_delete_cache) {
-            BOOST_LOG_TRIVIAL(info) << "[remove_old_networking_plugins] remove the plugins directory " << cache_plugin_folder.string();
-            try {
-                fs::remove_all(cache_plugin_folder);
-            } catch (...) {
-                BOOST_LOG_TRIVIAL(error) << "Failed removing the plugins directory " << cache_plugin_folder.string();
-            }
-        }
-    }
-
-#if defined(__WINDOWS__)
-    if (GUI::wxGetApp().is_running_on_arm64() && !GUI::wxGetApp().use_legacy_network_plugin()) {
-        //set to arm64 for plugins
-        std::map<std::string, std::string> current_headers = Slic3r::Http::get_extra_headers();
-        current_headers["X-BBL-OS-Type"] = "windows_arm";
-
-        Slic3r::Http::set_extra_headers(current_headers);
-        BOOST_LOG_TRIVIAL(info) << boost::format("set X-BBL-OS-Type to windows_arm");
-    }
-#endif
-    try {
-        std::map<std::string, Resource> resources
-        {
-            {"slicer/plugins/cloud", { using_version, "", "", false, cache_plugin_folder.string()}}
-        };
-        sync_resources(http_url, resources, true, plugin_version, "network_plugins.json");
-    }
-    catch (std::exception& e) {
-        BOOST_LOG_TRIVIAL(warning) << format("[Orca Updater] sync_plugins: %1%", e.what());
-    }
-#if defined(__WINDOWS__)
-    if (GUI::wxGetApp().is_running_on_arm64() && !GUI::wxGetApp().use_legacy_network_plugin()) {
-        //set back
-        std::map<std::string, std::string> current_headers = Slic3r::Http::get_extra_headers();
-        current_headers["X-BBL-OS-Type"] = "windows";
-
-        Slic3r::Http::set_extra_headers(current_headers);
-        BOOST_LOG_TRIVIAL(info) << boost::format("set X-BBL-OS-Type back to windows");
-    }
-#endif
-
-    bool result = get_cached_plugins_version(cached_version, force_upgrade);
-    if (result) {
-        BOOST_LOG_TRIVIAL(info) << format("[Orca Updater] found new plugins: %1%, prompt to update, force_upgrade %2%", cached_version, force_upgrade);
-        if (force_upgrade) {
-            auto app_config = GUI::wxGetApp().app_config;
-            if (!app_config)
-                GUI::wxGetApp().plater()->get_notification_manager()->push_notification(GUI::NotificationType::BBLPluginUpdateAvailable);
-            else
-                app_config->set("update_network_plugin", "true");
-        }
-        else
-            GUI::wxGetApp().plater()->get_notification_manager()->push_notification(GUI::NotificationType::BBLPluginUpdateAvailable);
-    }
-}
-
 void PresetUpdater::priv::sync_printer_config(std::string http_url)
 {
     std::string curr_version  = SLIC3R_VERSION;
@@ -1339,19 +1173,18 @@ PresetUpdater::~PresetUpdater()
 
 //BBS: change directories by design
 //BBS: refine the preset updater logic
-void PresetUpdater::sync(std::string http_url, std::string language, std::string plugin_version, PresetBundle * /*preset_bundle*/)
+void PresetUpdater::sync(std::string http_url, std::string language, PresetBundle * /*preset_bundle*/)
 {
 	//p->set_download_prefs(GUI::wxGetApp().app_config);
 	if (!p->enabled_version_check && !p->enabled_config_update) { return; }
 
-	p->thread = std::thread([this, http_url, language, plugin_version]() {
+	p->thread = std::thread([this, http_url, language]() {
 		try {
 			this->p->sync_version();
 			if (p->cancel)
 				return;
 			// Vendor profile updates are triggered by check_vendor_update()
 			// after the startup printer preset has been restored.
-            this->p->sync_plugins(http_url, plugin_version);
             this->p->sync_printer_config(http_url);
             // Orca (PR #130): the filament library is always installed, so refresh it
             // from the updater on every startup sync rather than deferring to check_vendor_update().
@@ -1405,6 +1238,11 @@ void PresetUpdater::priv::check_new_vendors(const std::set<std::string>& system_
 {
     vendor_check_threads.emplace_back([this, system_vendors, callback]() {
         AppConfig* app_config = GUI::wxGetApp().app_config;
+        if (app_config->profile_update_url().empty()) {
+            BOOST_LOG_TRIVIAL(info) << "[Orca Updater] no profile update URL configured, skipping new vendor check";
+            GUI::wxGetApp().CallAfter([callback]() { callback({}, false); });
+            return;
+        }
         std::string url       = app_config->profile_update_url() + "/new?orcaslicer_version=" + Http::url_encode(SoftFever_VERSION);
 
         auto check_cancel = [this](Http::Progress, bool& cancel_http) {

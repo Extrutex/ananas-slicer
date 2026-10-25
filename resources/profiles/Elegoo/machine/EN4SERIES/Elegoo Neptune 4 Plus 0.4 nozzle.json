@@ -6,7 +6,7 @@
 	"from": "system",
 	"setting_id": "Rc54LjtIhvBWRS2Y",
 	"instantiation": "true",
-	"host_type": "elegoolink",
+	"host_type": "moonraker",
 	"printer_model": "Elegoo Neptune 4 Plus",
 	"default_print_profile": "0.20mm Standard @Elegoo N4Plus 0.4 nozzle",
 	"nozzle_diameter": [

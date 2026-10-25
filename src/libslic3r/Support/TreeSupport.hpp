@@ -1,6 +1,7 @@
 #ifndef TREESUPPORT_H
 #define TREESUPPORT_H
 
+#include <atomic>
 #include <forward_list>
 #include <unordered_set>
 #include "ExPolygon.hpp"
@@ -393,8 +394,9 @@ public:
 
     int  avg_node_per_layer = 0;
     float nodes_angle = 0;
-    bool  has_sharp_tails = false;
-    bool  has_cantilever = false;
+    // Set from the per-layer overhang detection, which runs in parallel.
+    std::atomic<bool> has_sharp_tails { false };
+    std::atomic<bool> has_cantilever { false };
     double max_cantilever_dist = 0;
     SupportType support_type;
 

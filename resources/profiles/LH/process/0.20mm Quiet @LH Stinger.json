@@ -13,7 +13,7 @@
 	"bridge_acceleration": "5000",
 	"bridge_speed": "40",
 	"default_acceleration": "10000",
-	"default_jerk": "5",
+	"default_jerk": "0",
 	"filter_out_gap_fill": "10",
 	"gap_infill_speed": "200",
 	"infill_jerk": "5",
@@ -47,7 +47,7 @@
 	"travel_acceleration": "10000",
 	"travel_jerk": "5",
 	"sparse_infill_density": "15%",
-	"accel_to_decel_enable": "1",
+	"accel_to_decel_enable": "0",
 	"gap_fill_target": "nowhere",
 	"travel_speed": "200"
 }

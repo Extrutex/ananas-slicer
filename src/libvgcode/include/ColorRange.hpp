@@ -11,18 +11,21 @@
 
 namespace libvgcode {
 
+// Sequential heatmap ramp (docs/design/tokens.css --ks-ramp-0..10): blue -> neutral -> yellow,
+// luminance rising monotonically, no red (reserved for limits) and no saturated azure
+// (reserved for the active path).
 static const Palette DEFAULT_RANGES_COLORS{ {
-    {  11,  44, 122 }, // bluish
-    {  19,  89, 133 },
-    {  28, 136, 145 },
-    {   4, 214,  15 },
-    { 170, 242,   0 },
-    { 252, 249,   3 },
-    { 245, 206,  10 },
-    { 227, 136,  32 },
-    { 209, 104,  48 },
-    { 194,  82,  60 },
-    { 148,  38,  22 }  // reddish
+    {  75,  98, 168 }, // #4b62a8 ramp-0
+    {  90, 110, 166 }, // #5a6ea6
+    { 106, 122, 162 }, // #6a7aa2
+    { 123, 135, 158 }, // #7b879e
+    { 141, 149, 153 }, // #8d9599
+    { 160, 163, 147 }, // #a0a393
+    { 179, 177, 138 }, // #b3b18a
+    { 198, 191, 126 }, // #c6bf7e
+    { 217, 205, 110 }, // #d9cd6e
+    { 235, 219,  92 }, // #ebdb5c
+    { 251, 232,  74 }  // #fbe84a ramp-10
 } };
 
 class ColorRange

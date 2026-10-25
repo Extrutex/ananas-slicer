@@ -33,8 +33,6 @@ enum CUSTOM_ID
     ID_TOP_FILE_MENU,
     ID_TOP_DROPDOWN_MENU,
     ID_TITLE,
-    ID_MODEL_STORE,
-    ID_PUBLISH,
     ID_CALIB,
     ID_TOOL_BAR = 3200,
     ID_AMS_NOTEBOOK,
@@ -165,19 +163,19 @@ void BBLTopbarArt::DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& i
     {
         if (item.GetState() & wxAUI_BUTTON_STATE_PRESSED)
         {
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(StateColor::darkModeColorFor("#3D4953"))); // ORCA
+            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#3D4953"))); // ORCA
             dc.DrawRectangle(rect);
         }
         else if ((item.GetState() & wxAUI_BUTTON_STATE_HOVER) || item.IsSticky())
         {
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(StateColor::darkModeColorFor("#3D4953"))); // ORCA
+            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#3D4953"))); // ORCA
 
             // draw an even lighter background for checked item hovers (since
             // the hover background is the same color as the check background)
             if (item.GetState() & wxAUI_BUTTON_STATE_CHECKED)
-                dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+                dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#3D4953"))); // ORCA
 
             dc.DrawRectangle(rect);
         }
@@ -185,8 +183,8 @@ void BBLTopbarArt::DrawButton(wxDC& dc, wxWindow* wnd, const wxAuiToolBarItem& i
         {
             // it's important to put this code in an else statement after the
             // hover, otherwise hovers won't draw properly for checked items
-            dc.SetPen(wxPen(StateColor::darkModeColorFor("#009688"))); // ORCA
-            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#009688"))); // ORCA
+            dc.SetPen(wxPen(StateColor::darkModeColorFor("#3D4953"))); // ORCA
+            dc.SetBrush(wxBrush(StateColor::darkModeColorFor("#3D4953"))); // ORCA
             dc.DrawRectangle(rect);
         }
     }
@@ -327,18 +325,6 @@ void BBLTopbar::Init(wxFrame* parent)
     this->AddSpacer(FromDIP(25));
     //this->AddStretchSpacer(1);
 
-    //m_publish_bitmap = create_scaled_bitmap("topbar_publish", nullptr, TOPBAR_ICON_SIZE);
-    //m_publish_item = this->AddTool(ID_PUBLISH, "", m_publish_bitmap);
-    //m_publish_disable_bitmap = create_scaled_bitmap("topbar_publish_disable", nullptr, TOPBAR_ICON_SIZE);
-    //m_publish_item->SetDisabledBitmap(m_publish_disable_bitmap);
-    //this->EnableTool(m_publish_item->GetId(), false);
-    //this->AddSpacer(FromDIP(4));
-
-    /*wxBitmap model_store_bitmap = create_scaled_bitmap("topbar_store", nullptr, TOPBAR_ICON_SIZE);
-    m_model_store_item = this->AddTool(ID_MODEL_STORE, "", model_store_bitmap);
-    this->AddSpacer(12);
-    */
-
     //this->AddSeparator();
     //this->AddSpacer(FromDIP(4));
 
@@ -390,8 +376,6 @@ void BBLTopbar::Init(wxFrame* parent)
     this->Bind(wxEVT_AUITOOLBAR_TOOL_DROPDOWN, &BBLTopbar::OnSaveProject, this, wxID_SAVE);
     this->Bind(wxEVT_AUITOOLBAR_TOOL_DROPDOWN, &BBLTopbar::OnRedo, this, wxID_REDO);
     this->Bind(wxEVT_AUITOOLBAR_TOOL_DROPDOWN, &BBLTopbar::OnUndo, this, wxID_UNDO);
-    //this->Bind(wxEVT_AUITOOLBAR_TOOL_DROPDOWN, &BBLTopbar::OnModelStoreClicked, this, ID_MODEL_STORE);
-    //this->Bind(wxEVT_AUITOOLBAR_TOOL_DROPDOWN, &BBLTopbar::OnPublishClicked, this, ID_PUBLISH);
 }
 
 BBLTopbar::~BBLTopbar()
@@ -407,12 +391,6 @@ void BBLTopbar::OnOpenProject(wxAuiToolBarEvent& event)
     Plater* plater = main_frame->plater();
     plater->load_project();
 }
-
-//void BBLTopbar::show_publish_button(bool show)
-//{
-//    this->EnableTool(m_publish_item->GetId(), show);
-//    Refresh();
-//}
 
 void BBLTopbar::OnSaveProject(wxAuiToolBarEvent& event)
 {
@@ -463,27 +441,6 @@ void BBLTopbar::ShowCalibrationButton(bool show)
     if (!show)
         m_calib_item->GetSizerItem()->SetDimension({-1000, 0}, {0, 0});
     Refresh();
-}
-
-void BBLTopbar::OnModelStoreClicked(wxAuiToolBarEvent& event)
-{
-    //GUI::wxGetApp().load_url(wxString(wxGetApp().app_config->get_web_host_url() + MODEL_STORE_URL));
-}
-
-void BBLTopbar::OnPublishClicked(wxAuiToolBarEvent& event)
-{
-    if (!wxGetApp().getAgent()) {
-        BOOST_LOG_TRIVIAL(info) << "publish: no agent";
-        return;
-    }
-
-    //no more check
-    //if (GUI::wxGetApp().plater()->model().objects.empty()) return;
-
-#ifdef ENABLE_PUBLISHING
-    wxGetApp().plater()->show_publish_dialog();
-#endif
-    wxGetApp().open_publish_page_dialog();
 }
 
 void BBLTopbar::SetFileMenu(wxMenu* file_menu)
@@ -566,14 +523,6 @@ void BBLTopbar::Rescale() {
 
     if (m_title_ctrl)
         m_title_ctrl->SetTitle(m_titleText);
-
-    /*item = this->FindTool(ID_PUBLISH);
-    item->SetBitmap(create_scaled_bitmap("topbar_publish", this, TOPBAR_ICON_SIZE));
-    item->SetDisabledBitmap(create_scaled_bitmap("topbar_publish_disable", nullptr, TOPBAR_ICON_SIZE));*/
-
-    /*item = this->FindTool(ID_MODEL_STORE);
-    item->SetBitmap(create_scaled_bitmap("topbar_store", this, TOPBAR_ICON_SIZE));
-    */
 
     item = this->FindTool(wxID_ICONIZE_FRAME);
     item->SetBitmap(create_scaled_bitmap("topbar_min", this, TOPBAR_ICON_SIZE));

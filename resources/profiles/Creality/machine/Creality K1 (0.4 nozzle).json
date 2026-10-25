@@ -125,12 +125,10 @@
 	],
 	"machine_start_gcode": "START_PRINT EXTRUDER_TEMP=[nozzle_temperature_initial_layer] BED_TEMP=[bed_temperature_initial_layer_single]\nT[initial_no_support_extruder]\nM204 S2000\nM109 S[nozzle_temperature_initial_layer]\nG1 Z3 F600\nM83\nG92 E0\nG1 Z1 F600",
 	"machine_end_gcode": "END_PRINT",
-	"scan_first_layer": "0",
 	"thumbnails": [
 		"96x96",
 		"300x300"
 	],
-	"bbl_use_printhost": "0",
 	"bed_exclude_area": "0x0",
 	"bed_mesh_max": "99999,99999",
 	"bed_mesh_min": "-99999,-99999",
@@ -149,8 +147,8 @@
 	"fan_speedup_overhangs": "1",
 	"fan_speedup_time": "0",
 	"high_current_on_filament_swap": "0",
-	"host_type": "crealityprint",
-	"printer_agent": "crealityprint",
+	"host_type": "moonraker",
+	"printer_agent": "moonraker",
 	"layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
 	"machine_LED_light_exist": "1",
 	"machine_load_filament_time": "119",

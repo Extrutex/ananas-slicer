@@ -532,3 +532,49 @@ TEST_CASE("Benchmark caged overhang interior sampling", "[ExtrusionProcessor][!b
         return caged_overhang_gcode(wall_generator);
     };
 }
+
+// The six overlap levels GCode.cpp hands the estimator, with one speed per level the way a profile
+// sets them: 100% of the wall speed when fully supported, the four overhang_x_4 speeds, and the
+// bridge speed as the last band. The 100% overhang band here is slower than the bridge speed,
+// as in the default Voron profile (overhang_4_4_speed 10, bridge_speed 25).
+TEST_CASE("A steeper overhang never prints faster than a shallower one", "[ExtrusionProcessor][Regression]")
+{
+    const float wall_width = 0.42f;
+    const float wall_speed = 200.f;
+    const ConfigOptionPercents         overlaps({90, 75, 50, 25, 13, 0});
+    const ConfigOptionFloatsOrPercents speeds({FloatOrPercent{100, true}, FloatOrPercent{60, false}, FloatOrPercent{30, false},
+                                               FloatOrPercent{20, false}, FloatOrPercent{10, false}, FloatOrPercent{25, false}});
+
+    const std::vector<std::pair<float, float>> sections =
+        ExtrusionQualityEstimator::overhang_speed_sections(wall_width, overlaps, speeds, wall_speed);
+    REQUIRE(sections.size() == 6);
+    for (size_t i = 1; i < sections.size(); ++i) {
+        INFO("band " << i << " at overhang distance " << sections[i].first);
+        CHECK(sections[i].first >= sections[i - 1].first);
+        CHECK(sections[i].second <= sections[i - 1].second);
+    }
+    // The unsupported band keeps the slowest configured speed rather than jumping back up to the bridge speed.
+    CHECK_THAT(sections.back().second, Catch::Matchers::WithinAbs(10.f, 1e-4));
+    CHECK_THAT(sections.front().second, Catch::Matchers::WithinAbs(wall_speed, 1e-4));
+
+    float previous = wall_speed;
+    for (float distance = 0.f; distance <= wall_width + 0.1f; distance += 0.005f) {
+        const float speed = ExtrusionQualityEstimator::overhang_speed_at(sections, distance, wall_speed);
+        INFO("overhang distance " << distance);
+        CHECK(speed <= previous);
+        previous = speed;
+    }
+    CHECK_THAT(previous, Catch::Matchers::WithinAbs(10.f, 1e-4));
+}
+
+TEST_CASE("A monotonic overhang speed curve is left as configured", "[ExtrusionProcessor]")
+{
+    const ConfigOptionPercents         overlaps({90, 75, 50, 25, 13, 0});
+    const ConfigOptionFloatsOrPercents speeds({FloatOrPercent{100, true}, FloatOrPercent{80, false}, FloatOrPercent{60, false},
+                                               FloatOrPercent{40, false}, FloatOrPercent{20, false}, FloatOrPercent{20, false}});
+    const std::vector<std::pair<float, float>> sections = ExtrusionQualityEstimator::overhang_speed_sections(0.42f, overlaps, speeds, 100.f);
+    const std::vector<float> expected = {100.f, 80.f, 60.f, 40.f, 20.f, 20.f};
+    REQUIRE(sections.size() == expected.size());
+    for (size_t i = 0; i < sections.size(); ++i)
+        CHECK_THAT(sections[i].second, Catch::Matchers::WithinAbs(expected[i], 1e-4));
+}

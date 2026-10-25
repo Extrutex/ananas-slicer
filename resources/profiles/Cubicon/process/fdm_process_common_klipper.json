@@ -4,7 +4,7 @@
 	"inherits": "fdm_process_common",
 	"from": "system",
 	"instantiation": "false",
-	"default_jerk": "9",
+	"default_jerk": "0",
 	"initial_layer_jerk": "9",
 	"outer_wall_jerk": "7",
 	"infill_jerk": "12",

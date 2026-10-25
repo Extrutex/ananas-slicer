@@ -11,7 +11,7 @@
 	<key>CFBundleIconFile</key>
 	<string>${MACOSX_BUNDLE_ICON_FILE}</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.orcaslicer.OrcaSlicer</string>
+	<string>de.3dwindt.AnanasSlicer</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleLongVersionString</key>
@@ -32,10 +32,10 @@
     <array>
       <dict>
         <key>CFBundleURLName</key>
-        <string>OrcaSlicer Downloads</string>
+        <string>ANANAS SLICER Downloads</string>
         <key>CFBundleURLSchemes</key>
         <array>
-          <string>orcaslicer</string>
+          <string>ananas-slicer</string>
         </array>
       </dict>
     </array>
@@ -65,7 +65,7 @@
 			<string>OBJ</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>images/OrcaSlicer.icns</string>
+			<string>AnanasSlicer.icns</string>
 			<key>CFBundleTypeName</key>
 			<string>STL</string>
 			<key>CFBundleTypeRole</key>
@@ -82,7 +82,7 @@
 			<string>AMF</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>images/OrcaSlicer.icns</string>
+			<string>AnanasSlicer.icns</string>
 			<key>CFBundleTypeName</key>
 			<string>AMF</string>
 			<key>CFBundleTypeRole</key>
@@ -99,7 +99,7 @@
 			<string>3MF</string>
 			</array>
 			<key>CFBundleTypeIconFile</key>
-			<string>images/OrcaSlicer.icns</string>
+			<string>AnanasSlicer.icns</string>
 			<key>CFBundleTypeName</key>
 			<string>3MF</string>
 			<key>CFBundleTypeRole</key>
@@ -131,6 +131,12 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>${MACOSX_BUNDLE_COPYRIGHT}</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>ANANAS SLICER connects to Klipper printers (Moonraker) on your local network to send and monitor print jobs.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_moonraker._tcp</string>
+	</array>
 	<key>NSAppTransportSecurity</key>  
 	<dict>
 		<!-- Disable App Transport Security. Resolves https://github.com/OrcaSlicer/OrcaSlicer/issues/791 -->

@@ -1,0 +1,3077 @@
+{
+ "klipper": "v0.13.0 (61c0c8d)",
+ "printer_cfg": "tests/virtual-printer/printer.cfg",
+ "marker_commands": [
+  "SET_PRINT_STATS_INFO",
+  "EXCLUDE_OBJECT_START",
+  "EXCLUDE_OBJECT_END",
+  "PRINT_END"
+ ],
+ "models": [
+  {
+   "name": "cube",
+   "gcode": "cube.gcode",
+   "markers": [
+    {
+     "line": 3,
+     "command": "SET_PRINT_STATS_INFO TOTAL_LAYER=100",
+     "time_s": 0.0
+    },
+    {
+     "line": 14,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=1",
+     "time_s": 207.055609
+    },
+    {
+     "line": 17,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 207.055609
+    },
+    {
+     "line": 163,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 231.215904
+    },
+    {
+     "line": 164,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=2",
+     "time_s": 231.215904
+    },
+    {
+     "line": 168,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 231.215904
+    },
+    {
+     "line": 364,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 242.29506
+    },
+    {
+     "line": 365,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=3",
+     "time_s": 242.29506
+    },
+    {
+     "line": 367,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 242.29506
+    },
+    {
+     "line": 567,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 253.640699
+    },
+    {
+     "line": 568,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=4",
+     "time_s": 253.640699
+    },
+    {
+     "line": 570,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 253.640699
+    },
+    {
+     "line": 630,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 258.642713
+    },
+    {
+     "line": 631,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=5",
+     "time_s": 258.642713
+    },
+    {
+     "line": 633,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 258.642713
+    },
+    {
+     "line": 694,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 263.646704
+    },
+    {
+     "line": 695,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=6",
+     "time_s": 263.646704
+    },
+    {
+     "line": 697,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 263.646704
+    },
+    {
+     "line": 757,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 268.650694
+    },
+    {
+     "line": 758,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=7",
+     "time_s": 268.650694
+    },
+    {
+     "line": 760,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 268.650694
+    },
+    {
+     "line": 819,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 273.654685
+    },
+    {
+     "line": 820,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=8",
+     "time_s": 273.654685
+    },
+    {
+     "line": 822,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 273.654685
+    },
+    {
+     "line": 882,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 278.658675
+    },
+    {
+     "line": 883,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=9",
+     "time_s": 278.658675
+    },
+    {
+     "line": 885,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 278.658675
+    },
+    {
+     "line": 945,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 283.662665
+    },
+    {
+     "line": 946,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=10",
+     "time_s": 283.662665
+    },
+    {
+     "line": 948,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 283.662665
+    },
+    {
+     "line": 1008,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 288.666656
+    },
+    {
+     "line": 1009,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=11",
+     "time_s": 288.666656
+    },
+    {
+     "line": 1011,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 288.666656
+    },
+    {
+     "line": 1071,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 293.670646
+    },
+    {
+     "line": 1072,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=12",
+     "time_s": 293.670646
+    },
+    {
+     "line": 1074,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 293.670646
+    },
+    {
+     "line": 1200,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 299.039552
+    },
+    {
+     "line": 1201,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=13",
+     "time_s": 299.039552
+    },
+    {
+     "line": 1203,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 299.039552
+    },
+    {
+     "line": 1346,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 305.180005
+    },
+    {
+     "line": 1347,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=14",
+     "time_s": 305.180005
+    },
+    {
+     "line": 1349,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 305.180005
+    },
+    {
+     "line": 1487,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 311.655764
+    },
+    {
+     "line": 1488,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=15",
+     "time_s": 311.655764
+    },
+    {
+     "line": 1490,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 311.655764
+    },
+    {
+     "line": 1623,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 318.050795
+    },
+    {
+     "line": 1624,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=16",
+     "time_s": 318.050795
+    },
+    {
+     "line": 1626,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 318.050795
+    },
+    {
+     "line": 1770,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 324.200542
+    },
+    {
+     "line": 1771,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=17",
+     "time_s": 324.200542
+    },
+    {
+     "line": 1773,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 324.200542
+    },
+    {
+     "line": 1908,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 329.77914
+    },
+    {
+     "line": 1909,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=18",
+     "time_s": 329.77914
+    },
+    {
+     "line": 1911,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 329.77914
+    },
+    {
+     "line": 1975,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 334.861545
+    },
+    {
+     "line": 1976,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=19",
+     "time_s": 334.861545
+    },
+    {
+     "line": 1978,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 334.861545
+    },
+    {
+     "line": 2041,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 339.951939
+    },
+    {
+     "line": 2042,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=20",
+     "time_s": 339.951939
+    },
+    {
+     "line": 2044,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 339.951939
+    },
+    {
+     "line": 2108,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 345.042334
+    },
+    {
+     "line": 2109,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=21",
+     "time_s": 345.042334
+    },
+    {
+     "line": 2111,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 345.042334
+    },
+    {
+     "line": 2175,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 350.132728
+    },
+    {
+     "line": 2176,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=22",
+     "time_s": 350.132728
+    },
+    {
+     "line": 2178,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 350.132728
+    },
+    {
+     "line": 2242,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 355.223122
+    },
+    {
+     "line": 2243,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=23",
+     "time_s": 355.223122
+    },
+    {
+     "line": 2245,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 355.223122
+    },
+    {
+     "line": 2309,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 360.313516
+    },
+    {
+     "line": 2310,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=24",
+     "time_s": 360.313516
+    },
+    {
+     "line": 2312,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 360.313516
+    },
+    {
+     "line": 2376,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 365.403911
+    },
+    {
+     "line": 2377,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=25",
+     "time_s": 365.403911
+    },
+    {
+     "line": 2379,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 365.403911
+    },
+    {
+     "line": 2442,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 370.494305
+    },
+    {
+     "line": 2443,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=26",
+     "time_s": 370.494305
+    },
+    {
+     "line": 2445,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 370.494305
+    },
+    {
+     "line": 2580,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 376.253153
+    },
+    {
+     "line": 2581,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=27",
+     "time_s": 376.253153
+    },
+    {
+     "line": 2583,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 376.253153
+    },
+    {
+     "line": 2721,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 382.550356
+    },
+    {
+     "line": 2722,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=28",
+     "time_s": 382.550356
+    },
+    {
+     "line": 2724,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 382.550356
+    },
+    {
+     "line": 2876,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 389.294949
+    },
+    {
+     "line": 2877,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=29",
+     "time_s": 389.294949
+    },
+    {
+     "line": 2879,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 389.294949
+    },
+    {
+     "line": 3013,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 395.606818
+    },
+    {
+     "line": 3014,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=30",
+     "time_s": 395.606818
+    },
+    {
+     "line": 3016,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 395.606818
+    },
+    {
+     "line": 3159,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 401.546963
+    },
+    {
+     "line": 3160,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=31",
+     "time_s": 401.546963
+    },
+    {
+     "line": 3162,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 401.546963
+    },
+    {
+     "line": 3288,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 406.622751
+    },
+    {
+     "line": 3289,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=32",
+     "time_s": 406.622751
+    },
+    {
+     "line": 3291,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 406.622751
+    },
+    {
+     "line": 3351,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 411.626796
+    },
+    {
+     "line": 3352,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=33",
+     "time_s": 411.626796
+    },
+    {
+     "line": 3354,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 411.626796
+    },
+    {
+     "line": 3414,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 416.630787
+    },
+    {
+     "line": 3415,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=34",
+     "time_s": 416.630787
+    },
+    {
+     "line": 3417,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 416.630787
+    },
+    {
+     "line": 3477,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 421.634777
+    },
+    {
+     "line": 3478,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=35",
+     "time_s": 421.634777
+    },
+    {
+     "line": 3480,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 421.634777
+    },
+    {
+     "line": 3540,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 426.638767
+    },
+    {
+     "line": 3541,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=36",
+     "time_s": 426.638767
+    },
+    {
+     "line": 3543,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 426.638767
+    },
+    {
+     "line": 3602,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 431.642758
+    },
+    {
+     "line": 3603,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=37",
+     "time_s": 431.642758
+    },
+    {
+     "line": 3605,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 431.642758
+    },
+    {
+     "line": 3665,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 436.646748
+    },
+    {
+     "line": 3666,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=38",
+     "time_s": 436.646748
+    },
+    {
+     "line": 3668,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 436.646748
+    },
+    {
+     "line": 3728,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 441.650738
+    },
+    {
+     "line": 3729,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=39",
+     "time_s": 441.650738
+    },
+    {
+     "line": 3731,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 441.650738
+    },
+    {
+     "line": 3862,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 446.931189
+    },
+    {
+     "line": 3863,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=40",
+     "time_s": 446.931189
+    },
+    {
+     "line": 3865,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 446.931189
+    },
+    {
+     "line": 4008,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 452.962309
+    },
+    {
+     "line": 4009,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=41",
+     "time_s": 452.962309
+    },
+    {
+     "line": 4011,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 452.962309
+    },
+    {
+     "line": 4149,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 459.376013
+    },
+    {
+     "line": 4150,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=42",
+     "time_s": 459.376013
+    },
+    {
+     "line": 4152,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 459.376013
+    },
+    {
+     "line": 4285,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 465.826964
+    },
+    {
+     "line": 4286,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=43",
+     "time_s": 465.826964
+    },
+    {
+     "line": 4288,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 465.826964
+    },
+    {
+     "line": 4431,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 472.063538
+    },
+    {
+     "line": 4432,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=44",
+     "time_s": 472.063538
+    },
+    {
+     "line": 4434,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 472.063538
+    },
+    {
+     "line": 4569,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 477.77798
+    },
+    {
+     "line": 4570,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=45",
+     "time_s": 477.77798
+    },
+    {
+     "line": 4572,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 477.77798
+    },
+    {
+     "line": 4636,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 482.860442
+    },
+    {
+     "line": 4637,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=46",
+     "time_s": 482.860442
+    },
+    {
+     "line": 4639,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 482.860442
+    },
+    {
+     "line": 4703,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 487.950837
+    },
+    {
+     "line": 4704,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=47",
+     "time_s": 487.950837
+    },
+    {
+     "line": 4706,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 487.950837
+    },
+    {
+     "line": 4770,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 493.041231
+    },
+    {
+     "line": 4771,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=48",
+     "time_s": 493.041231
+    },
+    {
+     "line": 4773,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 493.041231
+    },
+    {
+     "line": 4836,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 498.131625
+    },
+    {
+     "line": 4837,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=49",
+     "time_s": 498.131625
+    },
+    {
+     "line": 4839,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 498.131625
+    },
+    {
+     "line": 4903,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 503.222019
+    },
+    {
+     "line": 4904,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=50",
+     "time_s": 503.222019
+    },
+    {
+     "line": 4906,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 503.222019
+    },
+    {
+     "line": 4971,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 508.312414
+    },
+    {
+     "line": 4972,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=51",
+     "time_s": 508.312414
+    },
+    {
+     "line": 4974,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 508.312414
+    },
+    {
+     "line": 5038,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 513.402808
+    },
+    {
+     "line": 5039,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=52",
+     "time_s": 513.402808
+    },
+    {
+     "line": 5041,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 513.402808
+    },
+    {
+     "line": 5105,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 518.493202
+    },
+    {
+     "line": 5106,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=53",
+     "time_s": 518.493202
+    },
+    {
+     "line": 5108,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 518.493202
+    },
+    {
+     "line": 5238,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 524.129079
+    },
+    {
+     "line": 5239,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=54",
+     "time_s": 524.129079
+    },
+    {
+     "line": 5241,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 524.129079
+    },
+    {
+     "line": 5389,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 530.448268
+    },
+    {
+     "line": 5390,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=55",
+     "time_s": 530.448268
+    },
+    {
+     "line": 5392,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 530.448268
+    },
+    {
+     "line": 5530,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 537.00743
+    },
+    {
+     "line": 5531,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=56",
+     "time_s": 537.00743
+    },
+    {
+     "line": 5533,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 537.00743
+    },
+    {
+     "line": 5672,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 543.443507
+    },
+    {
+     "line": 5673,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=57",
+     "time_s": 543.443507
+    },
+    {
+     "line": 5675,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 543.443507
+    },
+    {
+     "line": 5818,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 549.488833
+    },
+    {
+     "line": 5819,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=58",
+     "time_s": 549.488833
+    },
+    {
+     "line": 5821,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 549.488833
+    },
+    {
+     "line": 5951,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 554.7814
+    },
+    {
+     "line": 5952,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=59",
+     "time_s": 554.7814
+    },
+    {
+     "line": 5954,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 554.7814
+    },
+    {
+     "line": 6013,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 559.78001
+    },
+    {
+     "line": 6014,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=60",
+     "time_s": 559.78001
+    },
+    {
+     "line": 6016,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 559.78001
+    },
+    {
+     "line": 6076,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 564.784001
+    },
+    {
+     "line": 6077,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=61",
+     "time_s": 564.784001
+    },
+    {
+     "line": 6079,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 564.784001
+    },
+    {
+     "line": 6140,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 569.787991
+    },
+    {
+     "line": 6141,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=62",
+     "time_s": 569.787991
+    },
+    {
+     "line": 6143,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 569.787991
+    },
+    {
+     "line": 6203,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 574.791981
+    },
+    {
+     "line": 6204,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=63",
+     "time_s": 574.791981
+    },
+    {
+     "line": 6206,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 574.791981
+    },
+    {
+     "line": 6266,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 579.795972
+    },
+    {
+     "line": 6267,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=64",
+     "time_s": 579.795972
+    },
+    {
+     "line": 6269,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 579.795972
+    },
+    {
+     "line": 6329,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 584.799962
+    },
+    {
+     "line": 6330,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=65",
+     "time_s": 584.799962
+    },
+    {
+     "line": 6332,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 584.799962
+    },
+    {
+     "line": 6391,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 589.803952
+    },
+    {
+     "line": 6392,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=66",
+     "time_s": 589.803952
+    },
+    {
+     "line": 6394,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 589.803952
+    },
+    {
+     "line": 6520,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 594.867729
+    },
+    {
+     "line": 6521,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=67",
+     "time_s": 594.867729
+    },
+    {
+     "line": 6523,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 594.867729
+    },
+    {
+     "line": 6658,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 600.763364
+    },
+    {
+     "line": 6659,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=68",
+     "time_s": 600.763364
+    },
+    {
+     "line": 6661,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 600.763364
+    },
+    {
+     "line": 6799,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 607.112907
+    },
+    {
+     "line": 6800,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=69",
+     "time_s": 607.112907
+    },
+    {
+     "line": 6802,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 607.112907
+    },
+    {
+     "line": 6953,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 613.841972
+    },
+    {
+     "line": 6954,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=70",
+     "time_s": 613.841972
+    },
+    {
+     "line": 6956,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 613.841972
+    },
+    {
+     "line": 7094,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 620.139046
+    },
+    {
+     "line": 7095,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=71",
+     "time_s": 620.139046
+    },
+    {
+     "line": 7097,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 620.139046
+    },
+    {
+     "line": 7232,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 625.914574
+    },
+    {
+     "line": 7233,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=72",
+     "time_s": 625.914574
+    },
+    {
+     "line": 7235,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 625.914574
+    },
+    {
+     "line": 7300,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 631.004021
+    },
+    {
+     "line": 7301,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=73",
+     "time_s": 631.004021
+    },
+    {
+     "line": 7303,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 631.004021
+    },
+    {
+     "line": 7367,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 636.094415
+    },
+    {
+     "line": 7368,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=74",
+     "time_s": 636.094415
+    },
+    {
+     "line": 7370,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 636.094415
+    },
+    {
+     "line": 7434,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 641.184809
+    },
+    {
+     "line": 7435,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=75",
+     "time_s": 641.184809
+    },
+    {
+     "line": 7437,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 641.184809
+    },
+    {
+     "line": 7501,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 646.275204
+    },
+    {
+     "line": 7502,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=76",
+     "time_s": 646.275204
+    },
+    {
+     "line": 7504,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 646.275204
+    },
+    {
+     "line": 7568,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 651.365598
+    },
+    {
+     "line": 7569,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=77",
+     "time_s": 651.365598
+    },
+    {
+     "line": 7571,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 651.365598
+    },
+    {
+     "line": 7634,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 656.455992
+    },
+    {
+     "line": 7635,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=78",
+     "time_s": 656.455992
+    },
+    {
+     "line": 7637,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 656.455992
+    },
+    {
+     "line": 7701,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 661.546386
+    },
+    {
+     "line": 7702,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=79",
+     "time_s": 661.546386
+    },
+    {
+     "line": 7704,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 661.546386
+    },
+    {
+     "line": 7768,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 666.636781
+    },
+    {
+     "line": 7769,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=80",
+     "time_s": 666.636781
+    },
+    {
+     "line": 7771,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 666.636781
+    },
+    {
+     "line": 7896,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 672.03066
+    },
+    {
+     "line": 7897,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=81",
+     "time_s": 672.03066
+    },
+    {
+     "line": 7899,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 672.03066
+    },
+    {
+     "line": 8042,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 678.166695
+    },
+    {
+     "line": 8043,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=82",
+     "time_s": 678.166695
+    },
+    {
+     "line": 8045,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 678.166695
+    },
+    {
+     "line": 8178,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 684.576542
+    },
+    {
+     "line": 8179,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=83",
+     "time_s": 684.576542
+    },
+    {
+     "line": 8181,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 684.576542
+    },
+    {
+     "line": 8315,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 691.008363
+    },
+    {
+     "line": 8316,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=84",
+     "time_s": 691.008363
+    },
+    {
+     "line": 8318,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 691.008363
+    },
+    {
+     "line": 8462,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 697.164926
+    },
+    {
+     "line": 8463,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=85",
+     "time_s": 697.164926
+    },
+    {
+     "line": 8465,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 697.164926
+    },
+    {
+     "line": 8591,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 702.550674
+    },
+    {
+     "line": 8592,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=86",
+     "time_s": 702.550674
+    },
+    {
+     "line": 8594,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 702.550674
+    },
+    {
+     "line": 8654,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 707.554763
+    },
+    {
+     "line": 8655,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=87",
+     "time_s": 707.554763
+    },
+    {
+     "line": 8657,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 707.554763
+    },
+    {
+     "line": 8717,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 712.558754
+    },
+    {
+     "line": 8718,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=88",
+     "time_s": 712.558754
+    },
+    {
+     "line": 8720,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 712.558754
+    },
+    {
+     "line": 8779,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 717.562744
+    },
+    {
+     "line": 8780,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=89",
+     "time_s": 717.562744
+    },
+    {
+     "line": 8782,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 717.562744
+    },
+    {
+     "line": 8842,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 722.566734
+    },
+    {
+     "line": 8843,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=90",
+     "time_s": 722.566734
+    },
+    {
+     "line": 8845,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 722.566734
+    },
+    {
+     "line": 8905,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 727.570725
+    },
+    {
+     "line": 8906,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=91",
+     "time_s": 727.570725
+    },
+    {
+     "line": 8908,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 727.570725
+    },
+    {
+     "line": 8968,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 732.574715
+    },
+    {
+     "line": 8969,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=92",
+     "time_s": 732.574715
+    },
+    {
+     "line": 8971,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 732.574715
+    },
+    {
+     "line": 9031,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 737.578705
+    },
+    {
+     "line": 9032,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=93",
+     "time_s": 737.578705
+    },
+    {
+     "line": 9034,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 737.578705
+    },
+    {
+     "line": 9094,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 742.582696
+    },
+    {
+     "line": 9095,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=94",
+     "time_s": 742.582696
+    },
+    {
+     "line": 9097,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 742.582696
+    },
+    {
+     "line": 9232,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 748.375627
+    },
+    {
+     "line": 9233,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=95",
+     "time_s": 748.375627
+    },
+    {
+     "line": 9235,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 748.375627
+    },
+    {
+     "line": 9374,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 754.655492
+    },
+    {
+     "line": 9375,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=96",
+     "time_s": 754.655492
+    },
+    {
+     "line": 9377,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 754.655492
+    },
+    {
+     "line": 9548,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 761.719725
+    },
+    {
+     "line": 9549,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=97",
+     "time_s": 761.719725
+    },
+    {
+     "line": 9551,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 761.719725
+    },
+    {
+     "line": 9687,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 777.614128
+    },
+    {
+     "line": 9688,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=98",
+     "time_s": 777.614128
+    },
+    {
+     "line": 9690,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 777.614128
+    },
+    {
+     "line": 9886,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 788.694274
+    },
+    {
+     "line": 9887,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=99",
+     "time_s": 788.694274
+    },
+    {
+     "line": 9889,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 788.694274
+    },
+    {
+     "line": 10089,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 800.039912
+    },
+    {
+     "line": 10090,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=100",
+     "time_s": 800.039912
+    },
+    {
+     "line": 10092,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 800.039912
+    },
+    {
+     "line": 10475,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 814.653297
+    },
+    {
+     "line": 10477,
+     "command": "PRINT_END",
+     "time_s": 814.653297
+    }
+   ]
+  },
+  {
+   "name": "cube_fine",
+   "gcode": "cube_fine.gcode",
+   "markers": [
+    {
+     "line": 3,
+     "command": "SET_PRINT_STATS_INFO TOTAL_LAYER=166",
+     "time_s": 0.0
+    },
+    {
+     "line": 14,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=1",
+     "time_s": 207.055609
+    },
+    {
+     "line": 17,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 207.055609
+    },
+    {
+     "line": 162,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 231.215638
+    },
+    {
+     "line": 163,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=2",
+     "time_s": 231.215638
+    },
+    {
+     "line": 167,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 231.215638
+    },
+    {
+     "line": 353,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 241.495757
+    },
+    {
+     "line": 354,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=3",
+     "time_s": 241.495757
+    },
+    {
+     "line": 356,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 241.495757
+    },
+    {
+     "line": 545,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 252.042519
+    },
+    {
+     "line": 546,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=4",
+     "time_s": 252.042519
+    },
+    {
+     "line": 548,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 252.042519
+    },
+    {
+     "line": 735,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 262.321607
+    },
+    {
+     "line": 736,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=5",
+     "time_s": 262.321607
+    },
+    {
+     "line": 738,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 262.321607
+    },
+    {
+     "line": 927,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 272.868369
+    },
+    {
+     "line": 928,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=6",
+     "time_s": 272.868369
+    },
+    {
+     "line": 930,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 272.868369
+    },
+    {
+     "line": 1056,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 277.908837
+    },
+    {
+     "line": 1057,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=7",
+     "time_s": 277.908837
+    },
+    {
+     "line": 1059,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 277.908837
+    },
+    {
+     "line": 1118,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 282.911532
+    },
+    {
+     "line": 1119,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=8",
+     "time_s": 282.911532
+    },
+    {
+     "line": 1121,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 282.911532
+    },
+    {
+     "line": 1181,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 287.914201
+    },
+    {
+     "line": 1182,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=9",
+     "time_s": 287.914201
+    },
+    {
+     "line": 1184,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 287.914201
+    },
+    {
+     "line": 1243,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 292.91687
+    },
+    {
+     "line": 1244,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=10",
+     "time_s": 292.91687
+    },
+    {
+     "line": 1246,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 292.91687
+    },
+    {
+     "line": 1306,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 297.919539
+    },
+    {
+     "line": 1307,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=11",
+     "time_s": 297.919539
+    },
+    {
+     "line": 1309,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 297.919539
+    },
+    {
+     "line": 1368,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 302.922209
+    },
+    {
+     "line": 1369,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=12",
+     "time_s": 302.922209
+    },
+    {
+     "line": 1371,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 302.922209
+    },
+    {
+     "line": 1431,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 307.924878
+    },
+    {
+     "line": 1432,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=13",
+     "time_s": 307.924878
+    },
+    {
+     "line": 1434,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 307.924878
+    },
+    {
+     "line": 1493,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 312.927547
+    },
+    {
+     "line": 1494,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=14",
+     "time_s": 312.927547
+    },
+    {
+     "line": 1496,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 312.927547
+    },
+    {
+     "line": 1557,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 317.930216
+    },
+    {
+     "line": 1558,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=15",
+     "time_s": 317.930216
+    },
+    {
+     "line": 1560,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 317.930216
+    },
+    {
+     "line": 1619,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 322.932886
+    },
+    {
+     "line": 1620,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=16",
+     "time_s": 322.932886
+    },
+    {
+     "line": 1622,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 322.932886
+    },
+    {
+     "line": 1682,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 327.935555
+    },
+    {
+     "line": 1683,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=17",
+     "time_s": 327.935555
+    },
+    {
+     "line": 1685,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 327.935555
+    },
+    {
+     "line": 1744,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 332.938224
+    },
+    {
+     "line": 1745,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=18",
+     "time_s": 332.938224
+    },
+    {
+     "line": 1747,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 332.938224
+    },
+    {
+     "line": 1807,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 337.940893
+    },
+    {
+     "line": 1808,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=19",
+     "time_s": 337.940893
+    },
+    {
+     "line": 1810,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 337.940893
+    },
+    {
+     "line": 1869,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 342.943563
+    },
+    {
+     "line": 1870,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=20",
+     "time_s": 342.943563
+    },
+    {
+     "line": 1872,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 342.943563
+    },
+    {
+     "line": 1994,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 348.10856
+    },
+    {
+     "line": 1995,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=21",
+     "time_s": 348.10856
+    },
+    {
+     "line": 1997,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 348.10856
+    },
+    {
+     "line": 2129,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 353.78731
+    },
+    {
+     "line": 2130,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=22",
+     "time_s": 353.78731
+    },
+    {
+     "line": 2132,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 353.78731
+    },
+    {
+     "line": 2274,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 359.881413
+    },
+    {
+     "line": 2275,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=23",
+     "time_s": 359.881413
+    },
+    {
+     "line": 2277,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 359.881413
+    },
+    {
+     "line": 2420,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 366.104693
+    },
+    {
+     "line": 2421,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=24",
+     "time_s": 366.104693
+    },
+    {
+     "line": 2423,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 366.104693
+    },
+    {
+     "line": 2573,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 372.697809
+    },
+    {
+     "line": 2574,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=25",
+     "time_s": 372.697809
+    },
+    {
+     "line": 2576,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 372.697809
+    },
+    {
+     "line": 2735,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 379.307434
+    },
+    {
+     "line": 2736,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=26",
+     "time_s": 379.307434
+    },
+    {
+     "line": 2738,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 379.307434
+    },
+    {
+     "line": 2882,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 385.510448
+    },
+    {
+     "line": 2883,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=27",
+     "time_s": 385.510448
+    },
+    {
+     "line": 2885,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 385.510448
+    },
+    {
+     "line": 3027,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 391.622193
+    },
+    {
+     "line": 3028,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=28",
+     "time_s": 391.622193
+    },
+    {
+     "line": 3030,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 391.622193
+    },
+    {
+     "line": 3161,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 397.325073
+    },
+    {
+     "line": 3162,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=29",
+     "time_s": 397.325073
+    },
+    {
+     "line": 3164,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 397.325073
+    },
+    {
+     "line": 3285,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 402.54912
+    },
+    {
+     "line": 3286,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=30",
+     "time_s": 402.54912
+    },
+    {
+     "line": 3288,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 402.54912
+    },
+    {
+     "line": 3342,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 407.48981
+    },
+    {
+     "line": 3343,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=31",
+     "time_s": 407.48981
+    },
+    {
+     "line": 3345,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 407.48981
+    },
+    {
+     "line": 3400,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 412.430436
+    },
+    {
+     "line": 3401,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=32",
+     "time_s": 412.430436
+    },
+    {
+     "line": 3403,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 412.430436
+    },
+    {
+     "line": 3457,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 417.371061
+    },
+    {
+     "line": 3458,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=33",
+     "time_s": 417.371061
+    },
+    {
+     "line": 3460,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 417.371061
+    },
+    {
+     "line": 3515,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 422.311687
+    },
+    {
+     "line": 3516,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=34",
+     "time_s": 422.311687
+    },
+    {
+     "line": 3518,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 422.311687
+    },
+    {
+     "line": 3572,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 427.252313
+    },
+    {
+     "line": 3573,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=35",
+     "time_s": 427.252313
+    },
+    {
+     "line": 3575,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 427.252313
+    },
+    {
+     "line": 3630,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 432.192939
+    },
+    {
+     "line": 3631,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=36",
+     "time_s": 432.192939
+    },
+    {
+     "line": 3633,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 432.192939
+    },
+    {
+     "line": 3687,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 437.133565
+    },
+    {
+     "line": 3688,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=37",
+     "time_s": 437.133565
+    },
+    {
+     "line": 3690,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 437.133565
+    },
+    {
+     "line": 3745,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 442.074191
+    },
+    {
+     "line": 3746,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=38",
+     "time_s": 442.074191
+    },
+    {
+     "line": 3748,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 442.074191
+    },
+    {
+     "line": 3802,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 447.014817
+    },
+    {
+     "line": 3803,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=39",
+     "time_s": 447.014817
+    },
+    {
+     "line": 3805,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 447.014817
+    },
+    {
+     "line": 3860,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 451.955443
+    },
+    {
+     "line": 3861,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=40",
+     "time_s": 451.955443
+    },
+    {
+     "line": 3863,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 451.955443
+    },
+    {
+     "line": 3917,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 456.897358
+    },
+    {
+     "line": 3918,
+     "command": "PRINT_END",
+     "time_s": 456.897358
+    }
+   ]
+  },
+  {
+   "name": "cube_legacy_limits",
+   "gcode": "cube_legacy_limits.gcode",
+   "markers": [
+    {
+     "line": 3,
+     "command": "SET_PRINT_STATS_INFO TOTAL_LAYER=100",
+     "time_s": 0.0
+    },
+    {
+     "line": 14,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=1",
+     "time_s": 207.055609
+    },
+    {
+     "line": 17,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 207.055609
+    },
+    {
+     "line": 163,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 229.256999
+    },
+    {
+     "line": 164,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=2",
+     "time_s": 229.256999
+    },
+    {
+     "line": 168,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 229.256999
+    },
+    {
+     "line": 364,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 239.840839
+    },
+    {
+     "line": 365,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=3",
+     "time_s": 239.840839
+    },
+    {
+     "line": 367,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 239.840839
+    },
+    {
+     "line": 567,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 250.672636
+    },
+    {
+     "line": 568,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=4",
+     "time_s": 250.672636
+    },
+    {
+     "line": 570,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 250.672636
+    },
+    {
+     "line": 630,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 255.54231
+    },
+    {
+     "line": 631,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=5",
+     "time_s": 255.54231
+    },
+    {
+     "line": 633,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 255.54231
+    },
+    {
+     "line": 694,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 260.413659
+    },
+    {
+     "line": 695,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=6",
+     "time_s": 260.413659
+    },
+    {
+     "line": 697,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 260.413659
+    },
+    {
+     "line": 757,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 265.285008
+    },
+    {
+     "line": 758,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=7",
+     "time_s": 265.285008
+    },
+    {
+     "line": 760,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 265.285008
+    },
+    {
+     "line": 819,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 270.156357
+    },
+    {
+     "line": 820,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=8",
+     "time_s": 270.156357
+    },
+    {
+     "line": 822,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 270.156357
+    },
+    {
+     "line": 882,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 275.027707
+    },
+    {
+     "line": 883,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=9",
+     "time_s": 275.027707
+    },
+    {
+     "line": 885,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 275.027707
+    },
+    {
+     "line": 945,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 279.899056
+    },
+    {
+     "line": 946,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=10",
+     "time_s": 279.899056
+    },
+    {
+     "line": 948,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 279.899056
+    },
+    {
+     "line": 1008,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 284.770405
+    },
+    {
+     "line": 1009,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=11",
+     "time_s": 284.770405
+    },
+    {
+     "line": 1011,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 284.770405
+    },
+    {
+     "line": 1071,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 289.641754
+    },
+    {
+     "line": 1072,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=12",
+     "time_s": 289.641754
+    },
+    {
+     "line": 1074,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 289.641754
+    },
+    {
+     "line": 1200,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 294.511374
+    },
+    {
+     "line": 1201,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=13",
+     "time_s": 294.511374
+    },
+    {
+     "line": 1203,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 294.511374
+    },
+    {
+     "line": 1346,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 299.986663
+    },
+    {
+     "line": 1347,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=14",
+     "time_s": 299.986663
+    },
+    {
+     "line": 1349,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 299.986663
+    },
+    {
+     "line": 1487,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 305.958377
+    },
+    {
+     "line": 1488,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=15",
+     "time_s": 305.958377
+    },
+    {
+     "line": 1490,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 305.958377
+    },
+    {
+     "line": 1623,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 311.85704
+    },
+    {
+     "line": 1624,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=16",
+     "time_s": 311.85704
+    },
+    {
+     "line": 1626,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 311.85704
+    },
+    {
+     "line": 1770,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 317.353172
+    },
+    {
+     "line": 1771,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=17",
+     "time_s": 317.353172
+    },
+    {
+     "line": 1773,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 317.353172
+    },
+    {
+     "line": 1908,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 322.383855
+    },
+    {
+     "line": 1909,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=18",
+     "time_s": 322.383855
+    },
+    {
+     "line": 1911,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 322.383855
+    },
+    {
+     "line": 1975,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 327.33106
+    },
+    {
+     "line": 1976,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=19",
+     "time_s": 327.33106
+    },
+    {
+     "line": 1978,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 327.33106
+    },
+    {
+     "line": 2041,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 332.285792
+    },
+    {
+     "line": 2042,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=20",
+     "time_s": 332.285792
+    },
+    {
+     "line": 2044,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 332.285792
+    },
+    {
+     "line": 2108,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 337.240524
+    },
+    {
+     "line": 2109,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=21",
+     "time_s": 337.240524
+    },
+    {
+     "line": 2111,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 337.240524
+    },
+    {
+     "line": 2175,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 342.195256
+    },
+    {
+     "line": 2176,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=22",
+     "time_s": 342.195256
+    },
+    {
+     "line": 2178,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 342.195256
+    },
+    {
+     "line": 2242,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 347.149988
+    },
+    {
+     "line": 2243,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=23",
+     "time_s": 347.149988
+    },
+    {
+     "line": 2245,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 347.149988
+    },
+    {
+     "line": 2309,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 352.104719
+    },
+    {
+     "line": 2310,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=24",
+     "time_s": 352.104719
+    },
+    {
+     "line": 2312,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 352.104719
+    },
+    {
+     "line": 2376,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 357.059451
+    },
+    {
+     "line": 2377,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=25",
+     "time_s": 357.059451
+    },
+    {
+     "line": 2379,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 357.059451
+    },
+    {
+     "line": 2442,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 362.014183
+    },
+    {
+     "line": 2443,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=26",
+     "time_s": 362.014183
+    },
+    {
+     "line": 2445,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 362.014183
+    },
+    {
+     "line": 2580,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 367.081017
+    },
+    {
+     "line": 2581,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=27",
+     "time_s": 367.081017
+    },
+    {
+     "line": 2583,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 367.081017
+    },
+    {
+     "line": 2721,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 372.784019
+    },
+    {
+     "line": 2722,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=28",
+     "time_s": 372.784019
+    },
+    {
+     "line": 2724,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 372.784019
+    },
+    {
+     "line": 2876,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 379.09221
+    },
+    {
+     "line": 2877,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=29",
+     "time_s": 379.09221
+    },
+    {
+     "line": 2879,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 379.09221
+    },
+    {
+     "line": 3013,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 384.845093
+    },
+    {
+     "line": 3014,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=30",
+     "time_s": 384.845093
+    },
+    {
+     "line": 3016,
+     "command": "EXCLUDE_OBJECT_START NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 384.845093
+    },
+    {
+     "line": 3159,
+     "command": "EXCLUDE_OBJECT_END NAME=20mm_cube.obj_id_0_copy_0",
+     "time_s": 390.141297
+    },
+    {
+     "line": 3160,
+     "command": "PRINT_END",
+     "time_s": 390.141297
+    }
+   ]
+  },
+  {
+   "name": "extruder_idler",
+   "gcode": "extruder_idler.gcode",
+   "markers": [
+    {
+     "line": 3,
+     "command": "SET_PRINT_STATS_INFO TOTAL_LAYER=190",
+     "time_s": 0.0
+    },
+    {
+     "line": 14,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=1",
+     "time_s": 207.055609
+    },
+    {
+     "line": 139,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 211.854757
+    },
+    {
+     "line": 153,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 212.036049
+    },
+    {
+     "line": 154,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=2",
+     "time_s": 212.036049
+    },
+    {
+     "line": 158,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 212.036049
+    },
+    {
+     "line": 190,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 213.800453
+    },
+    {
+     "line": 191,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=3",
+     "time_s": 213.800453
+    },
+    {
+     "line": 193,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 213.800453
+    },
+    {
+     "line": 239,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 216.663925
+    },
+    {
+     "line": 240,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=4",
+     "time_s": 216.663925
+    },
+    {
+     "line": 242,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 216.663925
+    },
+    {
+     "line": 316,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 220.925989
+    },
+    {
+     "line": 317,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=5",
+     "time_s": 220.925989
+    },
+    {
+     "line": 319,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 220.925989
+    },
+    {
+     "line": 401,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 225.268722
+    },
+    {
+     "line": 402,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=6",
+     "time_s": 225.268722
+    },
+    {
+     "line": 404,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 225.268722
+    },
+    {
+     "line": 501,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 229.716363
+    },
+    {
+     "line": 502,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=7",
+     "time_s": 229.716363
+    },
+    {
+     "line": 504,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 229.716363
+    },
+    {
+     "line": 604,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 234.31161
+    },
+    {
+     "line": 605,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=8",
+     "time_s": 234.31161
+    },
+    {
+     "line": 607,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 234.31161
+    },
+    {
+     "line": 727,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 239.054015
+    },
+    {
+     "line": 728,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=9",
+     "time_s": 239.054015
+    },
+    {
+     "line": 730,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 239.054015
+    },
+    {
+     "line": 851,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 243.954538
+    },
+    {
+     "line": 852,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=10",
+     "time_s": 243.954538
+    },
+    {
+     "line": 854,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 243.954538
+    },
+    {
+     "line": 988,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 248.702581
+    },
+    {
+     "line": 989,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=11",
+     "time_s": 248.702581
+    },
+    {
+     "line": 991,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 248.702581
+    },
+    {
+     "line": 1123,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 253.450142
+    },
+    {
+     "line": 1124,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=12",
+     "time_s": 253.450142
+    },
+    {
+     "line": 1126,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 253.450142
+    },
+    {
+     "line": 1242,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 258.127852
+    },
+    {
+     "line": 1243,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=13",
+     "time_s": 258.127852
+    },
+    {
+     "line": 1245,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 258.127852
+    },
+    {
+     "line": 1364,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 262.897639
+    },
+    {
+     "line": 1365,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=14",
+     "time_s": 262.897639
+    },
+    {
+     "line": 1367,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 262.897639
+    },
+    {
+     "line": 1494,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 268.316486
+    },
+    {
+     "line": 1495,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=15",
+     "time_s": 268.316486
+    },
+    {
+     "line": 1497,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 268.316486
+    },
+    {
+     "line": 1704,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 273.540964
+    },
+    {
+     "line": 1705,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=16",
+     "time_s": 273.540964
+    },
+    {
+     "line": 1707,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 273.540964
+    },
+    {
+     "line": 1980,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 279.103695
+    },
+    {
+     "line": 1981,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=17",
+     "time_s": 279.103695
+    },
+    {
+     "line": 1983,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 279.103695
+    },
+    {
+     "line": 2302,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 285.218275
+    },
+    {
+     "line": 2303,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=18",
+     "time_s": 285.218275
+    },
+    {
+     "line": 2305,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 285.218275
+    },
+    {
+     "line": 2667,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 292.031702
+    },
+    {
+     "line": 2668,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=19",
+     "time_s": 292.031702
+    },
+    {
+     "line": 2670,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 292.031702
+    },
+    {
+     "line": 3047,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 299.369559
+    },
+    {
+     "line": 3048,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=20",
+     "time_s": 299.369559
+    },
+    {
+     "line": 3050,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 299.369559
+    },
+    {
+     "line": 3492,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 306.603628
+    },
+    {
+     "line": 3493,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=21",
+     "time_s": 306.603628
+    },
+    {
+     "line": 3495,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 306.603628
+    },
+    {
+     "line": 3945,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 314.198953
+    },
+    {
+     "line": 3946,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=22",
+     "time_s": 314.198953
+    },
+    {
+     "line": 3948,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 314.198953
+    },
+    {
+     "line": 4397,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 321.675725
+    },
+    {
+     "line": 4398,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=23",
+     "time_s": 321.675725
+    },
+    {
+     "line": 4400,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 321.675725
+    },
+    {
+     "line": 4838,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 329.492658
+    },
+    {
+     "line": 4839,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=24",
+     "time_s": 329.492658
+    },
+    {
+     "line": 4841,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 329.492658
+    },
+    {
+     "line": 5227,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 337.869226
+    },
+    {
+     "line": 5228,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=25",
+     "time_s": 337.869226
+    },
+    {
+     "line": 5230,
+     "command": "EXCLUDE_OBJECT_START NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 337.869226
+    },
+    {
+     "line": 5598,
+     "command": "EXCLUDE_OBJECT_END NAME=extruder_idler.obj_id_0_copy_0",
+     "time_s": 345.51851
+    },
+    {
+     "line": 5599,
+     "command": "PRINT_END",
+     "time_s": 345.51851
+    }
+   ]
+  },
+  {
+   "name": "frog_legs",
+   "gcode": "frog_legs.gcode",
+   "markers": [
+    {
+     "line": 3,
+     "command": "SET_PRINT_STATS_INFO TOTAL_LAYER=10",
+     "time_s": 0.0
+    },
+    {
+     "line": 14,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=1",
+     "time_s": 207.055609
+    },
+    {
+     "line": 17,
+     "command": "EXCLUDE_OBJECT_START NAME=frog_legs.obj_id_0_copy_0",
+     "time_s": 207.055609
+    },
+    {
+     "line": 2326,
+     "command": "EXCLUDE_OBJECT_END NAME=frog_legs.obj_id_0_copy_0",
+     "time_s": 273.960605
+    },
+    {
+     "line": 2327,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=2",
+     "time_s": 273.960605
+    },
+    {
+     "line": 2331,
+     "command": "EXCLUDE_OBJECT_START NAME=frog_legs.obj_id_0_copy_0",
+     "time_s": 273.960605
+    },
+    {
+     "line": 5543,
+     "command": "EXCLUDE_OBJECT_END NAME=frog_legs.obj_id_0_copy_0",
+     "time_s": 314.04043
+    },
+    {
+     "line": 5544,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=3",
+     "time_s": 314.04043
+    },
+    {
+     "line": 5546,
+     "command": "EXCLUDE_OBJECT_START NAME=frog_legs.obj_id_0_copy_0",
+     "time_s": 314.04043
+    },
+    {
+     "line": 8690,
+     "command": "EXCLUDE_OBJECT_END NAME=frog_legs.obj_id_0_copy_0",
+     "time_s": 354.620044
+    },
+    {
+     "line": 8691,
+     "command": "SET_PRINT_STATS_INFO CURRENT_LAYER=4",
+     "time_s": 354.620044
+    },
+    {
+     "line": 8693,
+     "command": "EXCLUDE_OBJECT_START NAME=frog_legs.obj_id_0_copy_0",
+     "time_s": 354.620044
+    },
+    {
+     "line": 11755,
+     "command": "EXCLUDE_OBJECT_END NAME=frog_legs.obj_id_0_copy_0",
+     "time_s": 386.965207
+    },
+    {
+     "line": 11756,
+     "command": "PRINT_END",
+     "time_s": 386.965207
+    }
+   ]
+  }
+ ]
+}

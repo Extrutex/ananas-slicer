@@ -109,7 +109,7 @@
 	"compatible_printers": [
 		"Creality K1 Max (0.6 nozzle)"
 	],
-	"accel_to_decel_enable": "1",
+	"accel_to_decel_enable": "0",
 	"accel_to_decel_factor": "100%",
 	"acceleration_limit_mess_enable": "0",
 	"ai_infill": "0",
@@ -122,7 +122,7 @@
 	"brim_ears_max_angle": "125",
 	"brim_type": "auto_brim",
 	"counterbore_hole_bridging": "none",
-	"default_jerk": "6",
+	"default_jerk": "0",
 	"detect_narrow_internal_solid_infill": "1",
 	"dont_filter_internal_bridges": "disabled",
 	"elefant_foot_compensation_layers": "1",

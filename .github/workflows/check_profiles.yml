@@ -6,12 +6,11 @@ on:
     # into a release branch would run no profile validation at all.
     branches:
     - main
+    - dev
     paths:
     - 'resources/profiles/**'
-    # orca_profile_tool.py also validates resources/printers/bambu_filament_ids.json, and
-    # both it and its tests live in scripts/, so a PR touching only those must still run
-    # this workflow.
-    - 'resources/printers/**'
+    # orca_profile_tool.py and its tests live in scripts/, so a PR touching only
+    # those must still run this workflow.
     - 'scripts/**'
     # orca_profile_tool.py reads the variant key sets from PrintConfig.cpp, and its
     # tests the obsolete keys, so a PR changing either must be checked against the profiles.

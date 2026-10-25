@@ -15,7 +15,7 @@
 	"bridge_flow": "1.4",
 	"brim_object_gap": "0.04",
 	"default_acceleration": "15000",
-	"default_jerk": "10",
+	"default_jerk": "0",
 	"filter_out_gap_fill": "1",
 	"gap_infill_speed": "200",
 	"infill_anchor": "1000",

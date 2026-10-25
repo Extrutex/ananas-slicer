@@ -5,7 +5,7 @@
 	"from": "system",
 	"setting_id": "mvjFUBLuSrZ1fm1e",
 	"instantiation": "true",
-	"accel_to_decel_enable": "1",
+	"accel_to_decel_enable": "0",
 	"accel_to_decel_factor": "100",
 	"acceleration_limit_mess_enable": "0",
 	"alternate_extra_wall": "0",
@@ -28,7 +28,7 @@
 		"Creality K2 0.8 nozzle"
 	],
 	"default_acceleration": "8000",
-	"default_jerk": "8",
+	"default_jerk": "0",
 	"detect_narrow_internal_solid_infill": "1",
 	"detect_overhang_wall": "1",
 	"detect_thin_wall": "0",

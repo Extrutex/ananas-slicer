@@ -1,0 +1,91 @@
+# ANANAS SLICER virtual printer rig. Driven by run.sh; see README.md.
+#
+# No service publishes a port and the network is internal: nothing here can
+# reach, or be reached from, the LAN or any real printer.
+
+name: ananas-slicer-vp
+
+x-rig: &rig
+  image: ananas-slicer-vp:local
+  build:
+    context: .
+  init: true
+  user: "${VP_UID:?run via run.sh}:${VP_GID:?run via run.sh}"
+  networks: [rig]
+  mem_limit: 512m
+  volumes:
+    - ./:/vp:ro
+    - ./out:/out
+    - printer_data:/printer_data
+    # Inside the data path's config folder, where Moonraker expects both.
+    # VP_PRINTER_CFG (relative to this folder) swaps in another config for the
+    # long-running Klippy; run.sh uses it for the live cancel check.
+    - ./${VP_PRINTER_CFG:-printer.cfg}:/printer_data/config/printer.cfg:ro
+    - ./moonraker.conf:/printer_data/config/moonraker.conf:ro
+    # The Klipper macros ANANAS SLICER ships, included by printer.cfg.
+    - ../../resources/klipper:/ananas-slicer:ro
+
+services:
+  # One-shot Klipper batch run (docker compose run --rm klipper-batch ...).
+  klipper-batch:
+    <<: *rig
+    profiles: [batch]
+    entrypoint: ["/opt/klippy-env/bin/python", "/vp/klippy_batch.py"]
+
+  # Long-running Klippy with the API socket open, for Moonraker. Same
+  # file-output MCU as batch mode, but G-code arrives through the API (and the
+  # pseudo-tty Klippy creates) instead of an input file, which is what keeps the
+  # API server enabled.
+  klipper:
+    <<: *rig
+    command:
+      - /opt/klippy-env/bin/python
+      - /opt/klipper/klippy/klippy.py
+      - /printer_data/config/printer.cfg
+      - -I
+      - /tmp/printer
+      - -o
+      - /dev/null
+      - -d
+      - /opt/klipper-dict/linux-host.dict
+      - -a
+      - /printer_data/comms/klippy.sock
+      - -l
+      - /printer_data/logs/klippy.log
+    healthcheck:
+      test: ["CMD", "test", "-S", "/printer_data/comms/klippy.sock"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  moonraker:
+    <<: *rig
+    depends_on:
+      klipper:
+        condition: service_healthy
+    command:
+      - /opt/moonraker-env/bin/python
+      - /opt/moonraker/moonraker/moonraker.py
+      - -d
+      - /printer_data
+      - -c
+      - /printer_data/config/moonraker.conf
+    healthcheck:
+      test:
+        - CMD
+        - /opt/moonraker-env/bin/python
+        - -c
+        - >-
+          import json, urllib.request;
+          info = json.load(urllib.request.urlopen('http://127.0.0.1:7125/server/info', timeout=2));
+          raise SystemExit(0 if info['result']['klippy_state'] == 'ready' else 1)
+      interval: 2s
+      timeout: 4s
+      retries: 45
+
+networks:
+  rig:
+    internal: true
+
+volumes:
+  printer_data:

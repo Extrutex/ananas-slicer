@@ -251,7 +251,7 @@ TEST_CASE("Arachne widening keeps two beads in transition band (#14376)", "[Arac
         /*transitioning_angle*/ float(M_PI / 4.0), /*print_thin_walls*/ true,
         min_bead_width, min_feature_size,
         split_middle_threshold, add_middle_threshold,
-        max_bead_count, /*outer_wall_offset*/ 0, /*inward_distributed_center_wall_count*/ 1);
+        max_bead_count, /*outer_wall_offset*/ 0, /*inner_wall_shift*/ 0, /*inward_distributed_center_wall_count*/ 1);
 
     // A wall thickness inside the 1<->2 bead transition band (inner_width < t < transition).
     const coord_t thickness = scaled<coord_t>(0.50);

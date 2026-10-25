@@ -66,7 +66,7 @@ public:
 
         try
         {
-            return stoi(ams_id);
+            return std::stoi(ams_id);
         }
         catch (...) {};
 
@@ -78,7 +78,7 @@ public:
         if (slot_id.empty()) { return -1; };
 
         try {
-            return stoi(slot_id);
+            return std::stoi(slot_id);
         } catch (...) {};
 
         return -1;

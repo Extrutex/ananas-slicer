@@ -1,13 +1,16 @@
 #include "HyperLink.hpp"
 #include "Label.hpp"
+#include "StateColor.hpp"
+#include "ThemeTokens.hpp"
 
 namespace Slic3r { namespace GUI {
 
 HyperLink::HyperLink(wxWindow* parent, const wxString& label, const wxString& url, long style)
     : wxStaticText(parent, wxID_ANY, label)
     , m_url(url)
-    , m_normalColor(wxColour("#009687")) // used slightly different color otherwise automatically uses ColorForDark that not visible enough
-    , m_hoverColor(wxColour("#26A69A"))
+    // Links use the neutral accent: aluminium on carbon, steel on white (ThemeTokens.hpp).
+    , m_normalColor(StateColor::darkModeColorFor(wxColour(Theme::LIGHT_ACCENT)))
+    , m_hoverColor(StateColor::darkModeColorFor(wxColour(Theme::LIGHT_ACCENT_HOVER)))
 {
     SetForegroundColour(m_normalColor);
     HyperLink::SetFont(Label::Head_14);

@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 360" width="1000" height="360" role="img" aria-label="Data flow from the ANANAS SLICER slicer through a .gcode file, Moonraker and Klipper to the stepper motors, with mDNS discovery and printer.cfg sync drawn as dashed return paths">
+  <title>Where a sliced file goes: ANANAS SLICER writes .gcode, uploads it to Moonraker over HTTP, Moonraker hands it to Klipper over a unix socket, and Klipper drives the steppers with the accelerations the slicer wrote.</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#d8e0e6"/>
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#8b99a4"/>
+    </marker>
+    <marker id="arrow-path" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#4db9ff"/>
+    </marker>
+  </defs>
+
+  <!-- ground and frame -->
+  <rect x="0" y="0" width="1000" height="360" fill="#0b0e11"/>
+  <rect x="0.5" y="0.5" width="999" height="359" fill="none" stroke="#262f37" stroke-width="1"/>
+
+  <!-- title block -->
+  <text x="40" y="44" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" letter-spacing="2" fill="#eef3f6">FROM SLICE TO STEPPER</text>
+  <text x="40" y="66" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#8b99a4">host_type: moonraker</text>
+
+  <!-- discovery: Moonraker advertises itself, the slicer finds it (above the row) -->
+  <path d="M500 160 V100 H100 V158" fill="none" stroke="#8b99a4" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrow-muted)"/>
+  <text x="300" y="90" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#8b99a4">mDNS&#160; _moonraker._tcp&#160; (discovery)</text>
+
+  <!-- main row: boxes -->
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="#eef3f6" text-anchor="middle">
+    <rect x="40" y="160" width="120" height="60" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
+    <text x="100" y="180">ANANAS SLICER</text>
+
+    <path d="M240 160 H346 L360 174 V220 H240 Z" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
+    <path d="M346 160 V174 H360" fill="none" stroke="#3d4953" stroke-width="2"/>
+    <text x="300" y="180">.gcode</text>
+
+    <rect x="440" y="160" width="120" height="60" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
+    <text x="500" y="180">Moonraker</text>
+
+    <rect x="640" y="160" width="120" height="60" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
+    <text x="700" y="180">Klipper</text>
+
+    <rect x="840" y="160" width="120" height="60" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
+    <text x="900" y="180">Steppers</text>
+  </g>
+
+  <!-- main row: second lines (data font) -->
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#8b99a4" text-anchor="middle">
+    <text x="100" y="198">slicer</text>
+    <text x="300" y="198">;ANANAS SLICER</text>
+    <text x="300" y="212">M204 S10000</text>
+    <text x="500" y="198">HTTP API</text>
+    <text x="500" y="212">port 7125</text>
+    <text x="700" y="198">printer.cfg</text>
+  </g>
+
+  <!-- stepper motors A B Z E -->
+  <g fill="#222a31" stroke="#5c6b77" stroke-width="2">
+    <circle cx="858" cy="204" r="12"/>
+    <circle cx="886" cy="204" r="12"/>
+    <circle cx="914" cy="204" r="12"/>
+    <circle cx="942" cy="204" r="12"/>
+  </g>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6" text-anchor="middle">
+    <text x="858" y="208">A</text>
+    <text x="886" y="208">B</text>
+    <text x="914" y="208">Z</text>
+    <text x="942" y="208">E</text>
+  </g>
+
+  <!-- main row: arrows -->
+  <g fill="none" stroke="#d8e0e6" stroke-width="2" marker-end="url(#arrow)">
+    <path d="M160 190 H240"/>
+    <path d="M360 180 H440"/>
+    <path d="M360 200 H440" stroke-width="1"/>
+    <path d="M560 190 H640"/>
+    <path d="M760 190 H840"/>
+  </g>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#b4c0c9" text-anchor="middle">
+    <text x="200" y="148">writes</text>
+    <text x="400" y="132">POST /server/files/upload</text>
+    <text x="400" y="148">POST /printer/print/start</text>
+    <text x="600" y="148">unix socket</text>
+    <text x="800" y="148">step pulses</text>
+  </g>
+
+  <!-- caution: nothing between the file and the firmware checks the limits -->
+  <path d="M360 228 V236 H640 V228" fill="none" stroke="#ffc56a" stroke-width="1.5"/>
+  <path d="M500 236 V250" fill="none" stroke="#ffc56a" stroke-width="1.5"/>
+  <text x="500" y="262" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#ffc56a">SET_VELOCITY_LIMIT and M204 are not clamped to printer.cfg</text>
+
+  <!-- machine sync: printer.cfg limits fed back to the slicer (below the row) -->
+  <path d="M740 220 V290 H100 V222" fill="none" stroke="#4db9ff" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrow-path)"/>
+  <text x="420" y="306" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#4db9ff">printer.cfg limits -> slicer&#160;&#160; (machine sync, roadmap)</text>
+
+  <!-- caption -->
+  <text x="40" y="328" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">The G-code is the last place a limit can be enforced: Klipper executes the accelerations the slicer wrote, so the slicer has to know the machine.</text>
+</svg>

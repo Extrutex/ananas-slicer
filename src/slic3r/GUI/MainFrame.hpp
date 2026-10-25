@@ -19,10 +19,8 @@
 #include "Event.hpp"
 //BBS: GUI refactor
 #include "ParamsPanel.hpp"
-#include "Monitor.hpp"
 #include "Auxiliary.hpp"
 #include "Project.hpp"
-#include "CalibrationPanel.hpp"
 #include "UnsavedChangesDialog.hpp"
 #include "Widgets/SideButton.hpp"
 #include "Widgets/SideMenuPopup.hpp"
@@ -36,8 +34,13 @@
 // BBS
 #include "BBLTopbar.hpp"
 #include "PrinterWebView.hpp"
+#include "GUI.hpp"
+#include "MsgDialog.hpp"
+#include "Plater.hpp"
+#include "Widgets/StaticLine.hpp"
+#include "libslic3r/Thread.hpp"
+#include "slic3r/Utils/NetworkAgent.hpp"
 #include "calib_dlg.hpp"
-#include "MultiMachinePage.hpp"
 #include "slic3r/plugin/host/PluginPages.hpp"
 
 // Stable identifiers for MainFrame::m_tabpanel's built-in pages. These are
@@ -49,13 +52,7 @@
 #define TAB_ID_PREPARE       "prepare"
 #define TAB_ID_PREVIEW       "preview"
 #define TAB_ID_MONITOR       "monitor"
-// Printer-agents mode shows the legacy web page alongside the native Device tab, so it needs an
-// id of its own: sharing TAB_ID_MONITOR makes every name lookup resolve to whichever of the two
-// comes first, which silently defeats PluginPages' selection round-trip across a tab relayout.
-#define TAB_ID_MONITOR_WEB   "monitor_web"
-#define TAB_ID_MULTI_DEVICE  "multi_device"
 #define TAB_ID_PROJECT       "project"
-#define TAB_ID_CALIBRATION   "calibration"
 
 #define ENABEL_PRINT_ALL 0
 
@@ -184,9 +181,7 @@ class MainFrame : public DPIFrame
     wxString    m_last_config = wxEmptyString;
 
     wxMenuBar*  m_menubar{ nullptr };
-    //wxMenu* publishMenu{ nullptr };
     wxMenu *    m_calib_menu{nullptr};
-    bool        enable_multi_machine{ false };
 
 #if 0
     wxMenuItem* m_menu_item_repeat { nullptr }; // doesn't used now
@@ -339,8 +334,7 @@ public:
         eSendToPrinter       = 5,
         eSendToPrinterAll    = 6,
         eUploadGcode         = 7,
-        eExportAllSlicedFile = 8,
-        ePrintMultiMachine   = 9
+        eExportAllSlicedFile = 8
     };
 
     void update_layout();
@@ -359,7 +353,6 @@ public:
     void        update_title();
     void        set_max_recent_count(int max);
 
-    void        show_publish_button(bool show);
 
 	void        update_title_colour_after_set_title();
     void        show_option(bool show);
@@ -409,8 +402,7 @@ public:
     //void        load_configbundle(wxString file = wxEmptyString);
     void        load_config(const DynamicPrintConfig& config);
     //BBS: jump to monitor
-    void        jump_to_monitor(std::string dev_id = "");
-    void        jump_to_multipage();
+    void        jump_to_monitor();
     //BBS: hint when jump to 3Deditor under preview only mode
     bool        preview_only_hint();
     // Select tab in m_tabpanel
@@ -425,7 +417,6 @@ public:
     // Builds the lazy tab pages while the user is idle; post_init() calls it once.
     void        prebuild_pages_when_idle();
     bool        Show(bool show = true) override;
-    int         get_calibration_curr_tab();
     void        select_view(const std::string& direction);
     void        update_shortcut_labels();
     // Propagate changed configuration from the Tab to the Plater and save changes to the AppConfig
@@ -467,11 +458,10 @@ public:
     void        load_printer_url(wxString url, wxString apikey = "");
     void        load_printer_url();
     bool        is_printer_view() const;
-    void        refresh_plugin_tips();
     void RunScript(wxString js);
 
     //SoftFever
-    void show_device(bool should_use_native);
+    void show_device();
     void fit_tab_labels(); // ORCA
     // True while either of the two tabs backed by m_plater is selected.
     bool is_prepare_or_preview_tab() const;
@@ -496,14 +486,8 @@ public:
 #ifdef SLIC3R_CAD
     LazyPage<DesignPanel>* m_design_page { nullptr };
 #endif
-    //BBS: GUI refactor
-    LazyPage<MonitorPanel>* m_monitor_page{ nullptr };
-
     //AuxiliaryPanel*       m_auxiliary{ nullptr };
-    LazyPage<MultiMachinePage>* m_multi_machine_page{ nullptr };
     LazyPage<ProjectPanel>* m_project_page{ nullptr };
-
-    LazyPage<CalibrationPanel>* m_calibration_page{ nullptr };
     LazyPage<WebViewPanel>* m_home_page { nullptr };
     LazyPage<PrinterWebView>* m_printer_view_page{nullptr};
     PluginPages           m_plugin_pages;
@@ -511,7 +495,6 @@ public:
     // BBS
     //wxBookCtrlBase*       m_tabpanel { nullptr };
     Notebook*             m_tabpanel{ nullptr };
-    wxBoxSizer*           m_side_tools{ nullptr };
     ParamsPanel*          m_param_panel{ nullptr };
     ParamsDialog*         m_param_dialog{ nullptr };
     //BBS
@@ -565,8 +548,6 @@ wxDECLARE_EVENT(EVT_USER_LOGIN, wxCommandEvent);
 wxDECLARE_EVENT(EVT_USER_LOGIN_HANDLE, wxCommandEvent);
 wxDECLARE_EVENT(EVT_CHECK_PRIVACY_VER, wxCommandEvent);
 wxDECLARE_EVENT(EVT_CHECK_PRIVACY_SHOW, wxCommandEvent);
-wxDECLARE_EVENT(EVT_SHOW_IP_DIALOG, wxCommandEvent);
-wxDECLARE_EVENT(EVT_UPDATE_MACHINE_LIST, wxCommandEvent);
 wxDECLARE_EVENT(EVT_UPDATE_PRESET_CB, SimpleEvent);
 
 

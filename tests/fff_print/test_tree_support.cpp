@@ -2,6 +2,9 @@
 
 #include <algorithm>
 
+#include "libslic3r/ClipperUtils.hpp"
+#include "libslic3r/ExtrusionEntity.hpp"
+#include "libslic3r/ExtrusionEntityCollection.hpp"
 #include "libslic3r/Layer.hpp"
 #include "libslic3r/TriangleMesh.hpp"
 
@@ -187,4 +190,198 @@ TEST_CASE("Tree support toolpaths do not depend on the MST tie order", "[TreeSup
         { "tree_support_branch_angle",    40 },
         { "support_line_width",           0.4 },
     });
+}
+
+namespace {
+
+// An explicit line width: the sharp-tail detection erodes by multiples of it, and the built-in
+// default resolves to zero here, which would leave the detection inert.
+constexpr double tree_line_width = 0.42;
+
+// A fin standing on the bed, 5 mm thick at the foot and 20 mm long, whose right face leans outwards
+// at 80 degrees to the bed (10 degrees from vertical): 0.88 mm of overhang over 5 mm of height, far
+// inside a 30 degree support threshold.
+TriangleMesh bed_standing_fin()
+{
+    return TriangleMesh(
+        {
+            {0.f, 0.f, 0.f},   {5.f, 0.f, 0.f},   {5.f, 20.f, 0.f},   {0.f, 20.f, 0.f},
+            {0.f, 0.f, 5.f},   {5.88f, 0.f, 5.f}, {5.88f, 20.f, 5.f}, {0.f, 20.f, 5.f},
+        },
+        {
+            {0, 2, 1}, {0, 3, 2}, // bottom
+            {4, 5, 6}, {4, 6, 7}, // top
+            {0, 1, 5}, {0, 5, 4}, // front
+            {2, 3, 7}, {2, 7, 6}, // back
+            {0, 4, 7}, {0, 7, 3}, // left
+            {1, 2, 6}, {1, 6, 5}, // right, the leaning face
+        });
+}
+
+// A 10 x 24 x 2 mm block on the bed and, beside it, a 4 x 12 mm tail floating 6 mm above the bed.
+// The tail is narrow enough to be classified as a sharp tail all the way up, and leans 10 degrees
+// from vertical over its 10 mm. It hangs over the bed rather than over the block, so the branches
+// under it have room to land.
+TriangleMesh block_with_leaning_floating_tail()
+{
+    TriangleMesh mesh = make_cube(10., 24., 2.);
+    TriangleMesh tail(
+        {
+            {20.f, 2.f, 6.f},     {24.f, 2.f, 6.f},     {24.f, 14.f, 6.f},     {20.f, 14.f, 6.f},
+            {21.76f, 2.f, 16.f},  {25.76f, 2.f, 16.f},  {25.76f, 14.f, 16.f},  {21.76f, 14.f, 16.f},
+        },
+        {
+            {0, 2, 1}, {0, 3, 2}, {4, 5, 6}, {4, 6, 7}, {0, 1, 5}, {0, 5, 4},
+            {2, 3, 7}, {2, 7, 6}, {0, 4, 7}, {0, 7, 3}, {1, 2, 6}, {1, 6, 5},
+        });
+    mesh.merge(tail);
+    return mesh;
+}
+
+// Highest print_z of a support layer that carries any support extrusion.
+double highest_supported_z(const Slic3r::Print &print)
+{
+    double z = 0.;
+    for (const SupportLayer *layer : print.objects().front()->support_layers())
+        if (!layer->support_fills.empty())
+            z = std::max(z, layer->print_z);
+    return z;
+}
+
+} // namespace
+
+TEST_CASE("A narrow fin standing on the bed gets no tree support under its near-vertical face", "[TreeSupport][Regression]")
+{
+    // The bed layer used to seed the sharp-tail classification from any footprint under 6 mm, and
+    // every layer above it then got support against the merely resolution-expanded layer below, so
+    // an 80 degree face was supported as if it were a tail hanging in the air.
+    const char *style = GENERATE("tree_slim", "tree_strong", "tree_hybrid");
+    INFO("style = " << style);
+    Slic3r::Print print;
+    slice_with_tree_support(bed_standing_fin(), print, style, 30, 0, 0, {{ "line_width", tree_line_width }});
+    CHECK(support_points(print).empty());
+}
+
+TEST_CASE("A tail hanging in the air is supported only where it overhangs beyond the threshold angle", "[TreeSupport][Regression]")
+{
+    // The tail's underside at z = 6 hangs in the air and gets support. Its faces lean 10 degrees
+    // from vertical, inside the 30 degree threshold, so nothing above the underside is an overhang;
+    // the tail support used to climb the leaning face to the top of the tail regardless.
+    Slic3r::Print print;
+    slice_with_tree_support(block_with_leaning_floating_tail(), print, "tree_slim", 30, 0, 0, {{ "line_width", tree_line_width }});
+    REQUIRE_FALSE(support_points(print).empty());
+    CHECK(highest_supported_z(print) < 6.5);
+}
+
+TEST_CASE("The underside of a tail hanging beside a wall is an overhang whatever the threshold angle", "[TreeSupport][Regression]")
+{
+    // A 0.8 mm wide bar starts in the air at z = 6, 0.2 mm away from a block. At a 10 degree
+    // threshold the block's slices grown by the threshold offset (0.2 / tan(11 deg), about 1 mm)
+    // cover the whole bar, so neither the ordinary overhang detection nor a threshold-grown tail
+    // subtraction sees its underside; the bar's first layer still hangs in the air.
+    TriangleMesh mesh = make_cube(10., 24., 16.);
+    TriangleMesh bar  = make_cube(0.8, 12., 10.);
+    bar.translate(10.2f, 6.f, 6.f);
+    mesh.merge(bar);
+    Slic3r::Print print;
+    slice_with_tree_support(mesh, print, "tree_slim", 10, 0, 0, {{ "line_width", tree_line_width }});
+    size_t overhang_layers = 0;
+    for (const Layer *layer : print.objects().front()->layers())
+        overhang_layers += !layer->loverhangs.empty();
+    CHECK(overhang_layers == 1);
+}
+
+TEST_CASE("Tree support under sharp tails does not depend on thread scheduling", "[TreeSupport][Regression]")
+{
+    // The overhang detection reduced its per-layer findings through shared flags written from the
+    // parallel loop, one of them gated on wall-clock time.
+    sliced_twice_matches(block_with_leaning_floating_tail(), 0, "tree_slim", {{ "line_width", tree_line_width }});
+    sliced_twice_matches(block_with_leaning_floating_tail(), 0, "tree_hybrid", {{ "line_width", tree_line_width }});
+}
+
+namespace {
+
+// An 8 x 8 mm column carrying a 30 x 30 mm plate at z = 12. The support under the plate stands
+// around the column, so its clearance to the column is the XY distance the generator applied.
+TriangleMesh column_under_plate()
+{
+    TriangleMesh column = make_cube(8., 8., 13.);
+    TriangleMesh plate  = make_cube(30., 30., 3.);
+    column.translate(11.f, 11.f, 0.f);
+    plate.translate(0.f, 0.f, 12.f);
+    column.merge(plate);
+    return column;
+}
+
+void collect_paths(const ExtrusionEntity &entity, std::vector<const ExtrusionPath *> &out)
+{
+    if (const auto *collection = dynamic_cast<const ExtrusionEntityCollection *>(&entity)) {
+        for (const ExtrusionEntity *child : collection->entities)
+            collect_paths(*child, out);
+    } else if (const auto *path = dynamic_cast<const ExtrusionPath *>(&entity)) {
+        out.push_back(path);
+    } else if (const auto *multi = dynamic_cast<const ExtrusionMultiPath *>(&entity)) {
+        for (const ExtrusionPath &p : multi->paths)
+            out.push_back(&p);
+    } else if (const auto *loop = dynamic_cast<const ExtrusionLoop *>(&entity)) {
+        for (const ExtrusionPath &p : loop->paths)
+            out.push_back(&p);
+    }
+}
+
+// Smallest gap, in mm, between the edge of any support bead and the model slice printed at the
+// same height. Layer 0 is skipped: it takes support_object_first_layer_gap instead.
+double smallest_support_clearance(const Slic3r::Print &print)
+{
+    const PrintObject *object = print.objects().front();
+    double smallest = std::numeric_limits<double>::max();
+    for (const SupportLayer *support_layer : object->support_layers()) {
+        const Layer *model_layer = nullptr;
+        for (const Layer *layer : object->layers())
+            if (std::abs(layer->print_z - support_layer->print_z) < EPSILON)
+                model_layer = layer;
+        if (model_layer == nullptr || model_layer->id() == 0 || model_layer->lslices.empty())
+            continue;
+        std::vector<const ExtrusionPath *> paths;
+        collect_paths(support_layer->support_fills, paths);
+        const Polygons model = to_polygons(model_layer->lslices);
+        for (const ExtrusionPath *path : paths) {
+            const Polyline line = path->polyline.to_polyline();
+            if (line.size() < 2)
+                continue;
+            // Sample the bead centre line finely enough that a segment passing a corner is seen.
+            Points samples = line.equally_spaced_points(Slic3r::scaled<double>(0.02));
+            samples.push_back(line.last_point());
+            for (const Point &pt : samples) {
+                double centre = std::numeric_limits<double>::max();
+                for (const Polygon &polygon : model) {
+                    if (polygon.is_counter_clockwise() && polygon.contains(pt))
+                        centre = 0.;
+                    for (const Line &edge : polygon.lines())
+                        centre = std::min(centre, unscaled<double>(edge.distance_to(pt)));
+                }
+                smallest = std::min(smallest, centre - 0.5 * path->width);
+            }
+        }
+    }
+    return smallest;
+}
+
+} // namespace
+
+TEST_CASE("Organic tree support keeps the configured XY distance from the model", "[TreeSupport][Regression]")
+{
+    // The organic generator kept every branch near an overhang half the outer wall width (0.21 mm here)
+    // from the model, whatever support_object_xy_distance said: 0.8 mm configured gave the same
+    // 0.43 mm bead clearance as 0.35 mm. 0.35 mm guards the small end, which was already met.
+    const double xy_distance = GENERATE(0.35, 0.8);
+    INFO("support_object_xy_distance = " << xy_distance);
+    Slic3r::Print print;
+    slice_with_tree_support(column_under_plate(), print, "organic", 30, 0, 0, {
+        { "line_width",                 tree_line_width },
+        { "support_object_xy_distance", xy_distance },
+    });
+    REQUIRE(support_points(print).size() > 1000);
+    // The polygons are simplified to the slicing resolution on both sides of the gap.
+    CHECK(smallest_support_clearance(print) > xy_distance - 0.05);
 }

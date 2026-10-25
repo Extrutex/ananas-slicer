@@ -84,7 +84,6 @@ private:
     wxString m_javascript;
     wxString m_response_js;
 
-    wxString m_bbl_user_agent;
 
     std::shared_ptr<ICloudServiceAgent> m_cloud_agent;
     int ensure_loopback_port();

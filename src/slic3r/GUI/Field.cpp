@@ -36,7 +36,6 @@
 #include "Widgets/TextCtrl.h"
 
 #include "../Utils/ColorSpaceConvert.hpp"
-#include "../Utils/NetworkAgentFactory.hpp"
 #ifdef __WXOSX__
 #define wxOSX true
 #else
@@ -1791,12 +1790,7 @@ void Choice::set_value(const boost::any& value, bool change_event)
 	                selection = -1;
 	        }
 	    } else {
-            // Support ThirdPartyPrinter
-            if (m_opt_id.compare("host_type") == 0 && val != 0 &&
-                m_opt.enum_values.size() > field->GetCount()) // for case, when PrusaLink isn't used as a HostType
-                selection = val - 1;
-            else
-                selection = val;
+            selection = val;
 
             if (m_opt_id == "top_surface_pattern" || m_opt_id == "bottom_surface_pattern" ||
                 m_opt_id == "internal_solid_infill_pattern" || m_opt_id == "sparse_infill_pattern" ||
@@ -1910,12 +1904,6 @@ boost::any& Choice::get_value()
             const std::string &key = m_opt.enum_values[field->GetSelection()];
             m_value = int(m_opt.enum_keys_map->at(key));
         }
-        // Support ThirdPartyPrinter
-        else if (m_opt_id.compare("host_type") == 0 && m_opt.enum_values.size() > field->GetCount())
-        {
-            // for case, when PrusaLink isn't used as a HostType
-            m_value = field->GetSelection() + 1;
-        }
         else
             m_value = field->GetSelection();
     }
@@ -2028,172 +2016,6 @@ void Choice::msw_rescale()
     window->SetMinSize(size);
     dynamic_cast<choice_ctrl*>(window)->Rescale();
 #endif
-}
-
-
-// PrinterAgentChoice
-
-void PrinterAgentChoice::reload_rows()
-{
-    auto* combo = dynamic_cast<choice_ctrl*>(window); // wxWidgets ComboBox
-    if (!combo)
-        return;
-
-    // clear ComboBox
-    combo->Clear();
-
-    // helpers
-    const auto agents = NetworkAgentFactory::get_registered_printer_agents();
-    const bool has_builtin_agents = std::any_of(agents.begin(), agents.end(),
-                                                [](const PrinterAgentInfo& a) { return !a.is_plugin(); });
-    const bool has_plugin_agents = std::any_of(agents.begin(), agents.end(),
-                                               [](const PrinterAgentInfo& a) { return a.is_plugin(); });
-
-    auto append_agent_rows = [combo](bool is_plugin)
-    {
-        const auto agents = NetworkAgentFactory::get_registered_printer_agents();
-        for (size_t i = 0; i < agents.size(); ++i)
-        {
-            if (agents[i].is_plugin() != is_plugin)
-                continue;
-            const int item = combo->Append(_(agents[i].display_name));
-            // why: carry the agent-id string on the row. alias is an owned wxString (auto-freed, never rendered)
-            combo->SetItemAlias(item, from_u8(agents[i].id));
-        }
-    };
-
-    // append rows
-    if (has_builtin_agents)
-    {
-        combo->Append(_L("System agents"), wxNullBitmap, DD_ITEM_STYLE_SPLIT_ITEM | DD_ITEM_STYLE_DISABLED);
-        append_agent_rows(false); // append rows for agents that are not plugins
-    }
-    if (has_plugin_agents)
-    {
-        combo->Append(_L("Plugins"), wxNullBitmap, DD_ITEM_STYLE_SPLIT_ITEM | DD_ITEM_STYLE_DISABLED);
-        append_agent_rows(true); // append rows for agents that are plugins
-    }
-}
-
-void PrinterAgentChoice::BUILD()
-{
-    wxSize size(def_width_wider() * m_em_unit, wxDefaultCoord);
-    if (m_opt.height >= 0) size.SetHeight(m_opt.height * m_em_unit);
-    if (m_opt.width >= 0) size.SetWidth(m_opt.width * m_em_unit);
-
-    static Builder<choice_ctrl> builder;
-    choice_ctrl* temp = builder.build(m_parent, wxID_ANY, wxString(""), wxDefaultPosition, size, 0, nullptr,
-                                      wxCB_READONLY);
-    temp->Clear();
-    temp->GetDropDown().SetUseContentWidth(true);
-    if (parent_is_custom_ctrl && m_opt.height < 0)
-        opt_height = (double)temp->GetTextCtrl()->GetSize().GetHeight() / m_em_unit;
-    temp->SetTextLabel(_L(m_opt.sidetext));
-    m_combine_side_text = true;
-#ifdef __WXGTK3__
-    wxSize best_sz = temp->GetBestSize();
-    if (best_sz.x > size.x) temp->SetSize(best_sz);
-#endif
-    if (!wxOSX) temp->SetBackgroundStyle(wxBG_STYLE_PAINT);
-
-    window = dynamic_cast<wxWindow*>(temp);
-
-    reload_rows();
-
-    temp->Bind(wxEVT_COMBOBOX, [this](wxCommandEvent&) { on_change_field(); }, temp->GetId());
-    temp->SetToolTip(get_tooltip_text(temp->GetValue()));
-}
-
-// Resolve CONFIG id string to a matching row in the live REGISTRY. "" uses the vendor default.
-// An unregistered id clears selection and shows "<id> (missing)" as free text.
-void PrinterAgentChoice::set_value(const std::string& value, bool change_event)
-{
-    m_disable_change_event = !change_event;
-
-    auto* field = dynamic_cast<choice_ctrl*>(window);
-
-    // check if any row's corresponding id matches the agent id we are attempting to set
-    const std::string effective_agent_id = wxGetApp().resolve_printer_agent_id(value);
-    const unsigned int count = field->GetCount();
-    int match = wxNOT_FOUND;
-    for (unsigned int i = 0; i < count; ++i)
-    {
-        if (into_u8(field->GetItemAlias(i)) == effective_agent_id) // if alias == id
-        {
-            match = static_cast<int>(i);
-            break;
-        }
-    }
-
-    // based on match or not, set selection and value
-    // - SetSelection and SetValue are UI to manipulate the display of the ComboBox
-    // - SetSelection automatically calls SetValue for the same value
-    // - we can also SetValue separately from SetSelection
-    if (match == wxNOT_FOUND)
-    {
-        field->SetSelection(wxNOT_FOUND); // nothing shows as selected in the dropdown
-        field->SetValue(from_u8(value + " (missing)")); // set a value not in the selection (upper display field)
-    }
-    else
-    {
-        // display name of agent shows both in upper display field and appears selected in dropdown
-        field->SetSelection(match);
-    }
-
-    m_disable_change_event = false;
-}
-
-// Accept boost::any values from callers (usually to OptionsGroup/Field parent classes) and normalize them to an agent id.
-// Then use PrinterAgentChoice::set_value(std::string& value, ...)
-void PrinterAgentChoice::set_value(const boost::any& value, bool change_event)
-{
-    m_disable_change_event = !change_event;
-
-    auto* field = dynamic_cast<choice_ctrl*>(window);
-    if (value.empty())
-    {
-        field->SetValue("");
-        m_value = value;
-        m_disable_change_event = false;
-        return;
-    }
-
-    std::string id;
-    if (const std::string* s = boost::any_cast<std::string>(&value))
-        id = *s;
-    else if (const wxString* w = boost::any_cast<wxString>(&value))
-        id = into_u8(*w);
-    set_value(id, change_event);
-}
-
-// A real row returns its alias, which is the agent id. Header rows, missing rows,
-// and no selection return empty boost::any so the custom writer leaves config unchanged.
-boost::any& PrinterAgentChoice::get_value()
-{
-    auto* field = dynamic_cast<choice_ctrl*>(window);
-    const int sel = field->GetSelection();
-    const std::string id = sel < 0 ? std::string{} : into_u8(field->GetItemAlias(sel));
-    if (id.empty())
-        m_value = boost::any{};
-    else
-        m_value = id;
-    return m_value;
-}
-
-void PrinterAgentChoice::enable() { dynamic_cast<choice_ctrl*>(window)->Enable(); }
-void PrinterAgentChoice::disable() { dynamic_cast<choice_ctrl*>(window)->Disable(); }
-
-void PrinterAgentChoice::msw_rescale()
-{
-    Field::msw_rescale();
-
-    auto* field = dynamic_cast<choice_ctrl*>(window)->GetTextCtrl();
-    wxSize size(wxDefaultSize);
-    size.SetWidth((m_opt.width > 0 ? m_opt.width : def_width_wider()) * m_em_unit);
-    field->SetMinSize(wxSize(-1, int(1.5f * field->GetFont().GetPixelSize().y + 0.5f)));
-    field->SetSize(size);
-
-    dynamic_cast<choice_ctrl*>(window)->Rescale();
 }
 
 void PluginField::BUILD()
@@ -2665,7 +2487,7 @@ void ColourPicker::draw_bmp_btn(wxColourPickerCtrl* field, wxColour color)
         if (!dc.IsOk()) return bmp;
         wxGCDC dc2(dc); // just use wxGCDC since bitmap button only used for windows
 
-        dc2.SetPen(focus ? wxPen(wxColour(StateColor::darkModeColorFor(wxColour("#009688"))), 1) : *wxTRANSPARENT_PEN);
+        dc2.SetPen(focus ? wxPen(wxColour(StateColor::darkModeColorFor(wxColour("#3D4953"))), 1) : *wxTRANSPARENT_PEN);
         dc2.SetBrush(wxBrush(StateColor::darkModeColorFor(bg_color)));
         dc2.DrawRoundedRectangle(btn->GetRect(), btn->FromDIP(4));
 

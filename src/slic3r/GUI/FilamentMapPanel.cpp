@@ -1,8 +1,8 @@
+#include "NozzleStats.hpp"
 #include "FilamentMapPanel.hpp"
 #include "GUI_App.hpp"
 #include "I18N.hpp"
 #include "Plater.hpp"
-#include "Widgets/MultiNozzleSync.hpp" // manuallySetNozzleCount producer for extruder_nozzle_stats
 #include <algorithm>
 #include <wx/dcbuffer.h>
 #include <wx/utils.h>
@@ -11,11 +11,11 @@
 namespace Slic3r { namespace GUI {
 
 static const wxColour BgNormalColor  = wxColour("#FFFFFF");
-static const wxColour BgSelectColor  = wxColour("#E5F0EE"); // ORCA
+static const wxColour BgSelectColor  = wxColour("#E6EBEF"); // ORCA
 static const wxColour BgDisableColor = wxColour("#CECECE");
 
 static const wxColour BorderNormalColor   = wxColour("#CECECE");
-static const wxColour BorderSelectedColor = wxColour("#009688");
+static const wxColour BorderSelectedColor = wxColour("#3D4953");
 static const wxColour BorderDisableColor  = wxColour("#EEEEEE");
 
 static const wxColour TextNormalBlackColor = wxColour("#262E30");
@@ -133,27 +133,6 @@ void FilamentMapManualPanel::OnTimer(wxTimerEvent &)
         event.SetInt(valid);
         ProcessEvent(event);
         m_force_validation = false;
-    }
-}
-
-void FilamentMapManualPanel::OnSuggestionClicked(wxCommandEvent &event)
-{
-    wxWindow *current = this;
-    while (current && !wxDynamicCast(current, wxDialog)) {
-        current = current->GetParent();
-    }
-
-    if (current) {
-        wxDialog *dlg = wxDynamicCast(current, wxDialog);
-        if (dlg) {
-            int invalid_eid = m_invalid_id;
-            dlg->EndModal(wxID_CANCEL);
-
-            if (invalid_eid >= 0) {
-                manuallySetNozzleCount(invalid_eid);
-            }
-            wxGetApp().plater()->update();
-        }
     }
 }
 
@@ -340,47 +319,14 @@ FilamentMapManualPanel::FilamentMapManualPanel(wxWindow                       *p
     m_suggestion_panel = new wxPanel(this, wxID_ANY);
     m_suggestion_panel->SetBackgroundColour(*wxWHITE);
     auto suggestion_sizer = new wxBoxSizer(wxHORIZONTAL);
-    auto suggestion_text  = new Label(m_suggestion_panel, _L("Please adjust your grouping or click "));
+    auto suggestion_text  = new Label(m_suggestion_panel, _L("Please adjust your grouping."));
     suggestion_text->SetFont(Label::Body_13);
     suggestion_text->SetForegroundColour(TextErrorColor);
     suggestion_text->SetBackgroundColour(*wxWHITE);
-    auto suggestion_btn   = new ScalableButton(m_suggestion_panel, wxID_ANY, "edit", wxEmptyString, wxDefaultSize, wxDefaultPosition, wxBU_EXACTFIT | wxNO_BORDER, true, 14);
-    suggestion_btn->SetBackgroundColour(*wxWHITE);
-    auto suggestion_text2 = new Label(m_suggestion_panel, _L(" to set nozzle count"));
-    suggestion_text2->SetFont(Label::Body_13);
-    suggestion_text2->SetForegroundColour(TextErrorColor);
-    suggestion_text2->SetBackgroundColour(*wxWHITE);
     suggestion_sizer->Add(suggestion_text, 0, wxALIGN_CENTER_VERTICAL);
-    suggestion_sizer->Add(suggestion_btn, 0, wxALIGN_CENTER_VERTICAL);
-    suggestion_sizer->Add(suggestion_text2, 0, wxALIGN_CENTER_VERTICAL);
     m_suggestion_panel->SetSizer(suggestion_sizer);
     top_sizer->Add(m_suggestion_panel, 0, wxALIGN_LEFT | wxLEFT, FromDIP(15));
     m_suggestion_panel->Hide();
-    suggestion_btn->Bind(wxEVT_BUTTON, &FilamentMapManualPanel::OnSuggestionClicked, this);
-
-    // Multi-nozzle: give the user a reachable way to declare, per extruder, how many
-    // physical nozzles of each volume type a multi-nozzle extruder carries. This is the
-    // fallback "manual" producer of the extruder_nozzle_stats config (the full device nozzle-rack
-    // auto-sync is deferred). Gated on the edited printer preset having an extruder with
-    // extruder_max_nozzle_count > 1, so the trigger is not even created for any single-nozzle or
-    // dual-extruder ({1,1}, H2D) printer - zero UI change for every existing profile.
-    if (printer_has_multi_nozzle_extruder()) {
-        auto *max_nozzle_counts_opt = wxGetApp().preset_bundle->printers.get_edited_preset().config.option<ConfigOptionIntsNullable>("extruder_max_nozzle_count");
-        auto *set_count_link = new Label(this, _L("Set the physical nozzle count..."));
-        set_count_link->SetFont(Label::Body_14);
-        set_count_link->SetForegroundColour(BorderSelectedColor);
-        set_count_link->SetCursor(wxCursor(wxCURSOR_HAND));
-        top_sizer->AddSpacer(FromDIP(8));
-        top_sizer->Add(set_count_link, 0, wxALIGN_LEFT | wxLEFT, FromDIP(15));
-        const std::vector<int> max_counts = max_nozzle_counts_opt->values;
-        set_count_link->Bind(wxEVT_LEFT_DOWN, [max_counts](wxMouseEvent &evt) {
-            for (int extruder_id = 0; extruder_id < (int) max_counts.size(); ++extruder_id) {
-                if (max_counts[extruder_id] > 1 && max_counts[extruder_id] != ConfigOptionIntsNullable::nil_value())
-                    GUI::manuallySetNozzleCount(extruder_id);
-            }
-            evt.Skip();
-        });
-    }
 
     m_timer = new wxTimer(this);
     Bind(wxEVT_TIMER, &FilamentMapManualPanel::OnTimer, this);

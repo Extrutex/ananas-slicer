@@ -173,7 +173,7 @@ Vec2d place_wipe_tower(DynamicPrintConfig &cfg, const Vec2d &center)
 // Either way the output file name is built after export, which expands filename_format with the final
 // print statistics. An undefined placeholder in any shipped custom g-code throws
 // Slic3r::PlaceholderParserError.
-std::string slice_two_color_cube_and_export(DynamicPrintConfig cfg, bool is_bbl, bool by_object)
+std::string slice_two_color_cube_and_export(DynamicPrintConfig cfg, bool by_object)
 {
     const Vec2d        center = printable_area_center(cfg);
     std::vector<Vec2d> cube_mins;
@@ -195,7 +195,6 @@ std::string slice_two_color_cube_and_export(DynamicPrintConfig cfg, bool is_bbl,
 
     Model  model;
     Print  print;
-    print.is_BBL_printer() = is_bbl;
     for (const Vec2d &cube_min : cube_mins) {
         TriangleMesh m = make_cube(10, 10, 10);
         m.translate(static_cast<float>(cube_min.x()), static_cast<float>(cube_min.y()), 0.f);
@@ -300,27 +299,8 @@ DynamicPrintConfig slice_config(PresetBundle &bundle)
     const size_t nozzles = bundle.printers.get_selected_preset().config.option<ConfigOptionFloats>("nozzle_diameter")->size();
     bundle.set_num_filaments((unsigned int) std::max<size_t>(2, nozzles));
 
-    // Mirror the app's manual filament->nozzle assignment for a multi-nozzle BBL printer: put each
-    // filament on its own nozzle and pin the map (fmmManual) so full_config() collapses every filament to
-    // the variant of the nozzle it actually prints from, and the engine keeps that assignment instead of
-    // auto-remapping it during process(). Without this the synthetic 2nd filament keeps nozzle 1's variant
-    // while the auto map moves it to nozzle 2 - harmless, but on the one printer whose nozzles differ in
-    // type (Direct Drive + Bowden) the mismatched lookup spams [error] lines. Single-nozzle and non-BBL
-    // printers keep the default map (their toolchange rides the AMS/tool-changer path unchanged).
-    const bool pin_filament_map = bundle.is_bbl_vendor() && nozzles > 1;
-    if (pin_filament_map) {
-        auto &fmap = bundle.project_config.option<ConfigOptionInts>("filament_map", true)->values;
-        for (size_t i = 0; i < fmap.size(); ++i)
-            fmap[i] = int(i % nozzles) + 1;
-    }
-
     DynamicPrintConfig cfg = bundle.full_config();
     cfg.set_key_value("enable_prime_tower", new ConfigOptionBool(true)); // force a purge tower so the change is detectable
-    // The map above drives full_config()'s per-filament variant collapse; fmmManual on the sliced config
-    // stops process() from auto-remapping filaments back onto a different nozzle (which would re-introduce
-    // the variant mismatch this pinning avoids).
-    if (pin_filament_map)
-        cfg.set_key_value("filament_map_mode", new ConfigOptionEnum<FilamentMapMode>(fmmManual));
 
     // full_config() grows filament_extruder_variant to one entry per filament, but because the synthetic
     // 2nd filament is a duplicate of the first (set_num_filaments copies the same preset), it leaves
@@ -345,7 +325,7 @@ DynamicPrintConfig slice_config(PresetBundle &bundle)
 std::string slice_selection(PresetBundle &bundle, const std::string &what, bool by_object, const std::string &outdir, const std::string &file_base)
 {
     try {
-        const std::string out = slice_two_color_cube_and_export(slice_config(bundle), bundle.is_bbl_vendor(), by_object);
+        const std::string out = slice_two_color_cube_and_export(slice_config(bundle), by_object);
         if (!outdir.empty() && !out.empty())
             save_string_file(fs::path(outdir) / (file_base + ".gcode"), out);
         if (out.empty() || out.find("G1") == std::string::npos) {

@@ -33,7 +33,6 @@ enum class VendorType {
     Unknown = 0,
     Klipper,
     Marlin,
-    Marlin_BBL,
     Klipper_Qidi
 };
 namespace Slic3r {
@@ -353,13 +352,6 @@ public:
 
     // Orca: get vendor type
     VendorType get_current_vendor_type();
-    // Vendor related handy functions
-    bool is_bbl_vendor() { return get_current_vendor_type() == VendorType::Marlin_BBL; }
-
-    // Whether using bbl network for print upload
-    bool use_bbl_network();
-    // Whether using bbl's device tab
-    bool use_bbl_device_tab();
 
     bool backup_user_folder() const;
 

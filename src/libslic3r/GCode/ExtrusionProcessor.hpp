@@ -442,23 +442,21 @@ public:
         next_curled_extrusions[object] = AABBTreeLines::LinesDistancer<CurledLine>{layer->curled_lines};
     }
 
-    std::vector<ProcessedPoint> estimate_extrusion_quality(const ExtrusionPath                &path,
-                                                           const ConfigOptionPercents         &overlaps,
-                                                           const ConfigOptionFloatsOrPercents &speeds,
-                                                           float                               ext_perimeter_speed,
-                                                           float                               original_speed,
-                                                           bool								   slowdown_for_curled_edges,
-                                                           // Overlap at or below which the overhang fan switches on; negative when the fan
-                                                           // does not depend on overlap.
-                                                           float                               fan_overlap_threshold = -1.0f)
+    // The overhang speed curve as (overhang distance, speed) bands sorted by distance, one band per
+    // configured overlap level. The bands are made monotonic: a band never prints faster than the
+    // shallower band before it. The configured speeds are independent values and the last band is
+    // the bridge speed, so a profile can put the 100% overhang band below the bridge speed (the
+    // default Voron profile does: overhang_4_4_speed 10, bridge_speed 25), and without the clamp a
+    // 60 degree overhang printed at 11 mm/s while a 65 degree one printed at 25 mm/s.
+    static std::vector<std::pair<float, float>> overhang_speed_sections(float                               width,
+                                                                        const ConfigOptionPercents         &overlaps,
+                                                                        const ConfigOptionFloatsOrPercents &speeds,
+                                                                        float                               ext_perimeter_speed)
     {
-        size_t                               speed_sections_count = std::min(overlaps.values.size(), speeds.values.size());
+        const size_t                         speed_sections_count = std::min(overlaps.values.size(), speeds.values.size());
         std::vector<std::pair<float, float>> speed_sections;
-        
-        
-        
         for (size_t i = 0; i < speed_sections_count; i++) {
-            float distance = path.width * (1.0 - (overlaps.get_at(i) / 100.0));
+            float distance = width * (1.0 - (overlaps.get_at(i) / 100.0));
             float speed    = speeds.get_at(i).percent ? (ext_perimeter_speed * speeds.get_at(i).value / 100.0) : speeds.get_at(i).value;
             speed_sections.push_back({distance, speed});
         }
@@ -477,6 +475,44 @@ public:
                 last_section = section;
             }
         }
+        for (size_t i = 1; i < speed_sections.size(); ++i)
+            speed_sections[i].second = std::min(speed_sections[i].second, speed_sections[i - 1].second);
+        return speed_sections;
+    }
+
+    // The speed an overhang distance prints at on the given bands: the path's own speed up to the
+    // first band, linear between bands, the last band's speed beyond it. Rounded to whole mm/s.
+    static float overhang_speed_at(const std::vector<std::pair<float, float>> &speed_sections, float distance, float original_speed)
+    {
+        float final_speed;
+        if (distance <= speed_sections.front().first) {
+            final_speed = original_speed;
+        } else if (distance >= speed_sections.back().first) {
+            final_speed = speed_sections.back().second;
+        } else {
+            size_t section_idx = 0;
+            while (distance > speed_sections[section_idx + 1].first) {
+                section_idx++;
+            }
+            float t = (distance - speed_sections[section_idx].first) /
+                      (speed_sections[section_idx + 1].first - speed_sections[section_idx].first);
+            t           = std::clamp(t, 0.0f, 1.0f);
+            final_speed = (1.0f - t) * speed_sections[section_idx].second + t * speed_sections[section_idx + 1].second;
+        }
+        return round(final_speed);
+    }
+
+    std::vector<ProcessedPoint> estimate_extrusion_quality(const ExtrusionPath                &path,
+                                                           const ConfigOptionPercents         &overlaps,
+                                                           const ConfigOptionFloatsOrPercents &speeds,
+                                                           float                               ext_perimeter_speed,
+                                                           float                               original_speed,
+                                                           bool								   slowdown_for_curled_edges,
+                                                           // Overlap at or below which the overhang fan switches on; negative when the fan
+                                                           // does not depend on overlap.
+                                                           float                               fan_overlap_threshold = -1.0f)
+    {
+        const std::vector<std::pair<float, float>> speed_sections = overhang_speed_sections(path.width, overlaps, speeds, ext_perimeter_speed);
         
         // Orca: Find the smallest overhang distance where speed adjustments begin
         float smallest_distance_with_lower_speed = std::numeric_limits<float>::infinity(); // Initialize to a large value
@@ -497,22 +533,7 @@ public:
 
         // Orca: Pass to the point properties estimator the smallest ovehang distance that triggers a slowdown (smallest_distance_with_lower_speed)
         auto calculate_speed = [&speed_sections, &original_speed](float distance) {
-            float final_speed;
-            if (distance <= speed_sections.front().first) {
-                final_speed = original_speed;
-            } else if (distance >= speed_sections.back().first) {
-                final_speed = speed_sections.back().second;
-            } else {
-                size_t section_idx = 0;
-                while (distance > speed_sections[section_idx + 1].first) {
-                    section_idx++;
-                }
-                float t = (distance - speed_sections[section_idx].first) /
-                          (speed_sections[section_idx + 1].first - speed_sections[section_idx].first);
-                t           = std::clamp(t, 0.0f, 1.0f);
-                final_speed = (1.0f - t) * speed_sections[section_idx].second + t * speed_sections[section_idx + 1].second;
-            }
-            return round(final_speed);
+            return overhang_speed_at(speed_sections, distance, original_speed);
         };
 
         // ORCA: The speed sections are built from ext_perimeter_speed, which can be above the speed this path prints at

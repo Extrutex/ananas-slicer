@@ -71,14 +71,14 @@ TEST_CASE("Plugin audit denies app config and token filenames anywhere", "[audit
 
     SECTION("matching is case-insensitive on every platform")
     {
-        CHECK(mgr.is_denied_filename(fs::path("orcaslicer.conf")));
-        CHECK(mgr.is_denied_filename(fs::path("ORCASLICER.CONF")));
+        CHECK(mgr.is_denied_filename(fs::path("ananasslicer.conf")));
+        CHECK(mgr.is_denied_filename(fs::path("ananasSlicer.CONF")));
         CHECK(mgr.is_denied_filename(fs::path("ORCA_REFRESH_TOKEN.SEC")));
     }
 
     SECTION("an unrelated name that merely shares a stem is not denied")
     {
-        // The prefix is the full registered name ("OrcaSlicer.conf"), not the stem "OrcaSlicer",
+        // The prefix is the full registered name ("AnanasSlicer.conf"), not the stem "AnanasSlicer",
         // so a sibling file with a different extension/suffix stays allowed.
         CHECK_FALSE(mgr.is_denied_filename(fs::path(data_dir()) / (SLIC3R_APP_KEY "_other.txt")));
         CHECK_FALSE(mgr.is_denied_filename(fs::path(data_dir()) / (SLIC3R_APP_KEY ".json")));
@@ -218,18 +218,19 @@ TEST_CASE("Plugin audit denies secret/certificate/config-like paths by keyword",
         CHECK(mgr.is_denied_path_keyword(fs::path("/resources/certificates/ca.pem")));
     }
 
-    SECTION("a 'conf'/'config' directory or file component is denied")
+    SECTION("a 'conf'/'config' directory or config file component is denied")
     {
         CHECK(mgr.is_denied_path_keyword(fs::path("/plugin/conf/settings.json")));
         CHECK(mgr.is_denied_path_keyword(fs::path("/plugin/config/settings.json")));
         CHECK(mgr.is_denied_path_keyword(fs::path("/plugin/plugin.conf")));
+        CHECK(mgr.is_denied_path_keyword(fs::path("/plugin/plugin.ini")));
     }
 
     SECTION("matching is case-insensitive")
     {
         CHECK(mgr.is_denied_path_keyword(fs::path("/plugin/SECRETS/token.txt")));
-        CHECK(mgr.is_denied_path_keyword(fs::path("/resources/CertBundle/ca.pem")));
-        CHECK(mgr.is_denied_path_keyword(fs::path("/plugin/CONFIG.JSON")));
+        CHECK(mgr.is_denied_path_keyword(fs::path("/resources/Certificates/ca.pem")));
+        CHECK(mgr.is_denied_path_keyword(fs::path("/plugin/PLUGIN.CONF")));
     }
 
     SECTION("matching is not limited to the base name -- any ancestor component counts")
@@ -241,6 +242,14 @@ TEST_CASE("Plugin audit denies secret/certificate/config-like paths by keyword",
     {
         CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/plugin/output/model.gcode")));
         CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/plugin/storage/state.json")));
+        CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/python/packages/cp312/numpy/__config__.py")));
+        CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/python/packages/cp312/numpy/_core/_ufunc_config.py")));
+        CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/python/Lib/configparser.py")));
+        CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/python/Lib/sysconfig.py")));
+        CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/python/Lib/logging/config.py")));
+        CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/python/packages/cp312/certifi/cacert.pem")));
+        CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/users/Conference/output.txt")));
+        CHECK_FALSE(mgr.is_denied_path_keyword(fs::path("/users/Concert/output.txt")));
     }
 
     SECTION("an empty path is not denied")

@@ -159,15 +159,12 @@ enum class NotificationType
 	BBLGcodeOverlap,
 	//BBL: sequence print info
 	BBLSeqPrintInfo,
-	//BBL: plugin install hint
-	BBLPluginInstallHint,
     BBLFlushingVolumeZero,
     // A mixed-color filament references a deleted component, or its components disagree in type.
     BBLMixedFilamentBroken,
-	BBLPluginUpdateAvailable,
 	BBLPreviewOnlyMode,
     BBLPrinterConfigUpdateAvailable,
-	BBLUserPresetExceedLimit,
+	UserPresetExceedLimit,
     BBLFilamentPrintableError,
     BBLSliceLimitError,
     BBLSliceMultiExtruderHeightOutside,
@@ -386,10 +383,6 @@ public:
     //BBS--preview only mode
     void bbl_show_preview_only_notification(const std::string &text);
     void bbl_close_preview_only_notification();
-
-    //BBS--PluginInstallHint
-    void bbl_show_plugin_install_notification(const std::string &text);
-    void bbl_close_plugin_install_notification();
 
 	//BBS--Objects Info
 	void bbl_show_objectsinfo_notification(const std::string &text, bool is_warning, bool is_hidden);
@@ -623,8 +616,8 @@ private:
 		// Aditional text after hypertext - currently not used
 		std::string      m_text2;
 		// mark for render operation
-		size_t           pos_start = string::npos;
-		size_t	         pos_end = string::npos;
+		size_t           pos_start = std::string::npos;
+		size_t	         pos_end = std::string::npos;
 		std::string      error_start = "<Error>";
 		std::string      error_end = "</Error>";
 
@@ -1110,16 +1103,6 @@ private:
         NotificationData{NotificationType::UndoDesktopIntegrationSuccess, NotificationLevel::RegularNotificationLevel, 10,
 		_u8L("Undo integration was successful.") },
 
-        NotificationData{NotificationType::BBLPluginUpdateAvailable, NotificationLevel::ImportantNotificationLevel, BBL_NOTICE_MAX_INTERVAL,
-			_u8L("New network plug-in available."),
-			_u8L("Details"),
-                         [](wxEvtHandler* evnthndlr) {
-                //BBS set feishu release page by default
-                 wxCommandEvent* evt = new wxCommandEvent(EVT_UPDATE_PLUGINS_WHEN_LAUNCH);
-				 wxQueueEvent(wxGetApp().plater(), evt);
-				 return true;
-             }},
-
         NotificationData{NotificationType::BBLPrinterConfigUpdateAvailable, NotificationLevel::ImportantNotificationLevel, BBL_NOTICE_MAX_INTERVAL,
                          _u8L("New printer config available."), _u8L("Details"),
                          [](wxEvtHandler *evnthndlr) {
@@ -1127,7 +1110,7 @@ private:
                              return true;
                          }},
 
-        NotificationData{NotificationType::BBLUserPresetExceedLimit, NotificationLevel::WarningNotificationLevel, BBL_NOTICE_MAX_INTERVAL,
+        NotificationData{NotificationType::UserPresetExceedLimit, NotificationLevel::WarningNotificationLevel, BBL_NOTICE_MAX_INTERVAL,
 			_u8L("The number of user presets cached in the cloud has exceeded the upper limit, newly created user presets can only be used locally."), 
 			_u8L("Wiki Guide"),
                          [](wxEvtHandler* evnthndlr) {

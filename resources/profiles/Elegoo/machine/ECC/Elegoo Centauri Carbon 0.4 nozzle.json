@@ -8,7 +8,7 @@
 	"nozzle_diameter": [
 		"0.4"
 	],
-	"host_type": "elegoolink",
+	"host_type": "moonraker",
 	"printer_model": "Elegoo Centauri Carbon",
 	"printer_variant": "0.4",
 	"auxiliary_fan": "1",
@@ -57,7 +57,6 @@
 	"machine_load_filament_time": "29",
 	"machine_unload_filament_time": "28",
 	"nozzle_type": "hardened_steel",
-	"scan_first_layer": "1",
 	"support_air_filtration": "1",
 	"upward_compatible_machine": [],
 	"manual_filament_change": "0",

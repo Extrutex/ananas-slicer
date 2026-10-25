@@ -10,7 +10,7 @@
 	"sparse_infill_speed": "250",
 	"internal_solid_infill_speed": "200",
 	"default_acceleration": "5000",
-	"default_jerk": "9",
+	"default_jerk": "0",
 	"gap_infill_speed": "200",
 	"initial_layer_acceleration": "1000",
 	"initial_layer_infill_speed": "100",

@@ -10,7 +10,7 @@
 	],
 	"bottom_surface_pattern": "monotonicline",
 	"bridge_acceleration": "7000",
-	"default_jerk": "10",
+	"default_jerk": "0",
 	"detect_narrow_internal_solid_infill": "0",
 	"filter_out_gap_fill": "1",
 	"gap_infill_speed": "220",

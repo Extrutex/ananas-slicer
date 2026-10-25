@@ -106,7 +106,7 @@
 	"ensure_vertical_shell_thickness": "1",
 	"precise_outer_wall": "1",
 	"independent_support_layer_height": "1",
-	"default_jerk": "15",
+	"default_jerk": "0",
 	"infill_jerk": "15",
 	"initial_layer_jerk": "12",
 	"inner_wall_jerk": "15",

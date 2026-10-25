@@ -10,37 +10,10 @@
 
 namespace Slic3r { namespace GUI {
 
-static bool get_pop_up_remind_flag()
-{
-    auto &app_config = wxGetApp().app_config;
-    return app_config->get_bool("pop_up_filament_map_dialog");
-}
-
 static void set_pop_up_remind_flag(bool remind)
 {
     auto &app_config = wxGetApp().app_config;
     app_config->set_bool("pop_up_filament_map_dialog", remind);
-}
-
-static FilamentMapMode get_applied_map_mode(DynamicConfig& proj_config, const Plater* plater_ref, const PartPlate* partplate_ref, const bool sync_plate)
-{
-    if (sync_plate)
-        return partplate_ref->get_real_filament_map_mode(proj_config);
-    return plater_ref->get_global_filament_map_mode();
-}
-
-static std::vector<int> get_applied_map(DynamicConfig& proj_config, const Plater* plater_ref, const PartPlate* partplate_ref, const bool sync_plate)
-{
-    if (sync_plate)
-        return partplate_ref->get_real_filament_maps(proj_config);
-    return plater_ref->get_global_filament_map();
-}
-
-static std::vector<int> get_applied_volume_map(DynamicConfig& proj_config, const Plater* plater_ref, const PartPlate* partplate_ref, const bool sync_plate)
-{
-    if (sync_plate)
-        return partplate_ref->get_real_filament_volume_maps(proj_config);
-    return plater_ref->get_global_filament_volume_map();
 }
 
 extern std::string& get_left_extruder_unprintable_text();
@@ -109,94 +82,11 @@ private:
 };
 
 
-bool try_pop_up_before_slice(bool is_slice_all, Plater* plater_ref, PartPlate* partplate_ref, bool force_pop_up)
+bool try_pop_up_before_slice(bool /*is_slice_all*/, Plater* /*plater_ref*/, PartPlate* /*partplate_ref*/, bool /*force_pop_up*/)
 {
-    auto full_config = wxGetApp().preset_bundle->full_config();
-    const auto nozzle_diameters = full_config.option<ConfigOptionFloats>("nozzle_diameter");
-    if (nozzle_diameters->size() <= 1)
-        return true;
-
-    // The filament-grouping dialog is specifically designed for BBL dual-nozzle printers
-    // (e.g. H2D) where filaments must be assigned to a left or right nozzle.
-    // For toolchangers (≥3 tools) and all non-BBL printers the dialog is irrelevant and
-    // confusing; skip it entirely so slicing proceeds without interruption. (#12390)
-    PresetBundle* preset = wxGetApp().preset_bundle;
-    if (!preset || !preset->is_bbl_vendor() || nozzle_diameters->size() != 2)
-        return true;
-
-    bool sync_plate = true;
-
-    std::vector<std::string> filament_colors = full_config.option<ConfigOptionStrings>("filament_colour")->values;
-    std::vector<std::string> filament_types = full_config.option<ConfigOptionStrings>("filament_type")->values;
-    FilamentMapMode applied_mode = get_applied_map_mode(full_config, plater_ref,partplate_ref, sync_plate);
-    std::vector<int> applied_maps = get_applied_map(full_config, plater_ref, partplate_ref, sync_plate);
-    std::vector<int> applied_volume_maps = get_applied_volume_map(full_config, plater_ref, partplate_ref, sync_plate);
-    applied_maps.resize(filament_colors.size(), 1);
-    applied_volume_maps.resize(filament_colors.size(), 0);
-
-    if (!force_pop_up && applied_mode != fmmManual)
-        return true;
-
-    std::vector<int> filament_lists;
-    if (is_slice_all) {
-        filament_lists.resize(filament_colors.size());
-        std::iota(filament_lists.begin(), filament_lists.end(), 1);
-    }
-    else {
-        filament_lists = partplate_ref->get_extruders();
-    }
-
-    FilamentMapDialog map_dlg(plater_ref,
-        filament_colors,
-        filament_types,
-        applied_maps,
-        applied_volume_maps,
-        filament_lists,
-        applied_mode,
-        plater_ref->get_machine_sync_status(),
-        false,
-        false
-    );
-    auto ret = map_dlg.ShowModal();
-
-    if (ret == wxID_OK) {
-        FilamentMapMode new_mode = map_dlg.get_mode();
-        std::vector<int> new_maps = map_dlg.get_filament_maps();
-        std::vector<int> new_volume_maps = map_dlg.get_filament_volume_maps();
-        if (sync_plate) {
-            if (is_slice_all) {
-                auto plate_list = plater_ref->get_partplate_list().get_plate_list();
-                for (int i = 0; i < plate_list.size(); ++i) {
-                    plate_list[i]->set_filament_map_mode(new_mode);
-                    if (new_mode == fmmManual) {
-                        plate_list[i]->set_filament_maps(new_maps);
-                        plate_list[i]->set_filament_volume_maps(new_volume_maps);
-                    }
-                }
-            }
-            else {
-                partplate_ref->set_filament_map_mode(new_mode);
-                if (new_mode == fmmManual) {
-                    partplate_ref->set_filament_maps(new_maps);
-                    partplate_ref->set_filament_volume_maps(new_volume_maps);
-                }
-            }
-        }
-        else {
-            plater_ref->set_global_filament_map_mode(new_mode);
-            if (new_mode == fmmManual) {
-                plater_ref->set_global_filament_map(new_maps);
-                plater_ref->set_global_filament_volume_map(new_volume_maps);
-            }
-        }
-        plater_ref->update();
-        // check whether able to slice, if not, return false
-        if (!get_left_extruder_unprintable_text().empty() || !get_right_extruder_unprintable_text().empty()){
-            return false;
-        }
-        return true;
-    }
-    return false;
+    // The left/right nozzle assignment dialog is built for Bambu dual-nozzle printers (H2D).
+    // No Klipper printer profile drives it, so slicing always proceeds.
+    return true;
 }
 
 FilamentMapDialog::FilamentMapDialog(wxWindow                       *parent,
@@ -224,7 +114,7 @@ FilamentMapDialog::FilamentMapDialog(wxWindow                       *parent,
     // Match/Convenience sub-mode is dropped and Auto is presented purely as a filament-saving mode.
     // Orca has no fmmAutoForQuality, so "only saving" collapses to "switch ready" and the remaining
     // auto mode set is { fmmAutoForFlush }.
-    m_fila_switch_ready              = wxGetApp().sidebar().is_fila_switch_ready();
+    m_fila_switch_ready              = false;
     const bool only_saving_mode     = m_fila_switch_ready;
     const bool auto_match_available = machine_synced && !m_fila_switch_ready;
 

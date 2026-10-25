@@ -1,4 +1,5 @@
 #include "slic3r/GUI/CAD/McpControl.hpp"
+#include "libslic3r_version.h"
 
 #ifndef _WIN32  // POSIX Unix-domain-socket transport only (slice 1)
 
@@ -113,7 +114,7 @@ json describe_tools()
     // Hand-written descriptor. The bridge turns this into MCP tool schemas; later
     // slices grow this list (ideally from the kernel directly).
     return json{
-        {"app", "Orca CAD"},
+        {"app", SLIC3R_APP_NAME " CAD"},
         {"protocol", "jsonrpc-2.0"},
         {"slice", 5},
         // Read this before using any face or edge id.

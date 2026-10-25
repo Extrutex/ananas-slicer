@@ -463,7 +463,7 @@ bool install_packages(const std::vector<std::string>& pkgs, std::string& error)
                                 // uv.exe (and the python.exe it spawns) are console-subsystem programs.
                                 // OrcaSlicer is a GUI app with no console of its own, so without this flag
                                 // Windows allocates a fresh console window for the child that flashes on
-                                // screen during startup plugin loading. Matches ProcessRunner/MediaPlayCtrl.
+                                // screen during startup plugin loading. Matches ProcessRunner.
                                 process::windows::create_no_window,
 #endif
                                 process::std_err > std_err);

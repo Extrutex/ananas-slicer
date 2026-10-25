@@ -5,7 +5,7 @@
 	"from": "system",
 	"setting_id": "PCZpqnHSGs2twFx9",
 	"instantiation": "true",
-	"host_type": "elegoolink",
+	"host_type": "moonraker",
 	"printer_model": "Elegoo OrangeStorm Giga",
 	"default_print_profile": "0.20mm Standard @Elegoo Giga 0.4 nozzle",
 	"nozzle_diameter": [
@@ -98,7 +98,6 @@
 	"nozzle_height": "4.76",
 	"nozzle_volume": "125",
 	"printer_structure": "i3",
-	"scan_first_layer": "0",
 	"time_lapse_gcode": "",
 	"gcode_flavor": "klipper",
 	"use_relative_e_distances": "0",

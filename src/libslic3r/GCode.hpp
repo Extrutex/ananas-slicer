@@ -184,6 +184,12 @@ private:
     std::vector<float>                                           m_compacted_tower_z;
 };
 
+// Klipper macros of resources/klipper/ananas_slicer_state.cfg. With klipper_restore_state the G-code calls
+// the first before the start G-code and the second before the end G-code, so the motion limits and the
+// pressure advance the print changes do not outlast it.
+inline constexpr const char *KLIPPER_SAVE_STATE_MACRO    = "_ANANAS_SLICER_SAVE";
+inline constexpr const char *KLIPPER_RESTORE_STATE_MACRO = "_ANANAS_SLICER_RESTORE";
+
 class ColorPrintColors
 {
     static const std::vector<std::string> Colors;
@@ -283,7 +289,6 @@ public:
     std::string     set_extruder(unsigned int extruder_id, double print_z, bool by_object=false, int toolchange_temp_override = -1, bool defer_temp_wait = false);
     // Sets the pressure advance of the filament's extruder variant, if enabled for it.
     std::string     set_filament_pressure_advance(unsigned int filament_id);
-    bool is_BBL_Printer();
     WipeTowerType wipe_tower_type();
 
     // SoftFever
@@ -447,19 +452,19 @@ private:
                                                            double &y_acceleration_limit_res, double &accumulated_mass_res);
     // Orca: pass the complete collection of region perimeters to the extrude loop to check whether the wipe before external loop
     // should be executed
-    std::string extrude_entity(const ExtrusionEntity&      entity,
-                               const std::string&          description       = "",
-                               double                      speed             = -1.,
-                               const ExtrusionEntitiesPtr& region_perimeters = ExtrusionEntitiesPtr(),
-                               const WipeInwardSupport*     wipe_support      = nullptr);
+    std::string extrude_entity(const ExtrusionEntity&                     entity,
+                               const std::string&                         description       = "",
+                               double                                     speed             = -1.,
+                               const std::vector<const ExtrusionEntity*>& region_perimeters = {},
+                               const WipeInwardSupport*                   wipe_support      = nullptr);
     // Orca: pass the complete collection of region perimeters to the extrude loop to check whether the wipe before external loop
     // should be executed
-    std::string extrude_loop(const ExtrusionLoop&        loop,
-                             const std::string&          description,
-                             double                      speed             = -1.,
-                             const ExtrusionEntitiesPtr& region_perimeters = ExtrusionEntitiesPtr(),
-                             const Point*                start_point       = nullptr,
-                             const WipeInwardSupport*     wipe_support      = nullptr);
+    std::string extrude_loop(const ExtrusionLoop&                       loop,
+                             const std::string&                         description,
+                             double                                     speed             = -1.,
+                             const std::vector<const ExtrusionEntity*>& region_perimeters = {},
+                             const Point*                               start_point       = nullptr,
+                             const WipeInwardSupport*                   wipe_support      = nullptr);
     std::string extrude_multi_path(const ExtrusionMultiPath& multipath, const std::string& description = "", double speed = -1.);
     std::string extrude_path(const ExtrusionPath& path, const std::string& description = "", double speed = -1.);
 
@@ -490,10 +495,9 @@ private:
         {
             struct Region {
             	// Non-owned references to LayerRegion::perimeters::entities
-            	// std::vector<const ExtrusionEntity*> would be better here, but there is no way in C++ to convert from std::vector<T*> std::vector<const T*> without copying.
-                ExtrusionEntitiesPtr perimeters;
+                std::vector<const ExtrusionEntity*> perimeters;
             	// Non-owned references to LayerRegion::fills::entities
-                ExtrusionEntitiesPtr infills;
+                std::vector<const ExtrusionEntity*> infills;
 
                 std::vector<const WipingExtrusions::ExtruderPerCopy*> infills_overrides;
                 std::vector<const WipingExtrusions::ExtruderPerCopy*> perimeters_overrides;
@@ -696,6 +700,8 @@ private:
     unsigned int                        m_layer_count;
     // Progress bar indicator. Increments from -1 up to layer_count.
     int                                 m_layer_index;
+    // Whether each layer change writes SET_PRINT_STATS_INFO CURRENT_LAYER (Klipper, unless the user's G-code does).
+    bool                                m_report_current_layer { false };
     // Current layer processed. In sequential printing mode, only a single copy will be printed.
     // In non-sequential mode, all its copies will be printed.
     const Layer*                        m_layer;
@@ -794,7 +800,6 @@ private:
     double      calc_max_volumetric_speed(const double layer_height, const double line_width, const std::string co_str);
     std::string _extrude(const ExtrusionPath &path, std::string description = "", double speed = -1);
     bool _needSAFC(const ExtrusionPath &path);
-    void print_machine_envelope(GCodeOutputStream& file, Print& print);
     void _print_first_layer_bed_temperature(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait);
     void _print_first_layer_extruder_temperatures(GCodeOutputStream &file, Print &print, const std::string &gcode, unsigned int first_printing_extruder_id, bool wait);
     // On the first printing layer. This flag triggers first layer speeds.
@@ -820,6 +825,7 @@ private:
         size_t                                                  num_objects,
         size_t                                                  num_islands);
 
+    friend class OozePrevention;
     friend class Wipe;
     friend class WipeTowerIntegration;
     friend class PressureEqualizer;

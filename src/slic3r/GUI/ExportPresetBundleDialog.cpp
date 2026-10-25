@@ -1,7 +1,7 @@
 #include "ExportPresetBundleDialog.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
+#include "libslic3r_version.h"
 #include "GUI_App.hpp"
-#include "ConfigWizard.hpp"
 #include "I18N.hpp"
 #include "GUI_App.hpp"
 #include <libslic3r/Config.hpp>
@@ -56,7 +56,7 @@ void ExportPresetBundleDialog::on_script_message(const nlohmann::json& j)
         OnRequestPresets();
     } else if (strCmd == "export_local") {
         wxFileDialog dlg(this, _L("Save preset bundle"), "", "export.orca_bundle",
-                         "Orca Preset Bundle (*.orca_bundle)|*.orca_bundle", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+                         SLIC3R_APP_NAME " Preset Bundle (*.orca_bundle)|*.orca_bundle", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
         wxString path;
         wxString name;
         if (dlg.ShowModal() == wxID_OK) {
@@ -341,11 +341,10 @@ void ExportPresetBundleDialog::OnExportData(const wxString& path, const wxString
     json bundle_structure;
     NetworkAgent* agent = wxGetApp().getAgent();
     std::string clock   = get_curr_time();
+    bundle_structure["version"] = SLIC3R_VERSION;
     if (agent) {
-        bundle_structure["version"]   = agent->get_version();
         bundle_structure["bundle_id"] = agent->get_user_id() + "_" + std::string(filename.utf8_string()) + "_" + clock;
     } else {
-        bundle_structure["version"] = "";
         std::string id;
         bundle_structure["bundle_id"] = id + "offline_" + "_" + clock;
     }

@@ -89,6 +89,8 @@ void Print::clear()
     m_print_regions.clear();
     m_model.clear_objects();
     m_statistics_by_extruder_count.clear();
+    m_same_shrinkage_compensations = false;
+    m_shrinkage_compensation = Vec3d::Ones();
 }
 
 bool Print::has_tpu_filament() const
@@ -204,6 +206,8 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "retract_restart_extra_toolchange",
         "retraction_speed",
         "use_firmware_retraction",
+        "firmware_owns_retraction",
+        "klipper_restore_state",
         "slow_down_layer_time",
         "standby_temperature_delta",
         "preheat_time",
@@ -498,30 +502,34 @@ std::vector<unsigned int> Print::object_extruders() const
 		for (const PrintRegion &region : object->all_regions())
         	region.collect_object_printing_extruders(*this, extruders);
 
-    for (const PrintObject* object : m_objects) {
-        const ModelObject* mo = object->model_object();
-        for (const ModelVolume* mv : mo->volumes) {
-            std::vector<int> volume_extruders = mv->get_extruders();
-            for (int extruder : volume_extruders) {
-                assert(extruder > 0);
-                extruders.push_back(extruder - 1);
-            }
-        }
-
-        // layer range
-        for (auto layer_range : mo->layer_config_ranges) {
-            if (layer_range.second.has("extruder")) {
-                //BBS: actually when user doesn't change filament by height range(value is default 0), height range should not save key "extruder".
-                //Don't know why height range always save key "extruder" because of no change(should only save difference)...
-                //Add protection here to avoid overflow
-                auto value = layer_range.second.option("extruder")->getInt();
-                if (value > 0)
-                    extruders.push_back(value - 1);
-            }
-        }
-    }
+    for (const PrintObject* object : m_objects)
+        append_model_object_extruders(*object->model_object(), extruders);
     sort_remove_duplicates(extruders);
     return extruders;
+}
+
+// Appends 0-based indices of the filaments assigned to the volumes of model_object (painting included) and to its height ranges.
+void Print::append_model_object_extruders(const ModelObject &mo, std::vector<unsigned int> &extruders)
+{
+    for (const ModelVolume* mv : mo.volumes) {
+        std::vector<int> volume_extruders = mv->get_extruders();
+        for (int extruder : volume_extruders) {
+            assert(extruder > 0);
+            extruders.push_back(extruder - 1);
+        }
+    }
+
+    // layer range
+    for (auto layer_range : mo.layer_config_ranges) {
+        if (layer_range.second.has("extruder")) {
+            //BBS: actually when user doesn't change filament by height range(value is default 0), height range should not save key "extruder".
+            //Don't know why height range always save key "extruder" because of no change(should only save difference)...
+            //Add protection here to avoid overflow
+            auto value = layer_range.second.option("extruder")->getInt();
+            if (value > 0)
+                extruders.push_back(value - 1);
+        }
+    }
 }
 
 // returns 0-based indices of used extruders
@@ -533,22 +541,8 @@ std::vector<unsigned int> Print::support_material_extruders() const
     auto num_extruders = (unsigned int)m_config.filament_diameter.size();
 
     for (PrintObject *object : m_objects) {
-        if (object->has_support_material()) {
-        	assert(object->config().support_filament >= 0);
-            if (object->config().support_filament == 0)
-                support_uses_current_extruder = true;
-            else {
-            	unsigned int i = (unsigned int)object->config().support_filament - 1;
-                extruders.emplace_back((i >= num_extruders) ? 0 : i);
-            }
-        	assert(object->config().support_interface_filament >= 0);
-            if (object->config().support_interface_filament == 0)
-                support_uses_current_extruder = true;
-            else {
-            	unsigned int i = (unsigned int)object->config().support_interface_filament - 1;
-                extruders.emplace_back((i >= num_extruders) ? 0 : i);
-            }
-        }
+        if (object->has_support_material() && append_support_extruders(object->config(), num_extruders, extruders))
+            support_uses_current_extruder = true;
     }
 
     if (support_uses_current_extruder)
@@ -559,31 +553,61 @@ std::vector<unsigned int> Print::support_material_extruders() const
     return extruders;
 }
 
+// Appends 0-based indices of the support and support interface filaments of an object printing support material.
+// Returns true if support or support interface is printed with the filament of the object.
+bool Print::append_support_extruders(const PrintObjectConfig &config, unsigned int num_extruders, std::vector<unsigned int> &extruders)
+{
+    bool uses_current_extruder = false;
+    assert(config.support_filament >= 0);
+    if (config.support_filament == 0)
+        uses_current_extruder = true;
+    else {
+        unsigned int i = (unsigned int)config.support_filament - 1;
+        extruders.emplace_back((i >= num_extruders) ? 0 : i);
+    }
+    assert(config.support_interface_filament >= 0);
+    if (config.support_interface_filament == 0)
+        uses_current_extruder = true;
+    else {
+        unsigned int i = (unsigned int)config.support_interface_filament - 1;
+        extruders.emplace_back((i >= num_extruders) ? 0 : i);
+    }
+    return uses_current_extruder;
+}
+
 // returns 0-based indices of used extruders
 std::vector<unsigned int> Print::extruders(bool conside_custom_gcode) const
 {
     std::vector<unsigned int> extruders = this->object_extruders();
     append(extruders, this->support_material_extruders());
 
-    if (conside_custom_gcode) {
-        //BBS
-        int num_extruders = m_config.filament_colour.size();
-        if (m_model.plates_custom_gcodes.find(m_model.curr_plate_index) != m_model.plates_custom_gcodes.end()) {
-            for (auto item : m_model.plates_custom_gcodes.at(m_model.curr_plate_index).gcodes) {
-                if (item.type == CustomGCode::Type::ToolChange && item.extruder <= num_extruders)
-                    extruders.push_back((unsigned int)(item.extruder - 1));
-            }
+    if (conside_custom_gcode)
+        this->append_tool_change_extruders(extruders);
+    this->append_wipe_tower_extruder(extruders);
+    sort_remove_duplicates(extruders);
+    return extruders;
+}
+
+// Appends 0-based indices of the filaments the tool changes of the current plate switch to.
+void Print::append_tool_change_extruders(std::vector<unsigned int> &extruders) const
+{
+    //BBS
+    int num_extruders = m_config.filament_colour.size();
+    if (m_model.plates_custom_gcodes.find(m_model.curr_plate_index) != m_model.plates_custom_gcodes.end()) {
+        for (auto item : m_model.plates_custom_gcodes.at(m_model.curr_plate_index).gcodes) {
+            if (item.type == CustomGCode::Type::ToolChange && item.extruder <= num_extruders)
+                extruders.push_back((unsigned int)(item.extruder - 1));
         }
     }
+}
 
+void Print::append_wipe_tower_extruder(std::vector<unsigned int> &extruders) const
+{
     // If a wipe tower filament is explicitly set, ensure it participates in tool ordering.
     if (has_wipe_tower() && config().wipe_tower_filament != 0 && extruders.size() > 1) {
         assert(config().wipe_tower_filament > 0 && config().wipe_tower_filament <= int(config().filament_diameter.size()));
         extruders.emplace_back(config().wipe_tower_filament - 1); // config value is 1-based
     }
-
-    sort_remove_duplicates(extruders);
-    return extruders;
 }
 
 unsigned int Print::num_object_instances() const
@@ -1762,6 +1786,63 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                  "enable_mixed_color_sublayer");
     }
 
+    // ANANAS SLICER: Klipper's [firmware_retraction] keeps one global "retracted" flag. The writer tracks a
+    // retraction per nozzle (per filament without single_extruder_multi_material): after a tool change
+    // the next nozzle's G10 is dropped while the parked one holds the flag, and its G11 pushes out what
+    // the parked nozzle retracted. An automatic filament map is only settled while slicing, so with
+    // several nozzles it counts as a split. The filaments are those the tool ordering prints with:
+    // custom layer tool changes included, mixed slots expanded to their physical components.
+    const bool firmware_retraction_per_nozzle = m_config.use_firmware_retraction && [&] {
+        const auto &is_mixed   = m_config.filament_is_mixed.values;
+        const auto &components = m_config.filament_mixed_components.values;
+        std::vector<unsigned int> physical;
+        for (unsigned int f : this->extruders(true)) {
+            std::vector<unsigned int> parts;
+            if (f < is_mixed.size() && is_mixed[f] && f < components.size())
+                parts = parse_mixed_components(components[f]);
+            // Same validity rule as ToolOrdering::resolve_mixed_filaments: physical components only.
+            if (std::any_of(parts.begin(), parts.end(), [&](unsigned int c) { return c == 0 || c > is_mixed.size() || is_mixed[c - 1]; }))
+                parts.clear();
+            if (parts.size() < 2)
+                physical.push_back(f);
+            else
+                for (unsigned int c : parts)
+                    physical.push_back(c - 1);
+        }
+        sort_remove_duplicates(physical);
+        if (physical.size() < 2)
+            return false;
+        if (!m_config.single_extruder_multi_material)
+            return true;
+        if (nozzles > 1 && is_auto_filament_map_mode(get_filament_map_mode()))
+            return true;
+        const size_t first_nozzle = get_extruder_id(physical.front());
+        return std::any_of(physical.begin(), physical.end(), [&](unsigned int f) { return get_extruder_id(f) != first_nozzle; });
+    }();
+    if (firmware_retraction_per_nozzle && m_config.firmware_owns_retraction)
+        warn(L("Firmware retraction with more than one nozzle: Klipper tracks a single retraction for all nozzles, "
+               "so retractions after a tool change can be lost or doubled. Disable firmware retraction for this print."),
+             "use_firmware_retraction");
+
+    // ANANAS SLICER: SET_RETRACTION carries the slicer's values to Klipper's [firmware_retraction], which
+    // rejects a negative length, speeds below 1 mm/s and a negative extra restart length. A rejected
+    // command aborts the print.
+    if (m_config.use_firmware_retraction && !m_config.firmware_owns_retraction) {
+        if (firmware_retraction_per_nozzle)
+            return { L("Retraction values from the slicer need firmware retraction on a single nozzle. Klipper tracks "
+                       "a single retraction for all nozzles. Disable firmware retraction or take the values from printer.cfg."),
+                     nullptr, "firmware_owns_retraction" };
+        auto any_of = [](const ConfigOptionFloats &opt, auto pred) { return std::any_of(opt.values.begin(), opt.values.end(), pred); };
+        if (any_of(m_config.retraction_length, [](double v) { return v < 0.; }))
+            return { L("Klipper's SET_RETRACTION does not accept a negative retraction length."), nullptr, "retraction_length" };
+        if (any_of(m_config.retraction_speed, [](double v) { return v < 1.; }))
+            return { L("Klipper's SET_RETRACTION needs a retraction speed of at least 1 mm/s."), nullptr, "retraction_speed" };
+        if (any_of(m_config.deretraction_speed, [](double v) { return v != 0. && v < 1.; }))
+            return { L("Klipper's SET_RETRACTION needs a deretraction speed of at least 1 mm/s, or 0 to use the retraction speed."), nullptr, "deretraction_speed" };
+        if (any_of(m_config.retract_restart_extra, [](double v) { return v < 0.; }))
+            return { L("Klipper's SET_RETRACTION does not accept a negative extra length on restart."), nullptr, "retract_restart_extra" };
+    }
+
     if (nozzles < 2 && extruders.size() > 1) {
         auto ret = check_multi_filament_valid(*this);
         if (!ret.string.empty())
@@ -1874,20 +1955,26 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
         if (auto layers = generate_object_layers(print_object.slicing_parameters(), layer_height_profile(print_object_idx), print_object.config().precise_z_height.value);
             !layers.empty()) {
 
-            Vec3d test =this->shrinkage_compensation();
+            // The object layers start above the raft, and they already carry the Z shrinkage compensation.
+            const double raft_z                   = print_object.slicing_parameters().object_print_z_min;
+            const double max_z                    = raft_z + layers.back();
+            const double printable_height         = this->config().printable_height;
             const double shrinkage_compensation_z = this->shrinkage_compensation().z();
-            
-            if (shrinkage_compensation_z != 1. && layers.back() > (this->config().printable_height / shrinkage_compensation_z + EPSILON)) {
+
+            if (shrinkage_compensation_z != 1. && max_z > printable_height + EPSILON &&
+                print_object.slicing_parameters().object_print_z_uncompensated_max <= printable_height + EPSILON) {
                 // The object exceeds the maximum build volume height because of shrinkage compensation.
                 return StringObjectException{
                     Slic3r::format(_u8L("While the object %1% itself fits the build volume, it exceeds the maximum build volume height because of material shrinkage compensation."), print_object.model_object()->name),
                     print_object.model_object(),
                     ""
                 };
-            } else if (layers.back() > this->config().printable_height + EPSILON) {
+            } else if (max_z > printable_height + EPSILON) {
                 // Test whether the last slicing plane is below or above the print volume.
+                const bool last_layer_below_max = layers.size() >= 2 &&
+                    raft_z + 0.5 * (layers[layers.size() - 2] + layers.back()) <= printable_height + EPSILON;
                 return StringObjectException{
-                    0.5 * (layers[layers.size() - 2] + layers.back()) > this->config().printable_height + EPSILON ?
+                    ! last_layer_below_max ?
                     Slic3r::format(_u8L("The object %1% exceeds the maximum build volume height."), print_object.model_object()->name) :
                     Slic3r::format(_u8L("While the object %1% itself fits the build volume, its last layer exceeds the maximum build volume height."), print_object.model_object()->name) +
                     " " + _u8L("You might want to reduce the size of your model or change current print settings and retry."),
@@ -1949,10 +2036,6 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
             return {L("Ooze prevention is only supported with the wipe tower when 'single_extruder_multi_material' is off.")};
             
 #if 0
-        if (m_config.gcode_flavor != gcfRepRapSprinter && m_config.gcode_flavor != gcfRepRapFirmware &&
-            m_config.gcode_flavor != gcfRepetier && m_config.gcode_flavor != gcfMarlinLegacy && m_config.gcode_flavor != gcfMarlinFirmware)
-            return { L("The prime tower is currently only supported for the Marlin, RepRap/Sprinter, RepRapFirmware and Repetier G-code flavors.")};
-
         if ((m_config.print_sequence == PrintSequence::ByObject) && extruders.size() > 1)
             return { L("A prime tower is not supported in \u201cBy object\u201d print."), nullptr, "enable_prime_tower" };
 
@@ -2228,14 +2311,6 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
             return {L("\"G92 E0\" was found in layer_change_gcode, but the G or E are not uppercase. "
                       "Please change them to the exact uppercase \"G92 E0\"."),
                     nullptr, "layer_change_gcode"};
-
-        // Only Marlin flavours need the reset; BBL printers do not.
-        if ((m_config.gcode_flavor == gcfMarlinLegacy || m_config.gcode_flavor == gcfMarlinFirmware) &&
-            !is_BBL_printer() &&
-            !before_has_g92_exact && !layer_has_g92_exact)
-            return {L("Relative extruder addressing requires resetting the extruder position at each layer to "
-                      "prevent loss of floating point accuracy. Add \"G92 E0\" to layer_gcode."),
-                    nullptr, "before_layer_change_gcode"};
     } else {
         // Absolute mode: any occurrence of "G92 E0" is incompatible.
         if (before_has_g92_any)
@@ -2252,7 +2327,7 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
     assert(bed_type_def != nullptr);
 
     // ORCA: check if bed type is compatible with all selected filaments
-    if (is_BBL_printer() || m_config.support_multi_bed_types.value) {
+    if (m_config.support_multi_bed_types.value) {
 	    const t_config_enum_values* bed_type_keys_map = bed_type_def->enum_keys_map;
 	    for (unsigned int extruder_id : extruders) {
 	        const ConfigOptionInts* bed_temp_opt = m_config.option<ConfigOptionInts>(get_bed_temp_key(m_config.curr_bed_type));
@@ -2311,11 +2386,8 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                 };
                 std::string warning_key;
 
-                const auto max_junction_deviation = m_config.machine_max_junction_deviation.values[0]; // TODO: fix this
-                const bool ignore_jerk_validation = m_config.gcode_flavor == gcfMarlinFirmware && max_junction_deviation > 0;
-
                 // check jerk
-                if (!ignore_jerk_validation) {
+                {
                     if (m_default_object_config.default_jerk.get_at(extruder_id) == 1 || m_default_object_config.outer_wall_jerk.get_at(extruder_id) == 1 ||
                         m_default_object_config.inner_wall_jerk.get_at(extruder_id) == 1) {
                        motion_warning.string = L("Setting the jerk speed too low could lead to artifacts on curved surfaces");
@@ -2338,32 +2410,18 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                        if (!warning_key.empty()) {
                             motion_warning.string = L(
                                 "The jerk setting exceeds the printer's maximum jerk (machine_max_jerk_x/machine_max_jerk_y).\n"
-                                "Orca will automatically cap the jerk speed to ensure it doesn't surpass the printer's capabilities.\n"
+                                "ANANAS SLICER will automatically cap the jerk speed to ensure it doesn't surpass the printer's capabilities.\n"
                                 "You can adjust the maximum jerk setting in your printer's configuration to get higher speeds.");
                             motion_warning.opt_key = warning_key;
                        }
                     }
                 }
 
-                // Check junction deviation
-                // Orca: Only marlin FW supports max junction deviation. Dont display warning if firmware is not supporting it.
-                const bool support_max_junction_deviation = ( m_config.gcode_flavor == gcfMarlinFirmware);
-                if (warning_key.empty() && m_default_object_config.default_junction_deviation.get_at(extruder_id) > max_junction_deviation && support_max_junction_deviation) {
-                    motion_warning.string  = L( "Junction deviation setting exceeds the printer's maximum value (machine_max_junction_deviation).\n"
-                                          "Orca will automatically cap the junction deviation to ensure it doesn't surpass the printer's capabilities.\n"
-                                          "You can adjust the machine_max_junction_deviation value in your printer's configuration to get higher limits.");
-                    motion_warning.opt_key = "default_junction_deviation";
-                }
-                
                 // check acceleration
                 const auto max_accel = m_config.machine_max_acceleration_extruding.values[0];
                 if (warning_key.empty() && m_default_object_config.default_acceleration.get_at(extruder_id) > 0 && max_accel > 0) {
-                   const bool support_travel_acc = (m_config.gcode_flavor == gcfRepetier || m_config.gcode_flavor == gcfMarlinFirmware ||
-                                                    m_config.gcode_flavor == gcfRepRapFirmware);
-
-                   std::vector<std::string> accel_to_check;
-                   if (!support_travel_acc)
-                        accel_to_check = {
+                   // Klipper has one acceleration for printing and travel moves.
+                   const std::vector<std::string> accel_to_check = {
                             "default_acceleration",
                             "inner_wall_acceleration",
                             "outer_wall_acceleration",
@@ -2374,43 +2432,14 @@ StringObjectException Print::validate(std::vector<StringObjectException> *warnin
                             "top_surface_acceleration",
                             "travel_acceleration",
                         };
-                   else
-                        accel_to_check = {
-                            "default_acceleration",
-                            "inner_wall_acceleration",
-                            "outer_wall_acceleration",
-                            "bridge_acceleration",
-                            "initial_layer_acceleration",
-                            "sparse_infill_acceleration",
-                            "internal_solid_infill_acceleration",
-                            "top_surface_acceleration",
-                        };
                    warning_key = check_motion_ability_object_setting(accel_to_check, max_accel);
                    if (!warning_key.empty()) {
                         motion_warning.string  = L("The acceleration setting exceeds the printer's maximum acceleration "
-                                              "(machine_max_acceleration_extruding).\nOrca will "
+                                              "(machine_max_acceleration_extruding).\nANANAS SLICER will "
                                               "automatically cap the acceleration speed to ensure it doesn't surpass the printer's "
                                               "capabilities.\nYou can adjust the "
                                               "machine_max_acceleration_extruding value in your printer's configuration to get higher speeds.");
                         motion_warning.opt_key = warning_key;
-                   }
-                   if (support_travel_acc) {
-                        const auto max_travel = m_config.machine_max_acceleration_travel.values[0];
-                        if (max_travel > 0) {
-                            accel_to_check = {
-                                "travel_acceleration",
-                            };
-                            warning_key = check_motion_ability_object_setting(accel_to_check, max_travel);
-                            if (!warning_key.empty()) {
-                                motion_warning.string = L(
-                                    "The travel acceleration setting exceeds the printer's maximum travel acceleration "
-                                    "(machine_max_acceleration_travel).\nOrca will "
-                                    "automatically cap the travel acceleration speed to ensure it doesn't surpass the printer's "
-                                    "capabilities.\nYou can adjust the "
-                                    "machine_max_acceleration_travel value in your printer's configuration to get higher speeds.");
-                                motion_warning.opt_key = warning_key;
-                            }
-                        }
                    }
                 }
 
@@ -2624,6 +2653,14 @@ void  PrintObject::clear_shared_object()
 void  PrintObject::copy_layers_from_shared_object()
 {
     if (m_shared_object) {
+        // Orca: Print::process() calls this once per slice for each sharing object, after clear_shared_object() has
+        // emptied any earlier alias, so the vectors hold only layers this object sliced itself before it started sharing
+        // (or nothing). Free them here, as clear_support_layers() / clear_layers() would; those skip deletion while
+        // m_shared_object is set.
+        for (SupportLayer *layer : m_support_layers)
+            delete layer;
+        for (Layer *layer : m_layers)
+            delete layer;
         m_layers.clear();
         m_support_layers.clear();
 
@@ -4971,7 +5008,8 @@ void Print::export_gcode_from_previous_file(const std::string& file, GCodeProces
 
     try {
         GCodeProcessor processor;
-        GCodeProcessor::s_IsBBLPrinter = is_BBL_printer();
+        // A previously imported Bambu G-code may have switched the tag dialect; sliced output never uses it.
+        GCodeProcessor::s_IsBBLPrinter = false;
         const Vec3d origin = this->get_plate_origin();
         processor.set_xy_offset(origin(0), origin(1));
         // Reloaded sliced projects re-estimate with the same nozzle-grouping slot context as the
@@ -5087,44 +5125,6 @@ std::string PrintStatistics::finalize_output_path(const std::string &path_in) co
         final_path = path_in;
     }
     return final_path;
-}
-
-// Orca: Implement prusa's filament shrink compensation approach
-// Returns if all used filaments have same shrinkage compensations.
- bool Print::has_same_shrinkage_compensations() const {
-     const std::vector<unsigned int> extruders = this->extruders();
-     if (extruders.empty())
-         return false;
-
-     const double filament_shrinkage_compensation_xy = m_config.filament_shrink.get_at(extruders.front());
-     const double filament_shrinkage_compensation_z  = m_config.filament_shrinkage_compensation_z.get_at(extruders.front());
-
-     for (unsigned int extruder : extruders) {
-         if (filament_shrinkage_compensation_xy != m_config.filament_shrink.get_at(extruder) ||
-             filament_shrinkage_compensation_z  != m_config.filament_shrinkage_compensation_z.get_at(extruder)) {
-             return false;
-         }
-     }
-
-     return true;
- }
-
-// Orca: Implement prusa's filament shrink compensation approach, but amended so 100% from the user is the equivalent to 0 in orca.
- // Returns scaling for each axis representing shrinkage compensations in each axis.
-Vec3d Print::shrinkage_compensation() const
-{
-    if (!this->has_same_shrinkage_compensations())
-        return Vec3d::Ones();
-
-    const unsigned int first_extruder = this->extruders().front();
-
-    const double xy_shrinkage_percent = m_config.filament_shrink.get_at(first_extruder);
-    const double z_shrinkage_percent  = m_config.filament_shrinkage_compensation_z.get_at(first_extruder);
-
-    const double xy_compensation = 100.0 / xy_shrinkage_percent;
-    const double z_compensation  = 100.0 / z_shrinkage_percent;
-
-    return { xy_compensation, xy_compensation, z_compensation };
 }
 
 const std::string PrintStatistics::FilamentUsedG     = "filament used [g]";

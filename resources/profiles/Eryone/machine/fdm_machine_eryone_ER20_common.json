@@ -21,7 +21,7 @@
 	"extruder_offset": [
 		"0x0"
 	],
-	"gcode_flavor": "marlin2",
+	"gcode_flavor": "klipper",
 	"layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
 	"machine_end_gcode": "G91 ;Relative positioning\nG1 Z5 F720 ;Raise Z\nG1 E-5 F300 ;Retract a bit to protect nozzle\nM104 S0 ;Turn off extruder\nM140 S0 ;Turn off bed\nM107 ;Turn off all fans\nG90 ;Absolute positioning\nG1 X200 Y200 F4800 ;Parking the hotend\nM84 X Y E ;All steppers off but left Z\n",
 	"machine_max_acceleration_e": [
@@ -131,7 +131,6 @@
 	"retraction_speed": [
 		"50"
 	],
-	"scan_first_layer": "0",
 	"single_extruder_multi_material": "0",
 	"support_air_filtration": "0",
 	"support_chamber_temp_control": "0",

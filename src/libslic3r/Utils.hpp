@@ -8,6 +8,8 @@
 #include <functional>
 #include <type_traits>
 #include <system_error>
+#include <initializer_list>
+#include <string_view>
 #include <regex>
 
 #include <boost/system/error_code.hpp>
@@ -190,6 +192,36 @@ void set_data_dir(const std::string &path);
 // Return a full path to the GUI resource files.
 const std::string& data_dir();
 
+// Result of copy_legacy_data_dir().
+enum class LegacyDataDirCopy { NotNeeded, Copied, Failed };
+// First start under a new app key: copies the data directory of the previous key (legacy_dir) to
+// data_dir and renames its top-level files named after legacy_key (legacy_key.conf, ...) to new_key.
+// The copy is assembled in a temporary sibling of data_dir unique to the process, gets the marker
+// ".migrated-from-<legacy_key>" as its last file (a file of that name in legacy_dir is not copied) and
+// is renamed into place, so only a finished copy ever becomes data_dir; on POSIX everything is flushed
+// to disk before the marker and the rename. A data_dir holding the marker or any other content is never touched; an empty
+// one is replaced. When another instance moved its finished copy into place first, that one is kept
+// (NotNeeded). legacy_dir is only read. Symbolic links are copied as links (on Windows left out and
+// named in message), permissions are kept with write access added for the owner, and the regenerated
+// top-level cache and log directories are left out. message receives the reason of a failure.
+LegacyDataDirCopy copy_legacy_data_dir(const std::string &legacy_dir, const std::string &legacy_key,
+                                       const std::string &data_dir, const std::string &new_key,
+                                       std::string *message = nullptr);
+// Where the data directory of the previous app key may live, in the order to try: next to data_dir,
+// and in a Flatpak sandbox also in the sandbox of the previous Flatpak app id under home.
+std::vector<std::string> legacy_data_dir_candidates(const std::string &data_dir, const std::string &legacy_key,
+                                                    const std::string &home, bool flatpak);
+// The data directory for a GUI start: copies the first existing legacy directory with
+// copy_legacy_data_dir() and returns data_dir; message then names links left out, if any. When the copy
+// fails it returns a new session directory next to data_dir instead (owner-only access, marked with the
+// process id), sets message to the reason, and leaves data_dir uncreated so the next start tries again.
+// Throws when not even the session directory can be created.
+std::string start_data_dir(const std::vector<std::string> &legacy_dirs, const std::string &legacy_key,
+                           const std::string &data_dir, const std::string &new_key, std::string &message);
+// Removes the session directories of start_data_dir() next to data_dir whose process is gone (a session
+// that ended without OnExit()). Only directories carrying a marker of this user's are touched.
+void remove_orphaned_session_dirs(const std::string &data_dir, const std::string &new_key);
+
 // BBL: true: succeed create or dir exists; false: fail to create
 bool makedir(const std::string path);
 
@@ -224,6 +256,21 @@ extern std::vector<std::string> split_string(const std::string &str, char delimi
 // On Windows, the file explorer (or anti-virus or whatever else) often locks the file
 // for a short while, so the file may not be movable. Retry while we see recoverable errors.
 extern std::error_code rename_file(const std::string &from, const std::string &to);
+// Write `chunks`, in order, to `path` through a temporary file beside it that is
+// then renamed over the target, so a concurrent reader sees the old or the new
+// file, never a partial one. The temporary is removed on failure and an existing
+// target keeps its permissions. Text mode unless `binary`, so Windows writes CRLF
+// as the streams this replaces did. A target that is not a regular file (a
+// device or pipe) is written in place, since replacing it would change what it
+// is, and so is an existing target beside which no temporary can be created or
+// whose replace the filesystem refuses; a symlink is followed and the file it
+// names is replaced. On Windows a reader holding the
+// target open without sharing its deletion, which the C runtime does not, makes
+// the replace fall back to the in-place write too, so an unlocked reader there
+// can still see a partial file.
+extern std::error_code write_file_atomically(const std::string &path, std::initializer_list<std::string_view> chunks, bool binary = false);
+inline std::error_code write_file_atomically(const std::string &path, const std::string &content, bool binary = false)
+	{ return write_file_atomically(path, { std::string_view(content) }, binary); }
 
 enum CopyFileResult {
 	SUCCESS = 0,
@@ -270,18 +317,14 @@ extern bool is_absolute_path_within_root(const boost::filesystem::path &path, co
 // Anything unknown is not safe.
 extern bool is_safe_to_open_file_name(const std::string &file_name);
 
-// Orca: custom protocal support utils
-inline bool is_orca_open(const std::string& url) { return boost::starts_with(url, "orcaslicer://open"); }
+// Custom protocol support utils. ANANAS SLICER owns ananas-slicer:// and does not claim orcaslicer:// or bambustudio://,
+// so it never takes links meant for an installed OrcaSlicer or Bambu Studio.
+inline bool is_ananas_slicer_open(const std::string& url) { return boost::starts_with(url, "ananas-slicer://open"); }
 inline bool is_prusaslicer_open(const std::string& url) { return boost::starts_with(url, "prusaslicer://open"); }
-inline bool is_bambustudio_open(const std::string& url) { return boost::starts_with(url, "bambustudio://open") || boost::starts_with(url, "bambustudioopen://"); }
 inline bool is_cura_open(const std::string& url) { return boost::starts_with(url, "cura://open"); }
-inline bool is_supported_open_protocol(const std::string& url) { return is_orca_open(url) || is_prusaslicer_open(url) || is_bambustudio_open(url) || is_cura_open(url); }
+inline bool is_supported_open_protocol(const std::string& url) { return is_ananas_slicer_open(url) || is_prusaslicer_open(url) || is_cura_open(url); }
 inline bool is_printables_link(const std::string& url) {
     const std::regex url_regex("(http|https)://printables.com", std::regex_constants::icase);
-    return std::regex_match(url, url_regex);
-}
-inline bool is_makerworld_link(const std::string& url) {
-    const std::regex url_regex("(http|https)://makerworld.com", std::regex_constants::icase);
     return std::regex_match(url, url_regex);
 }
 inline bool is_thingiverse_link(const std::string& url) {

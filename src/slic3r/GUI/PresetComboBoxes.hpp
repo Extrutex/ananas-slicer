@@ -75,19 +75,11 @@ public:
     // select preset which is selected in PreseBundle
     void update_from_bundle();
 
-    // BBS: printer
-    void add_connected_printers(std::string selected, bool alias_name = false);
-    int  selected_connected_printer() const;
-
     // BBS: ams
-    bool add_ams_filaments(std::string selected, bool alias_name = false);
     int  selected_ams_filament() const;
 
     void set_filament_idx(const int extr_idx) { m_filament_idx = extr_idx; }
     int  get_filament_idx() const { return m_filament_idx; }
-
-    std::string get_selected_dev_id() const { return m_selected_dev_id; }
-    void clear_selected_dev_id() { m_selected_dev_id.clear(); }
 
     // BBS
     wxString get_tooltip(const Preset& preset);
@@ -138,12 +130,6 @@ protected:
     int space_icon_width;
     int thin_space_icon_width;
     int wide_space_icon_width;
-
-    // BBS: printer
-    int m_first_printer_idx = 0;
-    int m_last_printer_idx  = 0;
-
-    std::string              m_selected_dev_id;
 
     PrinterTechnology printer_technology {ptAny};
 
@@ -243,40 +229,6 @@ public:
 
     PresetCollection*   presets()   const { return m_collection; }
     Preset::Type        type()      const { return m_type; }
-};
-
-// ---------------------------------
-// ***  CalibrateFilamentComboBox  ***
-// ---------------------------------
-
-class CalibrateFilamentComboBox : public PlaterPresetComboBox
-{
-public:
-    CalibrateFilamentComboBox(wxWindow *parent);
-    ~CalibrateFilamentComboBox();
-
-    void load_tray(DynamicPrintConfig & config);
-
-    void update() override;
-    void msw_rescale() override;
-    void OnSelect(wxCommandEvent &evt) override;
-    const Preset* get_selected_preset() { return m_selected_preset; }
-    std::string get_tray_name() { return m_tray_name; }
-    std::string get_tag_uid() { return m_tag_uid; }
-    bool is_tray_exist() { return m_filament_exist; }
-    bool is_compatible_with_printer() { return m_is_compatible; }
-
-private:
-    std::string m_tray_name;
-    std::string m_filament_id;
-    std::string m_tag_uid;
-    std::string m_filament_type;
-    std::string m_filament_color;
-    bool m_filament_exist{false};
-    bool m_is_compatible{true};
-    const Preset* m_selected_preset = nullptr;
-    std::map<wxString, std::pair<std::string, wxBitmap*>> m_nonsys_presets;
-    std::map<wxString, std::pair<std::string, wxBitmap*>> m_system_presets;
 };
 
 } // namespace GUI

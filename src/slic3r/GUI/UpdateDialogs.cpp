@@ -17,7 +17,6 @@
 #include "GUI.hpp"
 #include "GUI_App.hpp"
 #include "I18N.hpp"
-#include "ConfigWizard.hpp"
 #include "wxExtensions.hpp"
 #include "MainFrame.hpp"
 
@@ -111,7 +110,7 @@ MsgUpdateConfig::MsgUpdateConfig(const std::vector<Update> &updates, bool force_
 
     m_sizer_body->Add(0, 0, 0, wxLEFT, FromDIP(38));
 
-    auto sm    = create_scaled_bitmap("OrcaSlicer", nullptr, 70);
+    auto sm    = create_scaled_bitmap(GUI_App::symbol_name(), nullptr, 70);
     auto brand = new wxStaticBitmap(this, wxID_ANY, sm, wxDefaultPosition, wxSize(FromDIP(70), FromDIP(70)));
 
     m_sizer_body->Add(brand, 0, wxALL, 0);

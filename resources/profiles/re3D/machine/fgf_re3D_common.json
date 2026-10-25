@@ -56,7 +56,6 @@
 	"machine_end_gcode": "M104 S0 T0\nM104 S0 T1\nM104 S0 T2\nM140 S0\n\nG28 X Y\nM18\nM107\n",
 	"layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
 	"before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0\n",
-	"scan_first_layer": "0",
 	"nozzle_type": "undefine",
 	"auxiliary_fan": "0"
 }

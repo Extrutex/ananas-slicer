@@ -9,7 +9,7 @@
 	"brim_type": "outer_only",
 	"brim_width": "40",
 	"default_acceleration": "2500",
-	"default_jerk": "5",
+	"default_jerk": "0",
 	"elefant_foot_compensation": "0",
 	"ensure_vertical_shell_thickness": "none",
 	"exclude_object": "1",

@@ -27,12 +27,14 @@
 #include <wx/timer.h>
 #include <memory>
 #include "Lazy.hpp"
+#include "slic3r/Utils/MoonrakerStatus.hpp"
 
 
 namespace Slic3r {
 namespace GUI {
 
 class PrinterWebViewHandler;
+class PrinterStatusStrip;
 
 
 class PrinterWebView : public wxPanel, public LazyInstance<PrinterWebView> {
@@ -56,6 +58,7 @@ private:
     friend class PrinterWebViewHandler;
 
     void SendAPIKey();
+    void restart_status();
 
     wxWebView* m_browser;
     long m_zoomFactor;
@@ -63,6 +66,8 @@ private:
     bool m_apikey_sent;
     wxString m_url_deferred;
     std::unique_ptr<PrinterWebViewHandler> m_handler;
+    PrinterStatusStrip* m_status_strip = nullptr;
+    MoonrakerStatus m_status;
 
     // DECLARE_EVENT_TABLE()
 };

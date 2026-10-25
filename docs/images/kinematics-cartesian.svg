@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="Cartesian bed-slinger kinematics: one motor per axis, the bed carries the part in Y, the gantry carries the toolhead in X and rides two lead screws in Z.">
+  <title>Cartesian bed-slinger kinematics, front view: X motor on the gantry moves the toolhead, two Z motors lift the gantry on lead screws, the Y motor moves the bed with the part on it.</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4db9ff"/>
+    </marker>
+  </defs>
+
+  <!-- ground + frame -->
+  <rect x="0" y="0" width="800" height="480" fill="#0b0e11"/>
+  <rect x="0.5" y="0.5" width="799" height="479" fill="none" stroke="#262f37" stroke-width="1"/>
+
+  <!-- title block -->
+  <text x="40" y="44" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" letter-spacing="2" fill="#eef3f6">CARTESIAN</text>
+  <text x="40" y="66" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#8b99a4">kinematics: cartesian</text>
+
+  <!-- fixed structure: base, two columns, top beam -->
+  <g fill="#0f1317" stroke="#3d4953" stroke-width="2">
+    <rect x="60" y="380" width="500" height="20"/>
+    <rect x="80" y="100" width="20" height="280"/>
+    <rect x="520" y="100" width="20" height="280"/>
+    <rect x="80" y="100" width="460" height="20"/>
+  </g>
+
+  <!-- lead screws (threaded) with Z motors at the bottom -->
+  <g stroke-width="3" fill="none">
+    <line x1="120" y1="120" x2="120" y2="340" stroke="#5c6b77"/>
+    <line x1="120" y1="120" x2="120" y2="340" stroke="#0b0e11" stroke-width="1" stroke-dasharray="3 3"/>
+    <line x1="500" y1="120" x2="500" y2="340" stroke="#5c6b77"/>
+    <line x1="500" y1="120" x2="500" y2="340" stroke="#0b0e11" stroke-width="1" stroke-dasharray="3 3"/>
+  </g>
+  <g fill="#222a31" stroke="#5c6b77" stroke-width="2">
+    <circle cx="120" cy="352" r="12"/>
+    <circle cx="500" cy="352" r="12"/>
+  </g>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6" text-anchor="middle">
+    <text x="120" y="356">Z</text>
+    <text x="500" y="356">Z</text>
+  </g>
+
+  <!-- Y axis: two rails along depth, belt from rear Y motor to front idler, bed on top -->
+  <g stroke="#3d4953" stroke-width="4" fill="none">
+    <line x1="160" y1="340" x2="290" y2="275"/>
+    <line x1="280" y1="340" x2="420" y2="270"/>
+  </g>
+  <line x1="400" y1="250" x2="220" y2="340" stroke="#eef3f6" stroke-width="2" fill="none"/>
+  <g fill="#141a1f" stroke="#3d4953" stroke-width="2">
+    <polygon points="190,310 370,310 410,290 230,290"/>
+    <rect x="190" y="310" width="180" height="12"/>
+    <polygon points="370,310 410,290 410,302 370,322"/>
+  </g>
+  <rect x="296" y="282" width="28" height="28" fill="#1a2127" stroke="#5c6b77" stroke-width="2"/>
+  <text x="206" y="306" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">bed</text>
+  <circle cx="220" cy="340" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="400" cy="250" r="12" fill="#222a31" stroke="#5c6b77" stroke-width="2"/>
+  <text x="400" y="254" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6" text-anchor="middle">Y</text>
+
+  <!-- X gantry (moves in Z on the lead screws), X rail, X belt loop, X motor at the left end -->
+  <rect x="110" y="200" width="400" height="16" fill="#d8e0e6" stroke="none"/>
+  <line x1="170" y1="208" x2="450" y2="208" stroke="#3d4953" stroke-width="4" fill="none"/>
+  <polyline points="150,196 460,196 466,202 466,214 460,220 150,220 138,214 138,202 150,196" fill="none" stroke="#eef3f6" stroke-width="2"/>
+  <circle cx="150" cy="208" r="12" fill="#222a31" stroke="#5c6b77" stroke-width="2"/>
+  <text x="150" y="212" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6" text-anchor="middle">X</text>
+  <circle cx="460" cy="208" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+
+  <!-- toolhead carriage clamped to the belt, nozzle tick below -->
+  <rect x="290" y="190" width="40" height="36" fill="#d8e0e6" stroke="#eef3f6" stroke-width="1"/>
+  <rect x="300" y="226" width="20" height="20" fill="#eef3f6" stroke="none"/>
+  <line x1="310" y1="246" x2="310" y2="254" stroke="#eef3f6" stroke-width="3" fill="none"/>
+
+  <!-- motion arrows -->
+  <g stroke="#4db9ff" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="340" y1="170" x2="400" y2="170"/>
+    <line x1="60" y1="310" x2="60" y2="250"/>
+    <line x1="424" y1="346" x2="464" y2="326"/>
+  </g>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#4db9ff">
+    <text x="408" y="175">X</text>
+    <text x="60" y="238" text-anchor="middle">Z</text>
+    <text x="480" y="366" text-anchor="end">Y (bed moves)</text>
+  </g>
+
+  <!-- moving mass per axis -->
+  <rect x="580" y="180" width="180" height="100" fill="#0f1317" stroke="#262f37" stroke-width="1"/>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace">
+    <text x="600" y="204" font-size="11" fill="#8b99a4">moving mass per axis</text>
+    <text x="600" y="228" font-size="13" fill="#d8e0e6">X: toolhead</text>
+    <text x="600" y="248" font-size="13" fill="#d8e0e6">Y: bed + part</text>
+    <text x="600" y="268" font-size="13" fill="#d8e0e6">Z: gantry</text>
+  </g>
+
+  <!-- legend -->
+  <rect x="680" y="396" width="14" height="8" fill="#d8e0e6"/>
+  <text x="702" y="404" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">moves</text>
+  <rect x="680" y="416" width="14" height="8" fill="none" stroke="#3d4953" stroke-width="1"/>
+  <text x="702" y="424" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">fixed</text>
+
+  <!-- caption -->
+  <text x="40" y="448" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9"><tspan x="40" dy="-18">Each axis has its own motor and rail; the bed carries the part in Y,</tspan><tspan x="40" dy="18">so Y acceleration is bounded by the mass of bed plus print.</tspan></text>
+</svg>

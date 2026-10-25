@@ -7,7 +7,6 @@
 	"instantiation": "true",
 	"adaptive_bed_mesh_margin": "0",
 	"auxiliary_fan": "1",
-	"bbl_use_printhost": "0",
 	"bed_custom_model": "",
 	"bed_custom_texture": "",
 	"bed_exclude_area": [
@@ -49,7 +48,7 @@
 	"gcode_flavor": "klipper",
 	"head_wrap_detect_zone": [],
 	"high_current_on_filament_swap": "0",
-	"host_type": "octoprint",
+	"host_type": "moonraker",
 	"layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
 	"long_retractions_when_cut": [
 		"0"
@@ -198,7 +197,6 @@
 	"retraction_speed": [
 		"45"
 	],
-	"scan_first_layer": "0",
 	"single_extruder_multi_material": "1",
 	"support_air_filtration": "1",
 	"support_chamber_temp_control": "1",

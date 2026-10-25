@@ -151,7 +151,7 @@ void GLGizmoMeshBoolean::on_render()
     }
 
     ColorRGB src_color = { 1.0f, 1.0f, 1.0f };
-    ColorRGB tool_color = {0.0f, 150.0f / 255.0f, 136.0f / 255.0f};
+    ColorRGB tool_color = {0x8B / 255.0f, 0x99 / 255.0f, 0xA4 / 255.0f}; // alu-300
     m_parent.get_selection().render_bounding_box(src_bb, src_color, m_parent.get_scale());
     m_parent.get_selection().render_bounding_box(tool_bb, tool_color, m_parent.get_scale());
 }
@@ -234,14 +234,14 @@ void GLGizmoMeshBoolean::on_render_input_window(float x, float y, float bottom_l
         bool hovered = ImGui::IsMouseHoveringRect(pos, pos + size);
 
         if (selected || hovered) {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.f, 1.f, 1.f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_Button, { 0, 150.0f / 255.0f, 136.0f / 255.0f, 1.0f });
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0, 150.0f / 255.0f, 136.0f / 255.0f, 1.0f });
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0, 150.0f / 255.0f, 136.0f / 255.0f, 1.0f });
+            ImGui::PushStyleColor(ImGuiCol_Text, ImGuiWrapper::on_accent());
+            ImGui::PushStyleColor(ImGuiCol_Button, ImGuiWrapper::accent());
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGuiWrapper::accent());
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGuiWrapper::accent());
         }
         else {
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0, 150.0f / 255.0f, 136.0f / 255.0f, 1.0f });
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0, 150.0f / 255.0f, 136.0f / 255.0f, 1.0f });
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGuiWrapper::accent());
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGuiWrapper::accent());
         }
 
         bool res = ImGui::Button(label.c_str(), size_arg);

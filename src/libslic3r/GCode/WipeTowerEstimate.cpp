@@ -26,11 +26,6 @@ static const ConfigOption *option_of(const ConfigBase &config, const char *key)
 
 WipeTowerType resolve_wipe_tower_type(const ConfigBase &config)
 {
-    // printer_model is what the CLI keys its Bambu Lab detection on; the GUI's vendor flag
-    // agrees for every shipped profile.
-    if (const auto *model = dynamic_cast<const ConfigOptionString *>(config.option("printer_model"));
-        model != nullptr && model->value.compare(0, 9, "Bambu Lab") == 0)
-        return WipeTowerType::Type1;
     // By value, not by concrete type: a static PrintConfig holds ConfigOptionEnum<T>, a
     // DynamicConfig built from presets holds ConfigOptionEnumGeneric, and both answer getInt().
     const ConfigOption *type = option_of(config, "wipe_tower_type");

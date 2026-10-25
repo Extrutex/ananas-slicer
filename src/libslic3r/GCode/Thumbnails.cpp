@@ -66,9 +66,11 @@ std::unique_ptr<CompressedImageBuffer> compress_thumbnail_jpg(const ThumbnailDat
         rows_ptrs.emplace_back(&rgba_pixels[y * row_size]);
     }
 
-    std::vector<unsigned char> compressed_data(data.pixels.size());
-    unsigned char* compressed_data_ptr = compressed_data.data();
-    unsigned long compressed_data_size = data.pixels.size();
+    // libjpeg allocates the output buffer itself (malloc) and grows it as needed; the buffer is handed
+    // over to the result, which frees it. A caller-supplied buffer would be replaced, not filled, once
+    // the JPEG outgrew it.
+    unsigned char* compressed_data_ptr = nullptr;
+    unsigned long compressed_data_size = 0;
 
     jpeg_error_mgr err;
     jpeg_compress_struct info;
@@ -92,9 +94,8 @@ std::unique_ptr<CompressedImageBuffer> compress_thumbnail_jpg(const ThumbnailDat
     // FIXME -> Add error checking
 
     auto out = std::make_unique<CompressedJPG>();
-    out->data = malloc(compressed_data_size);
+    out->data = compressed_data_ptr;
     out->size = size_t(compressed_data_size);
-    ::memcpy(out->data, (const void*)compressed_data.data(), out->size);
     return out;
 }
 
@@ -113,7 +114,7 @@ std::unique_ptr<CompressedImageBuffer> compress_thumbnail_qoi(const ThumbnailDat
         memcpy(rgba_pixels.data() + (data.height - y - 1) * row_size, data.pixels.data() + y * row_size, row_size);
 
     auto out = std::make_unique<CompressedQOI>();
-    int  size;
+    int  size = 0;
     out->data = qoi_encode((const void*)rgba_pixels.data(), &desc, &size);
     out->size = size;
     return out;

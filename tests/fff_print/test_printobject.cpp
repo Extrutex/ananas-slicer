@@ -572,3 +572,226 @@ TEST_CASE("Body centering survives islands merging and splitting between layers"
         }
     }
 }
+
+// A 40 mm cube as a triangle soup: every facet keeps its own vertices, shrunk towards the facet's
+// centroid so neighbouring facets are millimetres apart. No slice through it closes a contour, which
+// is what an unwelded OBJ or a mesh with missing faces looks like to the slicer. It stands on a
+// watertight 20 x 20 x 0.6 mm plate so the object does slice to a few layers near the bed.
+static TriangleMesh soup_cube_on_plate()
+{
+    const indexed_triangle_set cube = its_make_cube(40., 40., 40.);
+    std::vector<Vec3f>  vertices;
+    std::vector<Vec3i32> faces;
+    for (const Vec3i32 &face : cube.indices) {
+        const Vec3f centroid = (cube.vertices[face(0)] + cube.vertices[face(1)] + cube.vertices[face(2)]) / 3.f;
+        const int   first    = int(vertices.size());
+        for (int i = 0; i < 3; ++i)
+            vertices.emplace_back(centroid + 0.6f * (cube.vertices[face(i)] - centroid) + Vec3f(0.f, 0.f, 0.6f));
+        faces.emplace_back(first, first + 1, first + 2);
+    }
+    TriangleMesh soup(vertices, faces);
+    TriangleMesh plate = make_cube(20., 20., 0.6);
+    plate.translate(10.f, 10.f, 0.f);
+    soup.merge(plate);
+    return soup;
+}
+
+TEST_CASE("An object whose mesh closes on only a few layers fails to slice with the cause named", "[PrintObject][Regression]")
+{
+    Slic3r::Print print;
+    Slic3r::Model model;
+    init_print({soup_cube_on_plate()}, print, model, {
+        { "layer_height",               0.2 },
+        { "initial_layer_print_height", 0.2 },
+        { "enable_support",             0 },
+    });
+    print.set_status_silent();
+
+    // A 40.6 mm object at 0.2 mm would be about 203 layers; the soup gives three.
+    std::string message;
+    try {
+        print.process();
+        FAIL("slicing accepted a 40 mm object that produced only the plate's layers");
+    } catch (const SlicingError &error) {
+        message = error.what();
+    }
+    CHECK(message.find("not watertight") != std::string::npos);
+    CHECK(message.find("3 layer") != std::string::npos);
+}
+
+TEST_CASE("An object one layer tall still slices", "[PrintObject]")
+{
+    const double layer_height = 0.2;
+    for (const double height : { layer_height, 2. * layer_height }) {
+        DYNAMIC_SECTION("object height " << height) {
+            TriangleMesh mesh = make_cube(20., 20., height);
+            Slic3r::Print print;
+            Slic3r::Model model;
+            init_print({mesh}, print, model, {
+                { "layer_height",               layer_height },
+                { "initial_layer_print_height", layer_height },
+            });
+            print.set_status_silent();
+            REQUIRE_NOTHROW(print.process());
+            REQUIRE(print.objects().front()->layer_count() == size_t(std::lround(height / layer_height)));
+        }
+    }
+}
+
+TEST_CASE("An object cut short by a negative volume still slices", "[PrintObject]")
+{
+    // A 40 mm cube with everything above 1 mm removed by a negative volume: five 0.2 mm layers, and
+    // a height that says nothing about how many layers to expect.
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({
+        { "layer_height",               0.2 },
+        { "initial_layer_print_height", 0.2 },
+    });
+    Slic3r::Model model;
+    ModelObject *object = model.add_object();
+    object->name = "cut_cube.stl";
+    object->add_volume(make_cube(20., 20., 40.), ModelVolumeType::MODEL_PART, false);
+    TriangleMesh cutter = make_cube(30., 30., 40.);
+    cutter.translate(-5.f, -5.f, 1.f);
+    object->add_volume(std::move(cutter), ModelVolumeType::NEGATIVE_VOLUME, false);
+    object->add_instance();
+    object->ensure_on_bed();
+
+    Slic3r::Print print;
+    print.auto_assign_extruders(object);
+    print.apply(model, config);
+    print.validate();
+    print.set_status_silent();
+    REQUIRE_NOTHROW(print.process());
+    REQUIRE(print.objects().front()->layer_count() == 5);
+}
+
+TEST_CASE("The post-slice layer-count gate keeps a wide margin", "[PrintObject]")
+{
+    // max layer height 0.3: a 40 mm object needs at least about 67 layers of the thickest kind.
+    CHECK_FALSE(PrintObject::layer_count_covers_object_height(1, 40., 0.3));
+    CHECK_FALSE(PrintObject::layer_count_covers_object_height(3, 40.6, 0.3));
+    // 200 layers of 0.2 mm; one dropped empty top layer is within the slack.
+    CHECK(PrintObject::layer_count_covers_object_height(199, 40., 0.3));
+    // Legitimate short objects: one layer, or two with the top one dropped.
+    CHECK(PrintObject::layer_count_covers_object_height(1, 0.2, 0.3));
+    CHECK(PrintObject::layer_count_covers_object_height(1, 0.6, 0.3));
+    CHECK(PrintObject::layer_count_covers_object_height(0, 0.2, 0.3));
+}
+
+TEST_CASE("Changing a motion-only setting on a sliced print invalidates only the G-code export", "[PrintObject][Regression]")
+{
+    // Each of these is read by the G-code generator alone. Before they were classified, any of them
+    // fell through to invalidate_all_steps() and cost a full re-slice.
+    const std::string key = GENERATE(as<std::string>{},
+        "outer_wall_acceleration", "inner_wall_acceleration", "top_surface_acceleration", "bridge_acceleration",
+        "sparse_infill_acceleration", "internal_solid_infill_acceleration",
+        "default_jerk", "outer_wall_jerk", "inner_wall_jerk", "infill_jerk", "top_surface_jerk", "initial_layer_jerk",
+        "travel_jerk", "default_junction_deviation");
+
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({{ "layer_height", 0.2 }, { key, 1000 }});
+    Slic3r::Print print;
+    Slic3r::Model model;
+    init_print({cube(20)}, print, model, config);
+    print.set_status_silent();
+    Slic3r::Test::gcode(print); // process and export, so the G-code step is done too
+    const PrintObject *object = print.objects().front();
+    REQUIRE(object->is_step_done(posSlice));
+    REQUIRE(print.is_step_done(psGCodeExport));
+
+    config.set_deserialize_strict({{ key, 2000 }});
+    print.apply(model, config);
+
+    INFO("key = " << key);
+    CHECK(object->is_step_done(posSlice));
+    CHECK(object->is_step_done(posPerimeters));
+    CHECK(object->is_step_done(posPrepareInfill));
+    CHECK(object->is_step_done(posInfill));
+    CHECK(object->is_step_done(posSupportMaterial));
+    CHECK_FALSE(print.is_step_done(psGCodeExport));
+}
+
+TEST_CASE("Changing an acceleration the wipe tower bakes in regenerates the tower but not the objects", "[PrintObject][Regression]")
+{
+    const std::string key = GENERATE(as<std::string>{}, "default_acceleration", "initial_layer_acceleration", "travel_acceleration");
+
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({{ "layer_height", 0.2 }, { key, 1000 }});
+    Slic3r::Print print;
+    Slic3r::Model model;
+    init_print({cube(20)}, print, model, config);
+    print.set_status_silent();
+    Slic3r::Test::gcode(print);
+    const PrintObject *object = print.objects().front();
+    REQUIRE(print.is_step_done(psWipeTower));
+    REQUIRE(print.is_step_done(psGCodeExport));
+
+    config.set_deserialize_strict({{ key, 2000 }});
+    print.apply(model, config);
+
+    INFO("key = " << key);
+    CHECK(object->is_step_done(posSlice));
+    CHECK(object->is_step_done(posPerimeters));
+    CHECK(object->is_step_done(posInfill));
+    CHECK_FALSE(print.is_step_done(psWipeTower));
+    CHECK_FALSE(print.is_step_done(psGCodeExport));
+}
+
+// Area of the first layer of a 20 x 20 x 2 mm block with a 0.5 mm wide, 10 mm deep slot cut into its
+// front: two 9.75 mm wide blocks joined by a back block. The back block is a part of its own with a
+// different wall count, so the layer has two regions; only a multi-region layer closes its merged
+// slices before the elephant foot compensation. With the compensation on, the first layer keeps the
+// closed, uncompensated outline it started from (lslices_elfoot_uncompensated).
+static double slotted_block_first_layer_area(double slice_closing_radius)
+{
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({
+        { "layer_height",               0.2 },
+        { "initial_layer_print_height", 0.2 },
+        { "elefant_foot_compensation",  0.1 },
+        { "slice_closing_radius",       slice_closing_radius },
+        { "wall_loops",                 2 },
+    });
+
+    Slic3r::Model model;
+    ModelObject *object = model.add_object();
+    object->name = "slotted_block.stl";
+    TriangleMesh right = make_cube(9.75, 20., 2.);
+    TriangleMesh back  = make_cube(20., 10., 2.);
+    right.translate(10.25f, 0.f, 0.f);
+    back.translate(0.f, 10.f, 0.f);
+    object->add_volume(make_cube(9.75, 20., 2.), ModelVolumeType::MODEL_PART, false);
+    object->add_volume(std::move(right), ModelVolumeType::MODEL_PART, false);
+    object->add_volume(std::move(back), ModelVolumeType::MODEL_PART, false)->config.set_key_value("wall_loops", new ConfigOptionInt(3));
+    object->add_instance();
+    object->ensure_on_bed();
+
+    Slic3r::Print print;
+    print.auto_assign_extruders(object);
+    print.apply(model, config);
+    print.validate();
+    print.set_status_silent();
+    print.process();
+    const Layer *first_layer = print.objects().front()->layers().front();
+    REQUIRE(first_layer->regions().size() == 2);
+    return unscaled(unscaled(area(first_layer->lslices)));
+}
+
+TEST_CASE("Each object is sliced with its own slice closing radius", "[PrintObject][Regression]")
+{
+    // Before compensating the elephant foot, a multi-region layer closes its merged slices with
+    // 1.5 x slice_closing_radius (the mesh slicer itself closes with 1 x). That radius was cached in
+    // a function-local static,
+    // so the first object sliced in the process decided the closing of every object after it.
+    // A 0.2 mm radius leaves the 0.5 mm slot open in the slicer (closes up to 0.4 mm) but fills it
+    // in the elephant foot pass (closes up to 0.6 mm), adding the slot's 0.5 x 10 mm to the first
+    // layer; 0.049 mm closes nothing either way.
+    const double slot_area = 0.5 * 10.;
+    const double open      = slotted_block_first_layer_area(0.049);
+    const double closed    = slotted_block_first_layer_area(0.2);
+    CHECK(closed - open > 0.6 * slot_area);
+    // And the order of slicing does not matter: the small radius still leaves the slot open afterwards.
+    const double open_again = slotted_block_first_layer_area(0.049);
+    CHECK_THAT(open_again, Catch::Matchers::WithinAbs(open, 1e-3));
+}

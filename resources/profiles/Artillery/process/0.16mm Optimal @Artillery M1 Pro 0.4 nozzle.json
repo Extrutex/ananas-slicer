@@ -28,7 +28,7 @@
 	"outer_wall_line_width": "0.42",
 	"support_line_width": "0.42",
 	"top_surface_line_width": "0.42",
-	"accel_to_decel_enable": "1",
+	"accel_to_decel_enable": "0",
 	"accel_to_decel_factor": "50%",
 	"alternate_extra_wall": "0",
 	"bottom_shell_thickness": "0",

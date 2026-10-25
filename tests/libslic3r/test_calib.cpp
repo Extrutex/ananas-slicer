@@ -37,7 +37,7 @@ TEST_CASE("Zero calibration line width resolves to a positive default", "[Calib]
     Calib_Params params;
     params.mode = CalibMode::Calib_PA_Pattern;
 
-    PaPatternProbe pattern(params, config, /* is_bbl_machine */ true, *model.objects.front(), Vec3d(0, 0, 0));
+    PaPatternProbe pattern(params, config, *model.objects.front(), Vec3d(0, 0, 0));
 
     REQUIRE(pattern.line_width() > 0.);
     REQUIRE(pattern.line_width_first_layer() > 0.);
@@ -95,9 +95,8 @@ TEST_CASE("PA pattern resets the extruder after the final layer in absolute E mo
     params.end   = 0.08;
     params.step  = 0.002;
 
-    CalibPressureAdvancePattern pattern(params, config, /* is_bbl_machine */ false, *model.objects.front(), Vec3d(0, 0, 0));
-    const CustomGCode::Info     info = pattern.generate_custom_gcodes(config, /* is_bbl_machine */ false, *model.objects.front(),
-                                                                      Vec3d(0, 0, 0));
+    CalibPressureAdvancePattern pattern(params, config, *model.objects.front(), Vec3d(0, 0, 0));
+    const CustomGCode::Info     info = pattern.generate_custom_gcodes(config, *model.objects.front(), Vec3d(0, 0, 0));
 
     std::string gcode;
     for (const CustomGCode::Item &item : info.gcodes)

@@ -18,7 +18,6 @@ import uuid
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import orca_profile_tool as afi  # noqa: E402
-import update_bambu_filament_ids as ubfi  # noqa: E402
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 REAL_PROFILES = os.path.join(REPO_ROOT, "resources", "profiles")
@@ -124,11 +123,10 @@ class SyntheticTree:
 
     # -- pipeline wrappers ---------------------------------------------------
 
-    def check(self, map_path=None):
+    def check(self):
         buf = io.StringIO()
-        kwargs = {} if map_path is None else {"map_path": map_path}
         with contextlib.redirect_stdout(buf):
-            errors = afi.check_filament_ids(self.profiles, **kwargs)
+            errors = afi.check_filament_ids(self.profiles)
         return errors, buf.getvalue()
 
     # assign() and remint() are the same one pass over the tree — every filament
@@ -685,108 +683,6 @@ class TestCheck3(OfCleanTreeCase):
         self.assertIn("[WARNING]", out)
         self.assertIn("across bundles", out)
         self.assertIn('"APLA"', out)
-
-
-class TestCheck4(OfCleanTreeCase):
-    def _write_map(self, rows):
-        path = os.path.join(self.t.dir, "bambu_filament_ids.json")
-        ubfi.write_map(path, rows, "testcommit", "2026-09-04")
-        return path
-
-    def _write_raw_map(self, payload):
-        """Write a map write_map() would never produce (hand-edited or mis-generated)."""
-        path = os.path.join(self.t.dir, "bambu_filament_ids.json")
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(payload, f, indent=2, ensure_ascii=False, sort_keys=True)
-        return path
-
-    def test_row_triple_must_match_tree(self):
-        fid = afi.generate_filament_id("V", "PLA", "Foo")
-        self.t.write_preset("VendorA", preset("Foo @base", filament_id=fid,
-                                              instantiation=False,
-                                              filament_vendor="V", filament_type="PLA"))
-        self.t.write_preset("VendorA", preset("Foo @P1", inherits="Foo @base",
-                                              compatible_printers=["P1"]))
-        map_path = self._write_map(
-            {fid: {"bambu_id": "GFZ00", "vendor": "V", "type": "PLA", "name": "Bar"}})
-        errors, out = self.t.check(map_path)
-        self.assertGreater(errors, 0)
-        self.assertIn("regenerate the map", out)
-
-    def test_non_of_map_key_is_an_error(self):
-        # The map is keyed by OUR ids; a Bambu id in the key column means the
-        # map was generated or hand-edited the wrong way round.
-        map_path = self._write_map({
-            "GFB00": {"bambu_id": "GFB00", "vendor": "V", "type": "PLA",
-                      "name": "Foo"}})
-        errors, out = self.t.check(map_path)
-        self.assertEqual(errors, 1, out)
-        self.assertIn('"GFB00" is not a minted "OF" id', out)
-
-    def test_duplicate_bambu_id_is_an_error(self):
-        map_path = self._write_map({
-            "OFaaaaaa": {"bambu_id": "GFZ00", "vendor": "V", "type": "PLA", "name": "Foo"},
-            "OFbbbbbb": {"bambu_id": "GFZ00", "vendor": "V", "type": "PETG", "name": "Bar"},
-        })
-        errors, out = self.t.check(map_path)
-        self.assertGreater(errors, 0)
-        self.assertIn("GFZ00", out)
-
-    def test_row_for_unshipped_product_is_fine(self):
-        map_path = self._write_map({
-            "OFcccccc": {"bambu_id": "GFZ99", "vendor": "Nobody", "type": "PLA",
-                        "name": "Ships Nothing"},
-        })
-        errors, out = self.t.check(map_path)
-        self.assertEqual(errors, 0, out)
-
-    def test_non_object_top_level_is_a_clean_error(self):
-        # A hand-edited map that is a list (or any non-object) must report the map,
-        # not raise AttributeError out of the check.
-        map_path = self._write_raw_map([{"bambu_id": "GFZ00"}])
-        errors, out = self.t.check(map_path)
-        self.assertGreater(errors, 0)
-        self.assertIn("does not parse", out)
-        self.assertIn("regenerate the map", out)
-
-    def test_empty_filaments_section_is_an_error(self):
-        # What a regeneration against the wrong --bambustudio-dir writes: a well-formed
-        # header with zero rows. At runtime every translation silently becomes identity.
-        map_path = self._write_map({})
-        errors, out = self.t.check(map_path)
-        self.assertGreater(errors, 0)
-        self.assertIn('no "filaments" rows', out)
-
-    def test_absent_filaments_section_is_an_error(self):
-        map_path = self._write_raw_map({
-            "source": "https://github.com/bambulab/BambuStudio",
-            "bambustudio_commit": "testcommit",
-            "generated": "2026-09-04",
-        })
-        errors, out = self.t.check(map_path)
-        self.assertGreater(errors, 0)
-        self.assertIn('no "filaments" rows', out)
-
-    def test_row_without_bambu_id_is_an_error(self):
-        # Two such rows used to collide on None and be reported as a duplicate id.
-        map_path = self._write_map({
-            "OFaaaaaa": {"vendor": "V", "type": "PLA", "name": "Foo"},
-            "OFbbbbbb": {"vendor": "V", "type": "PETG", "name": "Bar"},
-        })
-        errors, out = self.t.check(map_path)
-        self.assertGreater(errors, 0)
-        self.assertIn('"OFaaaaaa" declares no "bambu_id"', out)
-        self.assertIn('"OFbbbbbb" declares no "bambu_id"', out)
-        self.assertNotIn("mapped by both", out)
-
-    def test_empty_bambu_id_is_an_error(self):
-        # "" would land in the runtime map and translate an empty tray id into a filament.
-        map_path = self._write_map({
-            "OFaaaaaa": {"bambu_id": "", "vendor": "V", "type": "PLA", "name": "Foo"},
-        })
-        errors, out = self.t.check(map_path)
-        self.assertGreater(errors, 0)
-        self.assertIn('declares no "bambu_id"', out)
 
 
 # ---------------------------------------------------------------------------
@@ -1638,101 +1534,6 @@ class TestReviewFixes(OfCleanTreeCase):
         errors, out = self.t.check()
         self.assertGreater(errors, 0)
         self.assertIn(afi.generate_filament_id("OV", "PLA", "Orphan PLA"), out)
-
-
-# ---------------------------------------------------------------------------
-# scripts/update_bambu_filament_ids.py: the generated Bambu catalog id map
-# ---------------------------------------------------------------------------
-
-class TestBambuMap(unittest.TestCase):
-    def _bs_tree(self, filaments):
-        # filaments: list of (name, bambu_id, vendor, type); builds a minimal BBL
-        # bundle with an @base per filament carrying the id and one instantiated child.
-        t = SyntheticTree()
-        self.addCleanup(t.cleanup)
-        presets = []
-        for filament_name, bambu_id, vendor, ftype in filaments:
-            presets.append(preset(f"{filament_name} @base", filament_id=bambu_id,
-                                  instantiation=False, filament_vendor=vendor,
-                                  filament_type=ftype))
-            presets.append(preset(f"{filament_name} @P1", inherits=f"{filament_name} @base",
-                                  compatible_printers=["P1 0.4 nozzle"]))
-        t.add_vendor("BBL", presets)
-        filaments, errors = afi.load_vendor_filaments(t.profiles, "BBL")
-        self.assertEqual(errors, [])
-        return filaments
-
-    def test_one_row_per_filament(self):
-        rows = ubfi.derive_rows(self._bs_tree([("Bambu ABS", "GFB00", "Bambu Lab", "ABS")]))
-        self.assertEqual(rows, {afi.generate_filament_id("Bambu Lab", "ABS", "Bambu ABS"):
-                                {"bambu_id": "GFB00", "vendor": "Bambu Lab", "type": "ABS", "name": "Bambu ABS"}})
-
-    def test_shared_bambu_id_is_an_error(self):
-        with self.assertRaises(SystemExit):
-            ubfi.derive_rows(self._bs_tree([("A", "GFX00", "V", "PLA"), ("B", "GFX00", "V", "PLA")]))
-
-    @unittest.skipUnless(os.path.isdir("/Users/lijiang/codes/BambuStudio/resources/profiles"), "no local clone")
-    def test_local_clone_yields_the_catalog(self):
-        rows = ubfi.derive_rows(afi.load_vendor_filaments("/Users/lijiang/codes/BambuStudio/resources/profiles", "BBL")[0])
-        self.assertEqual(len(rows), 100)
-        self.assertEqual(len({r["bambu_id"] for r in rows.values()}), 100)
-
-
-class TestWriteMap(unittest.TestCase):
-    def test_format(self):
-        d = tempfile.mkdtemp(prefix="bambu_map_test_")
-        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
-        # nested, not-yet-existing directory: write_map must create it
-        path = os.path.join(d, "out", "bambu_filament_ids.json")
-        rows = {"OFabc123": {"bambu_id": "GFB00", "vendor": "Bambu Lab", "type": "ABS", "name": "Bambu ABS"}}
-
-        ubfi.write_map(path, rows, "66e405477", "2026-09-04")
-
-        with open(path, "rb") as f:
-            raw = f.read()
-        self.assertTrue(raw.endswith(b"\n"))
-        self.assertNotIn(b"\r", raw)
-        text = raw.decode("utf-8")
-        self.assertEqual(json.loads(text), {
-            "source": "https://github.com/bambulab/BambuStudio",
-            "bambustudio_commit": "66e405477",
-            "generated": "2026-09-04",
-            "filaments": rows,
-        })
-        # sorted top-level keys
-        self.assertLess(text.index('"bambustudio_commit"'), text.index('"filaments"'))
-        self.assertLess(text.index('"filaments"'), text.index('"generated"'))
-        self.assertLess(text.index('"generated"'), text.index('"source"'))
-
-
-class TestDriftReport(unittest.TestCase):
-    def test_reports_both_directions(self):
-        t = SyntheticTree()
-        self.addCleanup(t.cleanup)
-        t.add_vendor("BBL", [
-            preset("Match PLA @base", filament_id="GFX01", instantiation=False,
-                  filament_vendor="V", filament_type="PLA"),
-            preset("Match PLA @P1", inherits="Match PLA @base",
-                  compatible_printers=["P1"]),
-            preset("Orphan PLA @base", filament_id="GFX03", instantiation=False,
-                  filament_vendor="V", filament_type="PLA"),
-            preset("Orphan PLA @P1", inherits="Orphan PLA @base",
-                  compatible_printers=["P1"]),
-        ])
-        rows = {
-            # matches the BBL bundle's "Match PLA" filament: no drift either way
-            "OFmatch01": {"bambu_id": "GFX01", "vendor": "V", "type": "PLA", "name": "Match PLA"},
-            # no filament of this identity in the BBL bundle above
-            "OFghost01": {"bambu_id": "GFX02", "vendor": "V", "type": "PLA", "name": "Upstream Only PLA"},
-        }
-        orca_analysis = afi.analyze_tree(t.profiles)
-
-        lines = ubfi.drift_report(rows, orca_analysis)
-
-        report = "\n".join(lines)
-        self.assertIn("Upstream Only PLA", report)
-        self.assertIn("Orca BBL filaments with no row: 1", report)
-        self.assertNotIn("Match PLA", report)  # the matched filament is not drift
 
 
 if __name__ == "__main__":

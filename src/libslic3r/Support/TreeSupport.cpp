@@ -805,11 +805,13 @@ void TreeSupport::detect_overhangs(bool check_support_necessity/* = false*/)
             }
         });
 
-    typedef std::chrono::high_resolution_clock clock_;
-    typedef std::chrono::duration<double, std::ratio<1> > second_;
-    std::chrono::time_point<clock_> t0{ clock_::now() };
     // main part of overhang detection can be parallel
     tbb::concurrent_vector<ExPolygons> overhangs_all_layers(m_object->layer_count());
+    // Per-layer results reduced after the loop, so nothing here depends on which layer a worker
+    // thread reached first: a layer with too many overhang islands to afford the detail detection,
+    // and the farthest cantilever reach seen on a layer.
+    std::vector<char>   layer_skips_detail(m_object->layer_count(), 0);
+    std::vector<double> layer_max_cantilever_dist(m_object->layer_count(), 0.);
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m_object->layer_count()),
         [&](const tbb::blocked_range<size_t>& range) {
             for (size_t layer_nr = range.begin(); layer_nr < range.end(); layer_nr++) {
@@ -821,17 +823,11 @@ void TreeSupport::detect_overhangs(bool check_support_necessity/* = false*/)
 
                 Layer* layer = m_object->get_layer(layer_nr);
 
-                if (layer->lower_layer == nullptr) {
-                    for (auto& slice : layer->lslices_extrudable) {
-                        auto bbox_size = get_extents(slice).size();
-                        if (!((bbox_size.x() > length_thresh_well_supported && bbox_size.y() > length_thresh_well_supported))
-                            && g_config_support_sharp_tails) {
-                            layer->sharp_tails.push_back(slice);
-                            layer->sharp_tails_height.push_back(layer->height);
-                        }
-                    }
+                // A region on the build plate is never a sharp tail: it stands on the bed. Treating a
+                // small first-layer footprint as a tail propagated the classification up a narrow fin
+                // or bracket foot and put support rings on its faces whatever their angle.
+                if (layer->lower_layer == nullptr)
                     continue;
-                }
 
                 Layer* lower_layer = layer->lower_layer;
                 coordf_t lower_layer_offset = layer_nr < enforce_support_layers ? -0.15 * extrusion_width : (float)lower_layer->height / tan(threshold_rad);
@@ -844,11 +840,14 @@ void TreeSupport::detect_overhangs(bool check_support_necessity/* = false*/)
                 ExPolygons lower_layer_offseted = offset_ex(lower_polys, support_offset_scaled, SUPPORT_SURFACES_OFFSET_PARAMETERS);
                 overhangs_all_layers[layer_nr] = diff_ex(curr_polys, lower_layer_offseted);
 
-                double duration{ std::chrono::duration_cast<second_>(clock_::now() - t0).count() };
-                if (duration > 30 || overhangs_all_layers[layer_nr].size() > 100) {
-                    BOOST_LOG_TRIVIAL(info) << "detect_overhangs takes more than 30 secs, skip cantilever and sharp tails detection: layer_nr=" << layer_nr << " duration=" << duration;
-                    config_detect_sharp_tails = false;
-                    config_remove_small_overhangs = false;
+                // A layer with this many separate overhang islands is noise (a mesh made of many small
+                // pieces), and the per-island detail detection below would be wasted on it. The layer
+                // skips it for itself only. The skip used to switch the detection off for whichever
+                // layers the worker threads had not reached yet, and after 30 seconds of wall-clock
+                // time as well, so the support geometry differed between runs and between machines.
+                if (overhangs_all_layers[layer_nr].size() > 100) {
+                    BOOST_LOG_TRIVIAL(info) << "detect_overhangs: too many overhangs, skip cantilever and sharp tails detection: layer_nr=" << layer_nr;
+                    layer_skips_detail[layer_nr] = 1;
                     continue;
                 }
                 if (is_auto(stype) && config_detect_sharp_tails)
@@ -892,7 +891,7 @@ void TreeSupport::detect_overhangs(bool check_support_necessity/* = false*/)
                         dist_max = std::max(dist_max, dist_pt);
                     }
                     if (dist_max > scale_(3)) {  // is cantilever if the farmost point is larger than 3mm away from base
-                        max_cantilever_dist = std::max(max_cantilever_dist, dist_max);
+                        layer_max_cantilever_dist[layer_nr] = std::max(layer_max_cantilever_dist[layer_nr], dist_max);
                         layer->cantilevers.emplace_back(poly);
                         BOOST_LOG_TRIVIAL(debug) << "found a cantilever cluster. layer_nr=" << layer_nr << dist_max;
                         has_cantilever = true;
@@ -901,6 +900,13 @@ void TreeSupport::detect_overhangs(bool check_support_necessity/* = false*/)
             }
         }
     ); // end tbb::parallel_for
+
+    for (double dist : layer_max_cantilever_dist)
+        max_cantilever_dist = std::max(max_cantilever_dist, dist);
+    // Small overhangs are told from sharp tails by the detail detection, so with a layer that
+    // skipped it none are removed on this object.
+    if (std::find(layer_skips_detail.begin(), layer_skips_detail.end(), char(1)) != layer_skips_detail.end())
+        config_remove_small_overhangs = false;
 
     BOOST_LOG_TRIVIAL(info) << "max_cantilever_dist=" << max_cantilever_dist;
     if (check_support_necessity)
@@ -914,7 +920,7 @@ void TreeSupport::detect_overhangs(bool check_support_necessity/* = false*/)
 
             Layer* layer = m_object->get_layer(layer_nr);
             Layer* lower_layer = layer->lower_layer;
-            if (!lower_layer)
+            if (!lower_layer || layer_skips_detail[layer_nr])
                 continue;
 
             // BBS detect sharp tail
@@ -1057,13 +1063,18 @@ void TreeSupport::detect_overhangs(bool check_support_necessity/* = false*/)
 
         // add support for every 1mm height for sharp tails
         ExPolygons sharp_tail_overhangs;
-        if (lower_layer == nullptr)
-            sharp_tail_overhangs = layer->sharp_tails;
-        else {
-            ExPolygons lower_layer_expanded = offset_ex(lower_layer->lslices_extrudable, SCALED_RESOLUTION);
+        if (lower_layer != nullptr && !layer->sharp_tails.empty()) {
+            // The first layer of a tail hangs in the air: all of it that is not on the layer below
+            // needs support, whatever stands next to it. On the layers above, only the part that
+            // overhangs the layer below by more than the configured threshold angle does, as for any
+            // other overhang. Expanding the lower layer by the resolution alone there supported every
+            // face of a tail, however close to vertical.
+            const ExPolygons lower_layer_expanded = offset_ex(lower_layer->lslices_extrudable, SCALED_RESOLUTION);
+            const ExPolygons lower_layer_expanded_by_threshold = offset_ex(lower_layer->lslices_extrudable,
+                std::max(SCALED_RESOLUTION, scale_(lower_layer->height / tan(threshold_rad))), SUPPORT_SURFACES_OFFSET_PARAMETERS);
             for (size_t i = 0; i < layer->sharp_tails_height.size();i++) {
-                ExPolygons areas = diff_clipped({ layer->sharp_tails[i]}, lower_layer_expanded);
                 float accum_height = layer->sharp_tails_height[i];
+                ExPolygons areas = diff_clipped({ layer->sharp_tails[i]}, accum_height > 0 ? lower_layer_expanded_by_threshold : lower_layer_expanded);
                 if (!areas.empty() && int(accum_height * 10) % 5 == 0) {
                     append(sharp_tail_overhangs, areas);
                     has_sharp_tails = true;
@@ -2639,7 +2650,12 @@ void TreeSupport::draw_circles()
 #endif  // SUPPORT_TREE_DEBUG_TO_SVG
 
     SupportLayerPtrs& ts_layers = m_object->support_layers();
-    auto iter = std::remove_if(ts_layers.begin(), ts_layers.end(), [](SupportLayer* ts_layer) { return ts_layer->height < EPSILON; });
+    // Orca: the vector owns its layers, so the dropped ones are deleted before they are erased.
+    // std::stable_partition (unlike std::remove_if) leaves exactly the dropped layers in the tail.
+    // Only heights below EPSILON are dropped; written as !(height < EPSILON), a NaN height is kept.
+    auto iter = std::stable_partition(ts_layers.begin(), ts_layers.end(), [](SupportLayer* ts_layer) { return !(ts_layer->height < EPSILON); });
+    for (auto it = iter; it != ts_layers.end(); ++it)
+        delete *it;
     ts_layers.erase(iter, ts_layers.end());
     for (int layer_nr = 0; layer_nr < ts_layers.size(); layer_nr++) {
         ts_layers[layer_nr]->upper_layer = layer_nr != ts_layers.size() - 1 ? ts_layers[layer_nr + 1] : nullptr;

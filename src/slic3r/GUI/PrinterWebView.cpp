@@ -2,11 +2,13 @@
 
 #include "I18N.hpp"
 #include "PrinterWebViewHandler.hpp"
+#include "PrinterStatusStrip.hpp"
 #include "slic3r/GUI/PrinterWebView.hpp"
 #include "slic3r/GUI/wxExtensions.hpp"
 #include "slic3r/GUI/GUI_App.hpp"
 #include "slic3r/GUI/MainFrame.hpp"
 #include "libslic3r_version.h"
+#include "libslic3r/PresetBundle.hpp"
 
 #include <boost/filesystem/path.hpp>
 #include <wx/sizer.h>
@@ -110,6 +112,9 @@ PrinterWebView::PrinterWebView(wxWindow *parent)
 
     wxBoxSizer* topsizer = new wxBoxSizer(wxVERTICAL);
 
+    m_status_strip = new PrinterStatusStrip(this);
+    topsizer->Add(m_status_strip, 0, wxEXPAND);
+
       // Create the webview
     m_browser = WebView::CreateWebView(this, "");
     if (m_browser == nullptr) {
@@ -156,6 +161,7 @@ PrinterWebView::PrinterWebView(wxWindow *parent)
 PrinterWebView::~PrinterWebView()
 {
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << " Start";
+    m_status.stop();
     SetEvtHandlerEnabled(false);
     m_handler.reset();
 
@@ -188,6 +194,7 @@ void PrinterWebView::load_url(wxString& url, wxString apikey)
     }
     //m_browser->SetFocus();
     UpdateState();
+    restart_status();
 }
 
 bool PrinterWebView::Show(bool show)
@@ -198,6 +205,17 @@ bool PrinterWebView::Show(bool show)
         //m_url_deferred.clear();
     }
     return wxPanel::Show(show);
+}
+
+// The poll follows the edited printer preset; it runs for as long as the Device tab exists,
+// since the tab only exists while a host is configured.
+void PrinterWebView::restart_status()
+{
+    if (wxGetApp().preset_bundle == nullptr)
+        return;
+    m_status.start(wxGetApp().preset_bundle->printers.get_edited_preset().config, [this](const MoonrakerPrinterStatus &status) {
+        CallAfter([this, status] { m_status_strip->update(status); });
+    });
 }
 
 void PrinterWebView::reload()

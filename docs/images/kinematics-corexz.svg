@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="CoreXZ kinematics: two stationary motors at the bottom of an upright frame drive the X carriage and the Z gantry through two crossed belt loops, while the bed moves in Y.">
+  <title>CoreXZ: X and Z are driven by two stationary motors through crossed belt loops in the XZ plane; the bed moves in Y.</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#4db9ff"/>
+    </marker>
+  </defs>
+
+  <!-- ground + inner frame -->
+  <rect x="0" y="0" width="800" height="480" fill="#0b0e11"/>
+  <rect x="0.5" y="0.5" width="799" height="479" fill="none" stroke="#262f37" stroke-width="1"/>
+
+  <!-- title block -->
+  <text x="40" y="44" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" letter-spacing="2" fill="#eef3f6">COREXZ</text>
+  <text x="40" y="66" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#8b99a4">kinematics: corexz</text>
+
+  <!-- fixed frame (XZ plane, seen from the front) -->
+  <rect x="100" y="100" width="360" height="300" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
+  <!-- Z rails on the frame sides -->
+  <line x1="160" y1="110" x2="160" y2="390" stroke="#3d4953" stroke-width="4"/>
+  <line x1="400" y1="110" x2="400" y2="390" stroke="#3d4953" stroke-width="4"/>
+  <text x="168" y="116" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#b4c0c9">Z rail</text>
+
+  <!-- bed on Y rails (depth axis drawn at 30 degrees) -->
+  <line x1="240" y1="304" x2="268" y2="320" stroke="#3d4953" stroke-width="4"/>
+  <line x1="320" y1="304" x2="348" y2="320" stroke="#3d4953" stroke-width="4"/>
+  <rect x="210" y="288" width="140" height="16" fill="#141a1f" stroke="#3d4953" stroke-width="2"/>
+  <text x="224" y="300" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">bed</text>
+  <circle cx="184" cy="296" r="12" fill="#222a31" stroke="#5c6b77" stroke-width="2"/>
+  <text x="184" y="300" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6">Y</text>
+
+  <!-- belt A: motor A (bottom-left) -> up the left side -> top-left idler -> down to the gantry-left idler
+       -> along the gantry to the carriage -> gantry-right idler -> down the right side -> bottom-right idler -> motor A -->
+  <polyline points="128,376 128,120 152,120 152,212 260,212 300,200 420,200 420,384 116,384" fill="none" stroke="#eef3f6" stroke-width="2"/>
+  <!-- ground gaps so belt B reads as passing over belt A (left gantry end, bottom return) -->
+  <line x1="146" y1="200" x2="158" y2="200" stroke="#0b0e11" stroke-width="4"/>
+  <line x1="414" y1="368" x2="426" y2="368" stroke="#0b0e11" stroke-width="4"/>
+  <!-- belt B: mirror loop from motor B (bottom-right) -->
+  <polyline points="432,376 432,120 408,120 408,212 300,212 260,200 140,200 140,368 444,368" fill="none" stroke="#eef3f6" stroke-width="2"/>
+  <!-- right gantry end: belt A passes over belt B -->
+  <line x1="402" y1="200" x2="414" y2="200" stroke="#0b0e11" stroke-width="4"/>
+  <line x1="396" y1="200" x2="420" y2="200" stroke="#eef3f6" stroke-width="2"/>
+
+  <!-- idlers: frame top corners, two per gantry end, bottom returns -->
+  <circle cx="140" cy="120" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="420" cy="120" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="140" cy="200" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="152" cy="212" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="408" cy="212" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="420" cy="200" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="140" cy="368" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="420" cy="384" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+
+  <!-- stationary motors A and B at the bottom corners (Switchwire layout) -->
+  <circle cx="116" cy="376" r="12" fill="#222a31" stroke="#5c6b77" stroke-width="2"/>
+  <text x="116" y="380" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6">A</text>
+  <circle cx="444" cy="376" r="12" fill="#222a31" stroke="#5c6b77" stroke-width="2"/>
+  <text x="444" y="380" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6">B</text>
+
+  <!-- moving X gantry with its X rail, carriage and toolhead -->
+  <rect x="146" y="220" width="268" height="12" fill="#d8e0e6"/>
+  <line x1="150" y1="226" x2="410" y2="226" stroke="#3d4953" stroke-width="4"/>
+  <text x="170" y="186" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#b4c0c9">X gantry</text>
+  <rect x="260" y="192" width="40" height="48" fill="#d8e0e6"/>
+  <rect x="272" y="240" width="16" height="16" fill="#eef3f6"/>
+  <line x1="280" y1="256" x2="280" y2="261" stroke="#eef3f6" stroke-width="3"/>
+
+  <!-- motion arrows -->
+  <line x1="312" y1="248" x2="368" y2="248" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="378" y="253" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#4db9ff">X</text>
+  <line x1="380" y1="188" x2="380" y2="140" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="380" y="132" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#4db9ff">Z</text>
+  <line x1="358" y1="308" x2="386" y2="324" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="392" y="344" text-anchor="end" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#4db9ff">Y (bed moves)</text>
+
+  <!-- truth table -->
+  <text x="500" y="200" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#8b99a4">move: motor turns</text>
+  <text x="500" y="224" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#eef3f6">X: A+ B+</text>
+  <text x="500" y="248" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#eef3f6">Z: A+ B-</text>
+
+  <!-- legend -->
+  <rect x="680" y="380" width="14" height="8" fill="#d8e0e6"/>
+  <text x="700" y="388" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">moves</text>
+  <rect x="680" y="396" width="14" height="8" fill="none" stroke="#3d4953" stroke-width="1"/>
+  <text x="700" y="404" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">fixed</text>
+
+  <!-- caption (one sentence, wrapped to stay inside the viewBox) -->
+  <text x="40" y="428" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">X and Z share two stationary motors through crossed belts,</text>
+  <text x="40" y="448" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">exactly like CoreXY turned on its side; the bed still carries the part in Y.</text>
+</svg>

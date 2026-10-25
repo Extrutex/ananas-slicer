@@ -1,0 +1,19 @@
+# The virtual printer of tests/virtual-printer with its Moonraker reachable from this machine, for tests of the
+# engine's printer client. Used with the base file:
+#
+#   docker compose -f tests/virtual-printer/docker-compose.yml -f tests/engine/rig/docker-compose.host.yml ...
+#
+# Moonraker joins a second network and publishes one port, bound to 127.0.0.1 only. Klippy stays on the internal
+# network and still drives a file-output MCU: no real printer is anywhere in reach, and nothing outside this
+# machine can reach the rig.
+
+services:
+  moonraker:
+    networks: [rig, edge]
+    ports:
+      - "127.0.0.1:${RIG_PORT:-17125}:7125"
+    volumes:
+      - ${RIG_DIR:?run via rig.sh}/moonraker-host.conf:/printer_data/config/moonraker.conf:ro
+
+networks:
+  edge: {}

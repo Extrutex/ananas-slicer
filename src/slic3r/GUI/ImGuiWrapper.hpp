@@ -367,11 +367,20 @@ public:
     static const ImVec4 COL_TOOLBAR_BG_DARK;
     static const ImVec4 COL_SEPARATOR;
     static const ImVec4 COL_SEPARATOR_DARK;
-    static const ImVec4 COL_ORCA;
+    // Theme accent (ThemeTokens.hpp): aluminium in dark mode, steel in light mode.
+    // COL_ORCA / COL_ORCA_HOVER follow the colour mode (updated by on_change_color_mode()).
+    static ImVec4 COL_ORCA;
     static const ImVec4 COL_ORCA_DARK;
-    static const ImVec4 COL_ORCA_HOVER;
+    static ImVec4 COL_ORCA_HOVER;
     static const ImVec4 COL_ORCA_HOVER_DARK;
-    static const ImVec4 COL_MODIFIED;
+    // Accent as a line, text, grab or progress fill.
+    static ImVec4 accent(float alpha = 1.f);
+    static ImVec4 accent_hover(float alpha = 1.f);
+    // Background of a selected / hovered item that carries text (selected row, menu item).
+    static ImVec4 accent_surface(float alpha = 1.f);
+    // Ink drawn on an accent fill.
+    static ImVec4 on_accent(float alpha = 1.f);
+    static ImVec4 COL_MODIFIED;
     static const ImVec4 COL_WARNING;
 
     //BBS

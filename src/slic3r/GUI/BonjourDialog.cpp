@@ -79,9 +79,6 @@ BonjourDialog::BonjourDialog(wxWindow *parent, Slic3r::PrinterTechnology tech)
 	list->AppendColumn(_(L("Address")), wxLIST_FORMAT_LEFT, 20 * em);
 	list->AppendColumn(_(L("Hostname")), wxLIST_FORMAT_LEFT, 10 * em);
 	list->AppendColumn(_(L("Service name")), wxLIST_FORMAT_LEFT, 20 * em);
-	if (tech == ptFFF) {
-		list->AppendColumn(_(L("OctoPrint version")), wxLIST_FORMAT_LEFT, 15 * em);
-	}
 
 	vsizer->Add(list, 1, wxEXPAND | wxALL, em);
 
@@ -121,10 +118,11 @@ bool BonjourDialog::show_and_lookup()
 	// so that both threads can access it safely.
 	auto dguard = std::make_shared<LifetimeGuard>(this);
 
-	// Note: More can be done here when we support discovery of hosts other than Octoprint and SL1
-	Bonjour::TxtKeys txt_keys { "version", "model" };
+	// Moonraker's zeroconf component announces every instance as _moonraker._tcp; its TXT
+	// record carries the instance uuid and the route prefix, nothing that needs a column here.
+	Bonjour::TxtKeys txt_keys { "model" };
 
-    bonjour = Bonjour("octoprint")
+    bonjour = Bonjour("moonraker")
 		.set_txt_keys(std::move(txt_keys))
 		.set_retries(3)
 		.set_timeout(4)
@@ -193,13 +191,6 @@ void BonjourDialog::on_reply(BonjourReplyEvent &e)
 		auto item = list->InsertItem(0, reply.full_address);
 		list->SetItem(item, 1, reply.hostname);
 		list->SetItem(item, 2, reply.service_name);
-
-		if (tech == ptFFF) {
-			const auto it = reply.txt_data.find("version");
-			if (it != reply.txt_data.end()) {
-				list->SetItem(item, 3, GUI::from_u8(it->second));
-			}
-		}
 	}
 
 	const int em = GUI::wxGetApp().em_unit();

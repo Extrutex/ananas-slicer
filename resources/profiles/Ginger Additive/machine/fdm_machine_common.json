@@ -44,7 +44,7 @@
 	"gcode_flavor": "klipper",
 	"head_wrap_detect_zone": [],
 	"high_current_on_filament_swap": "0",
-	"host_type": "octoprint",
+	"host_type": "moonraker",
 	"layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
 	"machine_end_gcode": "PRINT_END",
 	"machine_load_filament_time": "0",
@@ -190,7 +190,6 @@
 	"retraction_speed": [
 		"30"
 	],
-	"scan_first_layer": "0",
 	"single_extruder_multi_material": "1",
 	"support_air_filtration": "1",
 	"support_chamber_temp_control": "1",

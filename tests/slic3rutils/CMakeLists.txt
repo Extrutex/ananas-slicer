@@ -1,16 +1,14 @@
 get_filename_component(_TEST_NAME ${CMAKE_CURRENT_LIST_DIR} NAME)
 add_executable(${_TEST_NAME}_tests
     ${_TEST_NAME}_tests_main.cpp
-    test_bambu_filament_ids.cpp
-    test_creality_cfs_match.cpp
-    test_dev_mapping.cpp
+    test_config_value_formatter.cpp
     test_filament_bitmap_utils.cpp
     test_scene_raycaster.cpp
     test_lazy.cpp
     test_prebuild_queue.cpp
     test_staged_build.cpp
-    test_network_versions.cpp
     test_action_source.cpp
+    test_bitmap_names.cpp
     test_plugin_host_api.cpp
     # Exercise seam enums and predicates through the embedded Python host API.
     test_precise_seam_plugin.cpp
@@ -19,16 +17,20 @@ add_executable(${_TEST_NAME}_tests
     test_plugin_capabilities_in_use.cpp
     test_plugin_install.cpp
     test_plugin_lifecycle.cpp
-    test_plugin_printer_agent.cpp
     test_printhost.cpp
+    test_moonraker_filaments.cpp
+    test_moonraker_status.cpp
+    test_moonraker_virtual.cpp
+    test_moonraker_upload.cpp
     test_slicing_pipeline_bindings.cpp
     test_slicing_pipeline_config.cpp
     test_plugin_sort.cpp
     test_plugin_cloud_metadata.cpp
     test_plugin_audit.cpp
+    test_plugin_json_depth.cpp
     test_shortcuts.cpp
     test_file_url.cpp
-    test_user_manager.cpp
+    test_sequential_clearance.cpp
     ../fff_print/test_helpers.cpp
     )
 

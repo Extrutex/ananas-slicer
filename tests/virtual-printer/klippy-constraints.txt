@@ -1,0 +1,10 @@
+# Exact versions of the Klippy virtualenv (Klipper v0.13.0 klippy-requirements.txt resolved).
+aenum==3.1.17
+cffi==1.14.6
+greenlet==2.0.2
+Jinja2==2.11.3
+MarkupSafe==1.1.1
+pycparser==3.0
+pyserial==3.4
+python-can==3.3.4
+wrapt==1.17.3

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>ANANAS SLICER app icon (provisional, draft A).</title>
+  <!-- Provisional ANANAS SLICER artwork, draft A "Schicht" (2026-10-19), not the final logo.
+       Only rect, path and g with translate/scale: nanosvg renders these files in the app.
+       Swap the logo by replacing the AnanasSlicer*.svg files, then run scripts/brand/build_icons.py. -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="#10161B"/>
+  <path fill="#2E9E5B" d="M490 320C420 290 370 230 350 150C430 170 480 230 510 300Z M534 320C604 290 654 230 674 150C594 170 544 230 514 300Z M512 320C470 250 470 170 512 100C554 170 554 250 512 320Z"/>
+  <path fill="#F2B705" d="M699.82 402L324.18 402A250 300 0 0 1 699.82 402Z M288.32 466H735.68A250 300 0 0 1 760.57 568H263.43A250 300 0 0 1 288.32 466Z M263.43 632H760.57A250 300 0 0 1 735.68 734H288.32A250 300 0 0 1 263.43 632Z M324.18 798H699.82A250 300 0 0 1 324.18 798Z"/>
+</svg>

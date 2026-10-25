@@ -696,7 +696,6 @@ private:
     bool        m_show_world_axes{true};
     Bed3D::Axes m_axes;
     //BBS:record key botton frequency
-    int auto_orient_count = 0;
     int auto_arrange_count = 0;
     int split_to_objects_count = 0;
     int split_to_part_count = 0;

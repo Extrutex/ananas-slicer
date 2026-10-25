@@ -7,7 +7,7 @@
 	"fan_kickstart": "0",
 	"fan_speedup_overhangs": "1",
 	"fan_speedup_time": "0",
-	"gcode_flavor": "marlin",
+	"gcode_flavor": "klipper",
 	"layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
 	"before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;[layer_z]\nG92 E0\n",
 	"machine_pause_gcode": "M601",
@@ -152,7 +152,6 @@
 	"retraction_speed": [
 		"35"
 	],
-	"scan_first_layer": "0",
 	"deretraction_speed": [
 		"30"
 	],

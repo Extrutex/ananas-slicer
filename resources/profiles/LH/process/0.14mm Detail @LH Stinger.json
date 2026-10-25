@@ -11,7 +11,7 @@
 	],
 	"bottom_shell_layers": "5",
 	"bridge_flow": "1.2",
-	"default_jerk": "10",
+	"default_jerk": "0",
 	"enable_support": "1",
 	"ensure_vertical_shell_thickness": "ensure_moderate",
 	"filter_out_gap_fill": "10",

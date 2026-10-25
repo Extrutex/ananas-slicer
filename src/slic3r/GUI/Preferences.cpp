@@ -6,6 +6,7 @@
 #include "Plater.hpp"
 #include "GLCanvas3D.hpp" // ORCA: for live preview refresh when toggling "Dim lower layers"
 #include "MsgDialog.hpp"
+#include "CommonDialogs.hpp"
 #include "I18N.hpp"
 #include "libslic3r/AppConfig.hpp"
 #include "libslic3r/Format/DRC.hpp"
@@ -21,8 +22,6 @@
 #include "Shortcuts.hpp"
 #include "slic3r/Utils/bambu_networking.hpp"
 #include "slic3r/Utils/NetworkAgent.hpp"
-#include "NetworkPluginDialog.hpp"
-#include "DownloadProgressDialog.hpp"
 
 #ifdef __WINDOWS__
 #ifdef _MSW_DARK_MODE
@@ -185,7 +184,7 @@ private:
         dc.SetBackground(wxBrush(GetParent() ? GetParent()->GetBackgroundColour() : *wxWHITE));
         dc.Clear();
  
-        wxColour textCol = StateColor::darkModeColorFor(m_hovered ? "#26A69A" : "#363636");
+        wxColour textCol = StateColor::darkModeColorFor(m_hovered ? "#2E3840" : "#363636");
  
         dc.SetTextForeground(textCol);
         dc.SetFont(m_font);
@@ -374,7 +373,7 @@ wxBoxSizer *PreferencesDialog::create_item_language_combobox(wxString title, wxS
         wxLANGUAGE_ROMANIAN
     };
 
-    auto translations = wxTranslations::Get()->GetAvailableTranslations(SLIC3R_APP_KEY);
+    auto translations = wxTranslations::Get()->GetAvailableTranslations(SLIC3R_L10N_DOMAIN);
     std::vector<const wxLanguageInfo *> language_infos;
     language_infos.emplace_back(wxLocale::GetLanguageInfo(wxLANGUAGE_ENGLISH));
     for (size_t i = 0; i < translations.GetCount(); ++i) {
@@ -529,86 +528,6 @@ wxBoxSizer *PreferencesDialog::create_item_language_combobox(wxString title, wxS
             }
         }
 
-        e.Skip();
-    });
-
-    return m_sizer;
-}
-
-wxBoxSizer *PreferencesDialog::create_item_region_combobox(wxString title, wxString tooltip)
-{
-
-    std::vector<wxString> Regions         = {_L("Asia-Pacific"), _L("China"), _L("Europe"), _L("North America"), _L("Others")};
-    std::vector<wxString> local_regions = {"Asia-Pacific", "China", "Europe", "North America", "Others"};
-
-    auto vlist = Regions;
-
-    auto tip = tooltip.IsEmpty() ? title : tooltip; // auto fill tooltips with title if its empty
-
-    wxBoxSizer *m_sizer = create_item_label(title, tip);
-
-    auto combobox = new ::ComboBox(m_parent, wxID_ANY, wxEmptyString, wxDefaultPosition, DESIGN_LARGE_COMBOBOX_SIZE, 0, nullptr, wxCB_READONLY);
-    combobox->GetDropDown().SetUseContentWidth(true);
-    combobox->SetToolTip(tip);
-
-    m_sizer->Add(combobox, 0, wxALIGN_CENTER);
-
-    std::vector<wxString>::iterator iter;
-    for (iter = vlist.begin(); iter != vlist.end(); iter++) { combobox->Append(*iter); }
-
-    AppConfig * config       = GUI::wxGetApp().app_config;
-
-    int         current_region = 0;
-    if (!config->get("region").empty()) {
-        std::string country_code = config->get("region");
-        for (auto i = 0; i < vlist.size(); i++) {
-            if (local_regions[i].ToStdString() == country_code) {
-                combobox->SetSelection(i);
-                current_region = i;
-            }
-        }
-    }
-
-    combobox->GetDropDown().Bind(wxEVT_COMBOBOX, [this, combobox, current_region, local_regions](wxCommandEvent &e) {
-        auto region_index = e.GetSelection();
-        auto region       = local_regions[region_index];
-
-        /*auto area   = "";
-        if (region == "CHN" || region == "China")
-            area = "CN";
-        else if (region == "USA")
-            area = "US";
-        else if (region == "Asia-Pacific")
-            area = "Others";
-        else if (region == "Europe")
-            area = "US";
-        else if (region == "North America")
-            area = "US";
-        else
-            area = "Others";*/
-        combobox->SetSelection(region_index);
-        NetworkAgent* agent = wxGetApp().getAgent();
-        AppConfig* config = GUI::wxGetApp().app_config;
-        if (agent) {
-            MessageDialog msg_wingow(this, _L("Changing the region will log you out of your account.\n") + "\n" + _L("Do you want to continue?"), _L("Region selection"),
-                                     wxICON_QUESTION | wxOK | wxCANCEL);
-            if (msg_wingow.ShowModal() == wxID_CANCEL) {
-                combobox->SetSelection(current_region);
-                return;
-            } else {
-                wxGetApp().request_user_logout();
-                config->set("region", region.ToStdString());
-                auto area = config->get_country_code();
-                if (agent) {
-                    agent->set_country_code(area);
-                }
-                EndModal(wxID_CANCEL);
-            }
-        } else {
-            config->set("region", region.ToStdString());
-        }
-
-        wxGetApp().update_publish_status();
         e.Skip();
     });
 
@@ -965,8 +884,15 @@ wxBoxSizer* PreferencesDialog::create_item_darkmode(wxString title,wxString tool
     //// save config
     checkbox->Bind(wxEVT_TOGGLEBUTTON, [this, checkbox, param](wxCommandEvent& e) {
         app_config->set(param, checkbox->GetValue() ? "1" : "0");
+        app_config->set("dark_color_mode_user_set", "1");
         app_config->save();
         wxGetApp().Update_dark_mode_flag();
+#ifndef __WINDOWS__
+        // Native controls follow the app colour mode; custom widgets pick it up through
+        // StateColor, the rest of the window on the next start.
+        wxGetApp().init_label_colours();
+        wxGetApp().apply_app_appearance();
+#endif
 
         //dark mode
 #ifdef _MSW_DARK_MODE
@@ -1041,7 +967,6 @@ wxBoxSizer *PreferencesDialog::create_item_checkbox(wxString title, wxString too
             bool enabled = app_config->get_stealth_mode();
             if (enabled) wxGetApp().on_stealth_mode_enter();
             if (m_sync_user_preset_checkbox) m_sync_user_preset_checkbox->Enable(!enabled);
-            if (m_bambu_cloud_checkbox)      m_bambu_cloud_checkbox->Enable(!enabled);
         }
         else if (param == "hide_login_side_panel") {
             if (WebViewPanel* home = WebViewPanel::if_built()) {
@@ -1098,13 +1023,6 @@ wxBoxSizer *PreferencesDialog::create_item_checkbox(wxString title, wxString too
             }
         }
 
-        if (param == "installed_networking") {
-            bool pbool = app_config->get_bool("installed_networking");
-            if (pbool) {
-                GUI::wxGetApp().CallAfter([] { GUI::wxGetApp().ShowDownNetPluginDlg(); });
-            }
-        }
-
 #endif // __WXMSW__
 
         if (param == "developer_mode") {
@@ -1125,14 +1043,6 @@ wxBoxSizer *PreferencesDialog::create_item_checkbox(wxString title, wxString too
 
         if (param == "show_unsupported_presets") {
             wxGetApp().plater()->sidebar().update_presets(Preset::TYPE_FILAMENT);
-        }
-
-        if (param == "use_printer_agents")
-        {
-            // Rebuild the Device tab so the native/web-UI choice reflects the new flag
-            // immediately, instead of only on the next printer-preset change or restart.
-            if (wxGetApp().plater())
-                wxGetApp().plater()->sidebar().update_all_preset_comboboxes();
         }
 
         if (param == "enable_high_low_temp_mixed_printing") {
@@ -1235,159 +1145,11 @@ wxBoxSizer* PreferencesDialog::create_item_downloads(wxString title, wxString to
     return m_sizer;
 }
 
-wxBoxSizer *PreferencesDialog::create_item_bambu_cloud(wxString title, wxString tooltip)
-{
-    wxBoxSizer *m_sizer = create_item_label(title, tooltip);
-
-    auto cb = new ::CheckBox(m_parent);
-    m_bambu_cloud_checkbox = cb;
-    cb->SetValue(app_config->has_cloud_provider(BBL_CLOUD_PROVIDER));
-    cb->SetToolTip(tooltip);
-
-    cb->Bind(wxEVT_TOGGLEBUTTON, [this, cb](wxCommandEvent &e) {
-        e.Skip(); // let CheckBox::update() refresh the bitmap
-        if (cb->GetValue()) {
-            app_config->add_cloud_provider(BBL_CLOUD_PROVIDER);
-        } else {
-            app_config->remove_cloud_provider(BBL_CLOUD_PROVIDER);
-        }
-        app_config->save();
-
-        // Update homepage visibility immediately
-        if (WebViewPanel* home = WebViewPanel::if_built())
-            home->SendCloudProvidersInfo();
-    });
-
-    m_sizer->Add(cb, 0, wxALIGN_CENTER);
-
-    return m_sizer;
-};
-
-wxBoxSizer *PreferencesDialog::create_item_network_plugin_version(wxString title, wxString tooltip)
-{
-    wxBoxSizer *m_sizer = create_item_label(title, tooltip);
-
-    m_network_version_combo = new ::ComboBox(m_parent, wxID_ANY, wxEmptyString, wxDefaultPosition, DESIGN_LARGE_COMBOBOX_SIZE, 0, nullptr, wxCB_READONLY);
-    m_network_version_combo->GetDropDown().SetUseContentWidth(true);
-    m_network_version_combo->SetToolTip(tooltip);
-
-    std::string current_version = app_config->get_network_plugin_version();
-    if (current_version.empty()) {
-        current_version = get_latest_network_version();
-    }
-    int current_selection = 0;
-
-    m_available_versions = get_all_available_versions();
-
-    for (size_t i = 0; i < m_available_versions.size(); i++) {
-        const auto& ver = m_available_versions[i];
-        m_network_version_combo->Append(network_version_label(ver));
-        if (current_version == ver.version) {
-            current_selection = i;
-        }
-    }
-
-    m_network_version_combo->SetSelection(current_selection);
-    m_sizer->Add(m_network_version_combo, 0, wxALIGN_CENTER);
-
-    m_network_version_combo->GetDropDown().Bind(wxEVT_COMBOBOX, [this](wxCommandEvent& e) {
-        e.Skip(); // order-independent flag read after this handler returns; every path just returns
-        int selection = e.GetSelection();
-        if (selection < 0 || selection >= (int) m_available_versions.size())
-            return;
-
-        const auto& selected_ver = m_available_versions[selection];
-        const std::string new_version = selected_ver.version;
-        std::string old_version = app_config->get_network_plugin_version();
-        if (old_version.empty())
-            old_version = get_latest_network_version();
-
-        // Move the combo back to the row for `version`, so the UI never shows a build other
-        // than the one actually configured/loaded (e.g. after a declined or refused switch).
-        auto reselect = [this](const std::string& version) {
-            for (size_t i = 0; i < m_available_versions.size(); ++i)
-                if (m_available_versions[i].version == version) {
-                    m_network_version_combo->SetSelection((int) i);
-                    break;
-                }
-        };
-
-        if (new_version == old_version)
-            return;
-
-        BOOST_LOG_TRIVIAL(info) << "Network plugin version selection changed from " << old_version << " to " << new_version;
-
-        if (!selected_ver.warning.empty()) {
-            MessageDialog warn_dlg(this, wxString::FromUTF8(selected_ver.warning), _L("Warning"), wxOK | wxCANCEL | wxICON_WARNING);
-            if (warn_dlg.ShowModal() != wxID_OK) {
-                reselect(old_version);
-                return;
-            }
-        }
-
-        // A build already present on disk loads directly with a hot reload - on any platform
-        // and across series (legacy <-> modern). Only claim success once the build that
-        // actually loaded is the one that was requested.
-        if (Slic3r::NetworkAgent::versioned_library_exists(new_version)) {
-            app_config->set_network_plugin_version(new_version);
-            app_config->save();
-            BOOST_LOG_TRIVIAL(info) << "Version " << new_version << " already exists on disk, triggering hot reload";
-            // Claim success only once the series that actually loaded is the one requested - the
-            // loaded plug-in reports its full build (02.08.01.53) while the requested identity is
-            // the series (02.08.01), so compare series, not the raw string.
-            if (wxGetApp().hot_reload_network_plugin() &&
-                network_plugin_series(Slic3r::NetworkAgent::get_version()) == network_plugin_series(new_version)) {
-                MessageDialog dlg(this, _L("Network plug-in switched successfully."), _L("Success"), wxOK | wxICON_INFORMATION);
-                dlg.ShowModal();
-            } else {
-                MessageDialog dlg(this, _L("Failed to load network plug-in. Please restart the application."), _L("Restart Required"), wxOK | wxICON_WARNING);
-                dlg.ShowModal();
-                reselect(app_config->get_network_plugin_version());
-            }
-            return;
-        }
-
-        // Not on disk: offer to download it. The endpoint is series-keyed and serves that series'
-        // newest build. (A same-series custom build is only ever listed when its file is on disk,
-        // so it takes the hot-reload branch above; the only not-on-disk selectable is a series or
-        // legacy entry that genuinely needs fetching.)
-        wxString msg = wxString::Format(
-            _L("You've selected network plug-in version %s.\n\nWould you like to download and install this version now?\n\nNote: The application may need to restart after installation."),
-            wxString::FromUTF8(new_version));
-        MessageDialog dlg(this, msg, _L("Download Network Plug-in"), wxYES_NO | wxICON_QUESTION);
-        if (dlg.ShowModal() == wxID_YES) {
-            app_config->set_network_plugin_version(new_version);
-            app_config->save();
-            DownloadProgressDialog progress_dlg(_L("Downloading Network Plug-in"));
-            progress_dlg.ShowModal();
-            reselect(app_config->get_network_plugin_version());
-        } else {
-            reselect(old_version);
-        }
-    });
-
-    auto reload_btn = new Button(m_parent, wxEmptyString, "refresh", 0, 16);
-    reload_btn->SetStyle(ButtonStyle::Regular, ButtonType::Icon);
-    reload_btn->SetToolTip(_L("Reload the network plug-in without restarting the application"));
-    reload_btn->Bind(wxEVT_BUTTON, [this](auto& e) {
-        if (wxGetApp().hot_reload_network_plugin()) {
-            MessageDialog dlg(this, _L("Network plug-in reloaded successfully."), _L("Reload"), wxOK | wxICON_INFORMATION);
-            dlg.ShowModal();
-        } else {
-            MessageDialog dlg(this, _L("Failed to reload network plug-in. Please restart the application."), _L("Reload Failed"), wxOK | wxICON_ERROR);
-            dlg.ShowModal();
-        }
-    });
-    m_sizer->Add(reload_btn, 0, wxALIGN_CENTER | wxLEFT, FromDIP(5));
-
-    return m_sizer;
-}
-
 #ifdef WIN32
 wxBoxSizer* PreferencesDialog::create_item_link_association( wxString url_prefix, wxString website_name)
 {
     wxString title = _L("Associate") + (boost::format(" %1%://") % url_prefix.c_str()).str();
-    wxString tooltip = _L("Associate") + " " + url_prefix + ":// " + _L("with OrcaSlicer so that Orca can open models from") + " " + website_name;
+    wxString tooltip = _L("Associate") + " " + url_prefix + ":// " + _L("with ANANAS SLICER so that ANANAS SLICER can open models from") + " " + website_name;
 
     std::wstring registered_bin; // not used, just here to provide a ref to check fn
     bool reg_to_current_instance = wxGetApp().check_url_association(url_prefix.ToStdWstring(), registered_bin);
@@ -1632,17 +1394,15 @@ void PreferencesDialog::create_items()
     auto item_default_page     = create_item_combobox(_L("Default page"), _L("Set the page opened on startup."), "default_page", DefaultPage);
     g_sizer->Add(item_default_page);
 
-#ifdef _WIN32
     auto item_darkmode         = create_item_darkmode(_L("Enable dark Mode"), "", "dark_color_mode");
     g_sizer->Add(item_darkmode);
-#endif
 
-    auto item_single_instance  = create_item_checkbox(_L("Allow only one OrcaSlicer instance"),
+    auto item_single_instance  = create_item_checkbox(_L("Allow only one ANANAS SLICER instance"),
     #if __APPLE__
             _L("On OSX there is always only one instance of app running by default. However it is allowed to run multiple instances "
                 "of same app from the command line. In such case this settings will allow only one instance."),
     #else
-            _L("If this is enabled, when starting OrcaSlicer and another instance of the same OrcaSlicer is already running, that instance will be reactivated instead."),
+            _L("If this is enabled, when starting ANANAS SLICER and another instance of the same ANANAS SLICER is already running, that instance will be reactivated instead."),
     #endif
             "single_instance");
     g_sizer->Add(item_single_instance);
@@ -1719,7 +1479,7 @@ void PreferencesDialog::create_items()
     //// GENERAL > Preset
     g_sizer->Add(create_item_title(_L("Preset")), 1, wxEXPAND);
 
-    auto item_remember_printer = create_item_checkbox(_L("Remember printer configuration"), _L("If enabled, Orca will remember and switch filament/process configuration for each printer automatically."), "remember_printer_config");
+    auto item_remember_printer = create_item_checkbox(_L("Remember printer configuration"), _L("If enabled, ANANAS SLICER will remember and switch filament/process configuration for each printer automatically."), "remember_printer_config");
     g_sizer->Add(item_remember_printer);
 
     auto item_filament_preset_grouping = create_item_combobox(_L("Group user filament presets"), _L("Group user filament presets based on selection"),
@@ -1740,9 +1500,6 @@ void PreferencesDialog::create_items()
 
     //// GENERAL > Features
     g_sizer->Add(create_item_title(_L("Features")), 1, wxEXPAND);
-
-    auto item_multi_machine    = create_item_checkbox(_L("Multi device management"), _L("With this option enabled, you can send a task to multiple devices at the same time and manage multiple devices."), "enable_multi_machine", _L("(Requires restart)"));
-    g_sizer->Add(item_multi_machine);
 
     auto item_speed_dial = create_item_checkbox(_L("Open the Speed Dial from the keyboard"),
         _L("When enabled, the Speed Dial keyboard shortcut (Space by default) opens the action search from any page."),
@@ -1824,14 +1581,14 @@ void PreferencesDialog::create_items()
 
     auto item_auto_reslice = create_item_auto_reslice(
         _L("Auto slice after changes"),
-        _L("If enabled, OrcaSlicer will re-slice automatically whenever slicing-related settings change."),
+        _L("If enabled, ANANAS SLICER will re-slice automatically whenever slicing-related settings change."),
         _L("Delay in seconds before auto slicing starts, allowing multiple edits to be grouped. Use 0 to slice immediately."));
     g_sizer->Add(item_auto_reslice);
 
     auto item_mix_print_high_low_temperature = create_item_checkbox(_L("Remove mixed temperature restriction"), _L("With this option enabled, you can print materials with a large temperature difference together."), "enable_high_low_temp_mixed_printing");
     g_sizer->Add(item_mix_print_high_low_temperature);
 
-    auto item_remember_print_action = create_item_checkbox(_L("Remember last print action"), _L("If enabled, OrcaSlicer will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."), "remember_print_action");
+    auto item_remember_print_action = create_item_checkbox(_L("Remember last print action"), _L("If enabled, ANANAS SLICER will remember the last selected option in the print button's dropdown (e.g. Print, Export plate sliced file, Export G-code file) and use it as the default on next startup."), "remember_print_action");
     g_sizer->Add(item_remember_print_action);
 
     //// CONTROL > Camera
@@ -2090,10 +1847,7 @@ void PreferencesDialog::create_items()
     //// ONLINE > Connection
     g_sizer->Add(create_item_title(_L("Connection")), 1, wxEXPAND);
 
-    auto item_region           = create_item_region_combobox(_L("Login region"), "");
-    g_sizer->Add(item_region);
- 
-    auto item_stealth_mode     = create_item_checkbox(_L("Stealth mode"), _L("This disables all cloud features, including Orca Cloud profile syncing. Users who prefer to work entirely offline can enable this option.\nNote: When Stealth Mode is enabled, your user profiles will not be backed up to Orca Cloud."), "stealth_mode");
+    auto item_stealth_mode     = create_item_checkbox(_L("Stealth mode"), _L("This disables all cloud features, including cloud profile syncing. Users who prefer to work entirely offline can enable this option.\nNote: When Stealth Mode is enabled, your user profiles will not be backed up to the cloud."), "stealth_mode");
     g_sizer->Add(item_stealth_mode);
 
     auto item_hide_login_side_panel = create_item_checkbox(_L("Hide login side panel"), _L("Hide the login side panel on the home page."), "hide_login_side_panel");
@@ -2105,12 +1859,6 @@ void PreferencesDialog::create_items()
     });
     g_sizer->Add(item_network_test);
 
-    //// ONLINE > Cloud Providers
-    g_sizer->Add(create_item_title(_L("Cloud Providers")), 1, wxEXPAND);
-
-    auto item_bambu_cloud     = create_item_bambu_cloud(_L("Enable Bambu Cloud"), _L("Allow logging into Bambu Cloud alongside Orca Cloud. When enabled, a Bambu login section appears on the homepage."));
-    g_sizer->Add(item_bambu_cloud);
-
     //// ONLINE > Update & sync
     g_sizer->Add(create_item_title(_L("Update & sync")), 1, wxEXPAND);
 
@@ -2121,7 +1869,6 @@ void PreferencesDialog::create_items()
     g_sizer->Add(item_user_sync);
 
     if (app_config->get_stealth_mode()) {
-        if (m_bambu_cloud_checkbox)      m_bambu_cloud_checkbox->Enable(false);
         if (m_sync_user_preset_checkbox) m_sync_user_preset_checkbox->Enable(false);
     }
 
@@ -2140,15 +1887,6 @@ void PreferencesDialog::create_items()
                                                       SETTING_USE_ENCRYPTED_TOKEN_FILE);
     g_sizer->Add(item_token_storage);
 
-    //// ONLINE > Network plugin
-    g_sizer->Add(create_item_title(_L("Bambu network plug-in")), 1, wxEXPAND);
-
-    auto item_enable_plugin    = create_item_checkbox(_L("Enable Bambu network plug-in"), "", "installed_networking");
-    g_sizer->Add(item_enable_plugin);
-
-    auto item_plugin_version = create_item_network_plugin_version(_L("Network plug-in version"), _L("Select the network plug-in version to use"));
-    g_sizer->Add(item_plugin_version);
-
     g_sizer->AddSpacer(FromDIP(10));
     sizer_page->Add(g_sizer, 0, wxEXPAND);
 
@@ -2165,7 +1903,7 @@ void PreferencesDialog::create_items()
         g_sizer = f_sizers.back();
         g_sizer->AddGrowableCol(0, 1);
 
-        g_sizer->Add(create_item_title(_L("Associate files to OrcaSlicer")), 1, wxEXPAND);
+        g_sizer->Add(create_item_title(_L("Associate files to ANANAS SLICER")), 1, wxEXPAND);
 
         auto item_open_default_apps = create_item_button(
             _L("File associations for the Microsoft Store version are managed by Windows Settings."),
@@ -2182,28 +1920,25 @@ void PreferencesDialog::create_items()
     g_sizer->AddGrowableCol(0, 1);
 
     //// ASSOCIATE > Extensions
-    g_sizer->Add(create_item_title(_L("Associate files to OrcaSlicer")), 1, wxEXPAND);
+    g_sizer->Add(create_item_title(_L("Associate files to ANANAS SLICER")), 1, wxEXPAND);
 
-    auto item_associate_3mf    = create_item_checkbox(_L("Associate 3MF files to OrcaSlicer"), _L("If enabled, this sets OrcaSlicer as the default application to open 3MF files.") , "associate_3mf");
+    auto item_associate_3mf    = create_item_checkbox(_L("Associate 3MF files to ANANAS SLICER"), _L("If enabled, this sets ANANAS SLICER as the default application to open 3MF files.") , "associate_3mf");
     g_sizer->Add(item_associate_3mf);
 
-    auto item_associate_drc = create_item_checkbox(_L("Associate DRC files to OrcaSlicer"), _L("If enabled, sets OrcaSlicer as default application to open DRC files."), "associate_drc");
+    auto item_associate_drc = create_item_checkbox(_L("Associate DRC files to ANANAS SLICER"), _L("If enabled, sets ANANAS SLICER as default application to open DRC files."), "associate_drc");
     g_sizer->Add(item_associate_drc);
 
-    auto item_associate_stl    = create_item_checkbox(_L("Associate STL files to OrcaSlicer"), _L("If enabled, this sets OrcaSlicer as the default application to open STL files.") , "associate_stl");
+    auto item_associate_stl    = create_item_checkbox(_L("Associate STL files to ANANAS SLICER"), _L("If enabled, this sets ANANAS SLICER as the default application to open STL files.") , "associate_stl");
     g_sizer->Add(item_associate_stl);
 
-    auto item_associate_step   = create_item_checkbox(_L("Associate STEP files to OrcaSlicer"), _L("If enabled, this sets OrcaSlicer as the default application to open STEP files."), "associate_step");
+    auto item_associate_step   = create_item_checkbox(_L("Associate STEP files to ANANAS SLICER"), _L("If enabled, this sets ANANAS SLICER as the default application to open STEP files."), "associate_step");
     g_sizer->Add(item_associate_step);
 
     //// ASSOCIATE > WebLinks
-    g_sizer->Add(create_item_title(_L("Associate web links to OrcaSlicer")), 1, wxEXPAND);
+    g_sizer->Add(create_item_title(_L("Associate web links to ANANAS SLICER")), 1, wxEXPAND);
 
     auto associate_url_prusa   = create_item_link_association(L"prusaslicer", "Printables.com");
     g_sizer->Add(associate_url_prusa);
-
-    auto associate_url_bambu   = create_item_link_association(L"bambustudio", "Makerworld.com");
-    g_sizer->Add(associate_url_bambu);
 
     auto associate_url_cura    = create_item_link_association(L"cura", "Thingiverse.com");
     g_sizer->Add(associate_url_cura);
@@ -2232,12 +1967,6 @@ void PreferencesDialog::create_items()
   
     auto item_show_unsupported = create_item_checkbox(_L("Show unsupported presets"), _L("Show incompatible/unsupported presets in the printer and filament dropdown lists. These presets cannot be selected."), "show_unsupported_presets");
     g_sizer->Add(item_show_unsupported);
-
-    auto item_plugin_printer_agents = create_item_checkbox(
-        _L("(Experimental) Use printer agents instead of print hosts"), _L(
-            "Route print jobs for non-Bambu printers through printer plug-in agents instead of the classic print-host upload flow.\nWhen disabled, OrcaSlicer uses the legacy print-host behavior."),
-        "use_printer_agents");
-    g_sizer->Add(item_plugin_printer_agents);
 
     //// DEVELOPER > Experimental Features
     g_sizer->Add(create_item_title(_L("Experimental Features")), 1, wxEXPAND);

@@ -33,7 +33,6 @@ struct PrintHostUpload
     boost::filesystem::path source_path;
     boost::filesystem::path upload_path;
 
-    std::string group;
     std::string storage;
 
     PrintHostPostUploadAction post_action { PrintHostPostUploadAction::None };
@@ -67,8 +66,6 @@ public:
     virtual bool has_auto_discovery() const = 0;
     virtual bool can_test() const = 0;
     virtual PrintHostPostUploadActions get_post_upload_actions() const = 0;
-    // A print host usually does not support multiple printers, with the exception of Repetier server.
-    virtual bool supports_multiple_printers() const { return false; }
     virtual std::string get_host() const = 0;
     /**
     * Get the serial number for connecting to the printer.
@@ -77,11 +74,7 @@ public:
     */
     virtual std::string get_sn() const { return ""; }
 
-    // Support for Repetier server multiple groups & printers. Not supported by other print hosts.
-    // Returns false if not supported. May throw HostNetworkError.
-    virtual bool get_groups(wxArrayString & /* groups */) const { return false; }
-    virtual bool get_printers(wxArrayString & /* printers */) const { return false; }
-    // Support for PrusaLink uploading to different storage. Not supported by other print hosts.
+    // Storage roots the host can upload to (Moonraker: /server/files/roots).
     // Returns false if not supported or fail.
     virtual bool get_storage(wxArrayString& /*storage_path*/, wxArrayString& /*storage_name*/) const { return false; }
 
@@ -89,12 +82,6 @@ public:
     static std::string get_print_host_webui(DynamicPrintConfig *config);
     // Reads the "err" field of a JSON reply, 0 when absent. Returns -1 when the body is not valid JSON.
     static int get_err_code_from_body(const std::string &body);
-
-    //Support for cloud webui login
-    virtual bool is_cloud() const { return false; }
-    virtual bool is_logged_in() const { return false; }
-    virtual void log_out() const {}
-    virtual bool get_login_url(wxString& auth_url) const { return false; }
 
 protected:
     virtual wxString format_error(const std::string &body, const std::string &error, unsigned status) const;

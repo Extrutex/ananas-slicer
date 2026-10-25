@@ -1,55 +1,76 @@
 #include "StateColor.hpp"
+#include "ThemeTokens.hpp"
+
+#include <vector>
 #include <cmath>
 
 static bool gDarkMode = false;
 
 static bool operator<(wxColour const &l, wxColour const &r) { return l.GetRGBA() < r.GetRGBA(); }
 
-static std::map<wxColour, wxColour> gDarkColors{
-    {"#009688", "#00675b"}, // rgb(0, 150, 136)    ORCA color
-    {"#1F8EEA", "#2778D2"}, // rgb(31, 142, 234)   ???
-    {"#FF6F00", "#D15B00"}, // rgb(255, 111, 0)    Secondary color
-    {"#D01B1B", "#BB2A3A"}, // rgb(208, 27, 27)    ???
-    {"#262E30", "#EFEFF0"}, // rgb(38, 46, 48)     Button text color | Input Text Color
-    {"#DFDFDF", "#3E3E45"}, // rgb(223, 223, 223)  Button Background color
-    {"#D4D4D4", "#4D4D54"}, // rgb(212, 212, 212)  Button Background color on Hover
-    {"#6B6A6A", "#909090"}, // rgb(107, 107, 106)  Button Dimmed text
-    {"#26A69A", "#008172"}, // rgb(0, 150, 136)    Button Confirm Color hover | ORCA Color Hover
-    {"#6B6B6A", "#B3B3B5"}, // rgb(107, 107, 106)  Input box side text
-    {"#2C2C2E", "#B3B3B4"}, // rgb(44, 44, 46)     ???
-    {"#6B6B6B", "#818183"}, // rgb(107, 107, 107)  Disabled Text
-    {"#ACACAC", "#65656A"}, // rgb(172, 172, 172)  Disabled Text on boxes | Dimmed Elements
-    {"#EEEEEE", "#4C4C55"}, // rgb(238, 238, 238)  Separator Line | Title Line Color
-    {"#E8E8E8", "#3E3E45"}, // rgb(232, 232, 232)  ???
-    {"#323A3D", "#E5E5E4"}, // rgb(50, 58, 61)     Softer text color
-    {"#FFFFFF", "#2D2D31"}, // rgb(255, 255, 255)  Window background
-    {"#F8F8F8", "#36363C"}, // rgb(248, 248, 248)  Sidebar > Titlebar > Gradient Top | BBL monitor page titlebar bg
-    {"#F1F1F1", "#36363B"}, // rgb(241, 241, 241)  Sidebar > Titlebar > Gradient Bottom
-    {"#3B4446", "#2D2D30"}, // rgb(59, 68, 78)     Top Bar / Main tab bar bg color
-    {"#CECECE", "#54545B"}, // rgb(206, 206, 206)  Sidebar wxPanel bg | 
-    {"#DBFDD5", "#3B3B40"}, // rgb(219, 253, 213)  Not Used anymore // Was used for BBS combo boxes etc
-    {"#000000", "#FFFFFE"}, // rgb(0, 0, 0)        Mostly Text color wxBlack
-    {"#F4F4F4", "#36363D"}, // rgb(244, 244, 244)  ???
-    {"#DBDBDB", "#4A4A51"}, // rgb(219, 219, 219)  Input/Combo Box Border Color
-    {"#EDFAF2", "#283232"}, // rgb(229, 240, 238)  Not Used anymore // Was used for BBS Combo / Dropdown focused background color
-    {"#323A3C", "#E5E5E6"}, // rgb(50, 58, 60)     Text color used on search list | 
-    {"#303A3C", "#E5E5E5"}, // rgb(48, 58, 60)     Object Table > Column header text color | StaticBox Border Color
-    {"#FEFFFF", "#242428"}, // rgb(254, 255, 255)  Side Tabbar bg | 
-    {"#A6A9AA", "#2D2D29"}, // rgb(166, 169, 170)  Seperator color
-    {"#363636", "#B2B3B5"}, // rgb(54, 54, 54)     Sidebar > Parameter Label/Title color | Sidebar tab text | Create Filament window text
-    {"#F0F0F1", "#333337"}, // rgb(240, 240, 241)  Disabled element background // ORCA Used better background color for dark mode
-    {"#9E9E9E", "#53545A"}, // rgb(158, 158, 158)  ???
-    {"#D7E8DE", "#1F2B27"}, // rgb(215, 232, 222)  Not Used anymore // Leftover from BBS
-    {"#2B3436", "#808080"}, // rgb(43, 52, 54)     Not Used anymore // Leftover from BBS. Was used as main fill color of icons
+using namespace Slic3r::GUI;
+
+// Light colour used in code -> its dark-mode counterpart. With dark mode as the native
+// mode, the right-hand column is the theme palette (docs/design/BRAND.md §6.2).
+// Order matters for lightModeColorFor(): when several light colours share one dark token,
+// the first entry wins the reverse lookup, so the canonical meaning is listed first.
+// No right-hand value may also appear as a left-hand key (it would be mapped twice).
+static const std::vector<std::pair<wxColour, wxColour>> gDarkColorList{
+    {"#FFFFFF", Theme::CARBON_850},          // Window background
+    {"#000000", Theme::ALU_50},              // Mostly text color wxBlack
+    {"#3B4446", Theme::CARBON_950},          // Top bar / main tab bar bg
+    {"#F8F8F8", Theme::CARBON_800},          // Sidebar > Titlebar > Gradient Top
+    {"#262E30", Theme::ALU_100},             // Button text color | Input text color
+    {"#DBDBDB", Theme::STEEL_400},           // Input / combo box border
+    {"#EEEEEE", Theme::LINE},                // Separator line | Title line
+    {"#363636", Theme::ALU_200},             // Sidebar > Parameter label/title | Sidebar tab text
+    {"#6B6B6A", Theme::ALU_300},             // Input box side text (units)
+    {"#FEFFFF", Theme::CARBON_900},          // Side tab bar bg
+    {"#A6A9AA", Theme::LINE_SUBTLE},         // Separator color
+    {"#DFDFDF", Theme::CARBON_800},          // Button background
+    {"#D4D4D4", Theme::CARBON_700},          // Button background on hover
+    {"#E6EBEF", Theme::CARBON_750},          // Accent role: combo / dropdown focused background
+    // accent roles (ThemeTokens.hpp) - the accent is aluminium on carbon, never teal
+    {Theme::LIGHT_ACCENT,         Theme::ALU_50},     // Accent: confirm button, checked, focus, links
+    {Theme::LIGHT_ACCENT_HOVER,   Theme::ALU_100},    // Accent hover / pressed
+    {Theme::LIGHT_ACCENT_CHECKED, Theme::CARBON_700}, // Dropdown checked item / selected row background
+    {Theme::LIGHT_ON_ACCENT,      Theme::CARBON_950}, // Ink on an accent fill
+    // signals
+    {"#D01B1B", Theme::SIGNAL_LIMIT},        // Error red
+    {"#FF6F00", Theme::SIGNAL_CAUTION},      // Secondary orange
+    // remaining neutrals
+    {"#1F8EEA", Theme::CARBON_700},          // Legacy blue selection bg
+    {"#6B6A6A", Theme::STEEL_400},           // Button dimmed (disabled) text
+    {"#6B6B6B", Theme::STEEL_400},           // Disabled text
+    {"#ACACAC", Theme::STEEL_400},           // Disabled text on boxes | Dimmed elements
+    {"#2C2C2E", Theme::ALU_200},             // ???
+    {"#E8E8E8", Theme::CARBON_800},          // ???
+    {"#323A3D", Theme::ALU_100},             // Softer text color
+    {"#F1F1F1", Theme::CARBON_800},          // Sidebar > Titlebar > Gradient Bottom (no gradient)
+    {"#CECECE", Theme::CARBON_850},          // Sidebar wxPanel bg
+    {"#DBFDD5", Theme::CARBON_750},          // Not used anymore
+    {"#F4F4F4", Theme::CARBON_800},          // ???
+    {"#EDFAF2", Theme::CARBON_750},          // Not used anymore
+    {"#323A3C", Theme::ALU_100},             // Text color used on search list
+    {"#303A3C", Theme::ALU_100},             // Object table > Column header text | StaticBox border
+    {"#F0F0F1", Theme::CARBON_800},          // Disabled element background
+    {"#9E9E9E", Theme::LINE},                // ???
+    {"#D7E8DE", Theme::CARBON_700},          // Not used anymore
+    {"#2B3436", Theme::ALU_300},             // Not used anymore (icon fill)
     {"#ABABAB", "#ABABAB"},
-    {"#D9D9D9", "#27272A"}, // rgb(217, 217, 217)  Sidebar > Toggle button track color
-    {"#FFFEFE", "#D9D9D9"}, // rgb(255, 254, 254)  Sidebar > Toggle button thumb color
-    {"#EBF9F0", "#293F34"},
-    //{"#F0F0F0", "#4C4C54"},
-    // ORCA
-    {"#BFE1DE", "#223C3C"}, // rgb(191, 225, 222)  Dropdown checked item background color > ORCA color with %25 opacity
-    {"#E5F0EE", "#283232"}, // rgb(229, 240, 238)  Combo / Dropdown focused background color > ORCA color with %10 opacity
+    {"#D9D9D9", Theme::CARBON_700},          // Sidebar > Toggle button track
+    {"#FFFEFE", Theme::ALU_200},             // Sidebar > Toggle button thumb
+    {"#EBF9F0", Theme::CARBON_700},
 };
+
+static std::map<wxColour, wxColour> make_dark_map()
+{
+    std::map<wxColour, wxColour> map;
+    for (auto &p : gDarkColorList) map.emplace(p.first, p.second);
+    return map;
+}
+
+static std::map<wxColour, wxColour> gDarkColors = make_dark_map();
 
 std::tuple<double, double, double> StateColor::GetLAB(const wxColour& color) {
     // Convert color to RGB color space
@@ -196,16 +217,18 @@ inline wxColour darkModeColorFor2(wxColour const &color)
     return color;
 }
 
-std::map<wxColour, wxColour> revert(std::map<wxColour, wxColour> const & map)
+// Reverse lookup; for a dark token shared by several light colours the first entry of
+// gDarkColorList wins (emplace does not overwrite).
+static std::map<wxColour, wxColour> revert(std::vector<std::pair<wxColour, wxColour>> const & list)
 {
     std::map<wxColour, wxColour> map2;
-    for (auto &p : map) map2.emplace(p.second, p.first);
+    for (auto &p : list) map2.emplace(p.second, p.first);
     return map2;
 }
 
 wxColour StateColor::lightModeColorFor(wxColour const &color)
 {
-    static std::map<wxColour, wxColour> gLightColors = revert(gDarkColors);
+    static std::map<wxColour, wxColour> gLightColors = revert(gDarkColorList);
     auto iter = gLightColors.find(color);
     if (iter != gLightColors.end()) return iter->second;
     return color;

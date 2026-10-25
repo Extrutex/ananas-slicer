@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" width="800" height="480" role="img" aria-label="IDEX kinematics: two independent toolhead carriages T0 and T1 share one X rail, each driven by its own motor and belt, with Klipper dual_carriage modes PRIMARY, COPY and MIRROR">
+  <title>Top view of an IDEX Cartesian gantry: two carriages on one X rail, each with its own motor and belt, plus Klipper's dual_carriage modes.</title>
+  <defs>
+    <marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#4db9ff"/>
+    </marker>
+  </defs>
+
+  <!-- ground + inner frame -->
+  <rect x="0" y="0" width="800" height="480" fill="#0b0e11"/>
+  <rect x="0.5" y="0.5" width="799" height="479" fill="none" stroke="#262f37" stroke-width="1"/>
+
+  <!-- title block -->
+  <text x="40" y="44" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" letter-spacing="2" fill="#eef3f6">IDEX</text>
+  <text x="40" y="66" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#8b99a4">kinematics: cartesian  +  [dual_carriage]</text>
+
+  <!-- fixed frame (top view) -->
+  <rect x="40" y="100" width="440" height="300" fill="#0f1317" stroke="#3d4953" stroke-width="2"/>
+
+  <!-- bed (moves in Y) -->
+  <rect x="100" y="280" width="320" height="100" fill="#141a1f" stroke="#3d4953" stroke-width="2"/>
+  <text x="112" y="300" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#8b99a4">bed</text>
+  <line x1="70" y1="370" x2="70" y2="300" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="70" y="288" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#4db9ff">Y</text>
+
+  <!-- belt T1: U motor (right) to idler (left) -->
+  <polygon points="80,114 460,114 460,126 80,126" fill="none" stroke="#eef3f6" stroke-width="2"/>
+  <!-- belt T0: X motor (left) to idler (right) -->
+  <polygon points="60,154 440,154 440,166 60,166" fill="none" stroke="#eef3f6" stroke-width="2"/>
+
+  <!-- idlers -->
+  <circle cx="80" cy="120" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+  <circle cx="440" cy="160" r="6" fill="#0b0e11" stroke="#5c6b77" stroke-width="2"/>
+
+  <!-- motors -->
+  <circle cx="60" cy="160" r="12" fill="#222a31" stroke="#5c6b77" stroke-width="2"/>
+  <text x="60" y="164" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6">X</text>
+  <circle cx="460" cy="120" r="12" fill="#222a31" stroke="#5c6b77" stroke-width="2"/>
+  <text x="460" y="124" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#eef3f6">U</text>
+
+  <!-- belt labels -->
+  <text x="100" y="144" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="11" fill="#8b99a4">belt T1</text>
+  <text x="100" y="184" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="11" fill="#8b99a4">belt T0</text>
+
+  <!-- X rail (fixed at this level) -->
+  <line x1="80" y1="200" x2="440" y2="200" stroke="#3d4953" stroke-width="4"/>
+  <text x="300" y="184" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">X rail</text>
+
+  <!-- T0 park position (left end, empty) -->
+  <rect x="80" y="190" width="40" height="20" fill="none" stroke="#5c6b77" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="100" y="228" text-anchor="middle" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">park</text>
+
+  <!-- belt clamps: each carriage grabs its own belt -->
+  <line x1="200" y1="166" x2="200" y2="190" stroke="#d8e0e6" stroke-width="2"/>
+  <line x1="420" y1="150" x2="420" y2="170" stroke="#0b0e11" stroke-width="4"/>
+  <line x1="420" y1="126" x2="420" y2="190" stroke="#d8e0e6" stroke-width="2"/>
+
+  <!-- carriage T0 (mid-rail) -->
+  <rect x="180" y="190" width="40" height="20" fill="#d8e0e6"/>
+  <rect x="192" y="212" width="16" height="16" fill="#eef3f6"/>
+  <line x1="200" y1="228" x2="200" y2="232" stroke="#eef3f6" stroke-width="2"/>
+  <text x="216" y="227" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#eef3f6">T0</text>
+
+  <!-- carriage T1 (parked, right end) -->
+  <rect x="400" y="190" width="40" height="20" fill="#d8e0e6"/>
+  <rect x="412" y="212" width="16" height="16" fill="#eef3f6"/>
+  <line x1="420" y1="228" x2="420" y2="232" stroke="#eef3f6" stroke-width="2"/>
+  <text x="404" y="227" text-anchor="end" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#eef3f6">T1</text>
+  <text x="436" y="228" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">park</text>
+
+  <!-- motion arrows -->
+  <line x1="200" y1="246" x2="270" y2="246" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="200" y="268" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#4db9ff">X (T0)</text>
+  <line x1="420" y1="246" x2="350" y2="246" stroke="#4db9ff" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="420" y="268" text-anchor="end" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#4db9ff">dual_carriage (T1)</text>
+
+  <!-- Klipper modes -->
+  <text x="520" y="124" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#8b99a4">Klipper modes</text>
+  <line x1="520" y1="134" x2="760" y2="134" stroke="#262f37" stroke-width="1"/>
+  <text x="520" y="160" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#eef3f6">PRIMARY:</text>
+  <text x="520" y="180" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="11" fill="#b4c0c9">one head prints</text>
+  <text x="520" y="210" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#eef3f6">COPY:</text>
+  <text x="520" y="230" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="11" fill="#b4c0c9">both heads, same path, offset</text>
+  <text x="520" y="260" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#eef3f6">MIRROR:</text>
+  <text x="520" y="280" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="11" fill="#b4c0c9">both heads, mirrored path</text>
+
+  <!-- legend -->
+  <rect x="640" y="406" width="14" height="8" fill="#d8e0e6"/>
+  <text x="660" y="414" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">moves</text>
+  <rect x="640" y="422" width="14" height="8" fill="none" stroke="#3d4953" stroke-width="1"/>
+  <text x="660" y="430" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" fill="#8b99a4">fixed</text>
+
+  <!-- caption -->
+  <text x="40" y="436" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">Two carriages share one X rail with separate motors and belts;</text>
+  <text x="40" y="456" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">Klipper's dual_carriage section drives the second head and its COPY and MIRROR modes.</text>
+</svg>

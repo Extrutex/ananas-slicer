@@ -11,7 +11,7 @@
 	"compatible_printers": [
 		"Anycubic Kobra S1 0.4 nozzle"
 	],
-	"accel_to_decel_enable": "1",
+	"accel_to_decel_enable": "0",
 	"accel_to_decel_factor": "50%",
 	"alternate_extra_wall": "0",
 	"bottom_shell_layers": "3",
@@ -32,7 +32,7 @@
 	"compatible_printers_condition": "",
 	"counterbore_hole_bridging": "none",
 	"default_acceleration": "10000",
-	"default_jerk": "9",
+	"default_jerk": "0",
 	"detect_narrow_internal_solid_infill": "1",
 	"detect_overhang_wall": "1",
 	"detect_thin_wall": "1",

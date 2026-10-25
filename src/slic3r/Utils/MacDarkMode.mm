@@ -46,9 +46,10 @@ double mac_max_scaling_factor()
     
 void set_miniaturizable(void * window)
 {
-    CGFloat rFloat = 34/255.0;
-    CGFloat gFloat = 34/255.0;
-    CGFloat bFloat = 36/255.0;
+    // carbon-950 (#07090B), the chrome colour of the theme
+    CGFloat rFloat = 7/255.0;
+    CGFloat gFloat = 9/255.0;
+    CGFloat bFloat = 11/255.0;
     [(NSView*) window window].titlebarAppearsTransparent = true;
     [(NSView*) window window].backgroundColor = [NSColor colorWithCalibratedRed:rFloat green:gFloat blue:bFloat alpha:1.0];
     [(NSView*) window window].styleMask |= NSMiniaturizableWindowMask;

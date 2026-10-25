@@ -17,9 +17,10 @@ using SeamPlacerImpl::EnforcedBlockedSeamPoint;
 // Actual deviations: maximum ~0.27, using 2.5 with margin (nanometers)
 static constexpr double MACHINE_PRECISION_SQUARED = 2.5;
 
-// Tolerance for checking proximity when inserting seam points into perimeter
-static const coord_t TOLERANCE_LINEAR = scale_(0.001);  // 1.0 micrometers
-static const coord_t TOLERANCE_SQUARED = TOLERANCE_LINEAR * TOLERANCE_LINEAR;
+// Tolerance for checking proximity when inserting seam points into perimeter.
+// Scaled on use: SCALING_FACTOR is set per bed size at run time, after static initialization.
+static inline coord_t tolerance_linear()  { return scale_(0.001); } // 1.0 micrometers
+static inline coord_t tolerance_squared() { return tolerance_linear() * tolerance_linear(); }
 
 // Find common segment between intersection polygon and object perimeter
 //
@@ -661,7 +662,7 @@ static std::optional<std::pair<Point, size_t>> segment_right(const SegmentData &
 }
 
 // Insert point into perimeter with proximity check to existing vertices
-// If point is close to vertex (< TOLERANCE_SQUARED) - use existing vertex
+// If point is close to vertex (< tolerance_squared()) - use existing vertex
 // Returns pair: {final coordinates, point index in polygon}
 // edge_start_idx is start vertex of edge containing point
 static std::optional<std::pair<Point, size_t>> insert_point_into_perimeter(
@@ -686,12 +687,12 @@ static std::optional<std::pair<Point, size_t>> insert_point_into_perimeter(
 
     // Check proximity to edge vertices
     coord_t dist_sq_start = (point - perim_p_start).squaredNorm();
-    if (dist_sq_start < TOLERANCE_SQUARED) {
+    if (dist_sq_start < tolerance_squared()) {
         return std::make_pair(perim_p_start, vtx_start);
     }
 
     coord_t dist_sq_end = (point - perim_p_end).squaredNorm();
-    if (dist_sq_end < TOLERANCE_SQUARED) {
+    if (dist_sq_end < tolerance_squared()) {
         return std::make_pair(perim_p_end, vtx_end);
     }
 
@@ -717,9 +718,9 @@ static std::optional<std::pair<Point, size_t>> insert_point_into_perimeter(
     return std::make_pair(perimeter_polygon.points[insert_pos], insert_pos);
 }
 
-// Insert new point at distance TOLERANCE_LINEAR from specified perimeter vertex
+// Insert new point at distance tolerance_linear() from specified perimeter vertex
 // Insertion direction specified by direction parameter: +1 = after vertex, -1 = before vertex
-// If target edge length < 2*TOLERANCE_LINEAR, insertion not performed (new point would be too close to edge end)
+// If target edge length < 2*tolerance_linear(), insertion not performed (new point would be too close to edge end)
 // Returns true if point was inserted, false otherwise
 // point_idx is index of perimeter vertex from which insertion is performed
 static bool refine_at_vertex(
@@ -760,16 +761,16 @@ static bool refine_at_vertex(
     double edge_length = edge_vector.norm();
 
     // Check if edge is long enough for insertion
-    // New point must be at distance TOLERANCE_LINEAR from start
-    // and at distance >= TOLERANCE_LINEAR from end
-    if (edge_length < 2.0 * TOLERANCE_LINEAR) {
+    // New point must be at distance tolerance_linear() from start
+    // and at distance >= tolerance_linear() from end
+    if (edge_length < 2.0 * tolerance_linear()) {
         return false;  // Edge too short - new point would be too close to end
     }
 
-    // Calculate new point coordinates: edge_start + TOLERANCE_LINEAR * direction_normalized
+    // Calculate new point coordinates: edge_start + tolerance_linear() * direction_normalized
     Vec2d direction_normalized = edge_vector / edge_length;
     // Place helper point near point_idx: after it for +1, before it for -1
-    auto offset = (TOLERANCE_LINEAR * direction_normalized).cast<coord_t>();
+    auto offset = (tolerance_linear() * direction_normalized).cast<coord_t>();
     Point new_point = (direction == 1)
         ? Point(edge_start + offset)
         : Point(edge_end   - offset);

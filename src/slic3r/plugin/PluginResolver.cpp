@@ -74,15 +74,6 @@ std::string find_option_for_capability(Preset::Type type,
         }
     }
 
-    // printer_agent stores AgentInfo::id, so a missing plugin cannot be reverse-mapped through
-    // the runtime registry. If no regular printer plugin field matched, assume printer_agent.
-    if (type == Preset::Type::TYPE_PRINTER && preset.config.has("printer_agent")) {
-        const ConfigOptionDef* agent_def = def->get("printer_agent");
-        if (agent_def != nullptr && agent_def->is_plugin_backed() &&
-            (capability_type == PluginCapabilityType::Unknown || agent_def->plugin_type == expected_type))
-        return "printer_agent";
-    }
-
     return {};
 }
 

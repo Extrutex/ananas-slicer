@@ -721,14 +721,15 @@ bool GizmoObjectManipulation::reset_zero_button(ImGuiWrapper *imgui_wrapper,  bo
      bool result;
      bool b_value = value;
      if (b_value) {
-         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.00f, 0.68f, 0.26f, 1.00f));
-         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.00f, 0.68f, 0.26f, 1.00f));
-         ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.00f, 0.68f, 0.26f, 1.00f));
+         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImGuiWrapper::accent());
+         ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImGuiWrapper::accent_hover());
+         ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImGuiWrapper::accent());
+         ImGui::PushStyleColor(ImGuiCol_CheckMark, ImGuiWrapper::on_accent());
      }
      auto label_utf8 = into_u8(label);
      result          = ImGui::BBLCheckbox(label_utf8.c_str(), &value);
 
-     if (b_value) { ImGui::PopStyleColor(3); }
+     if (b_value) { ImGui::PopStyleColor(4); }
      return result;
 }
 
@@ -901,8 +902,9 @@ void GizmoObjectManipulation::do_render_move_window(ImGuiWrapper *imgui_wrapper,
 
     m_last_active_item = current_active_id;
     last_move_input_window_width = ImGui::GetWindowWidth();
+    ImGui::PopStyleVar();
     imgui_wrapper->end();
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar();
     ImGuiWrapper::pop_toolbar_style();
 }
 
@@ -1107,10 +1109,11 @@ void GizmoObjectManipulation::do_render_rotate_window(ImGuiWrapper *imgui_wrappe
 
     m_last_active_item = current_active_id;
     last_rotate_input_window_width = ImGui::GetWindowWidth();
+    ImGui::PopStyleVar();
     imgui_wrapper->end();
 
     // BBS
-    ImGui::PopStyleVar(2);
+    ImGui::PopStyleVar();
     ImGuiWrapper::pop_toolbar_style();
 }
 

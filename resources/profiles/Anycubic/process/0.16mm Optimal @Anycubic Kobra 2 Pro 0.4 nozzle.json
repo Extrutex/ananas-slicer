@@ -11,7 +11,7 @@
 	"compatible_printers": [
 		"Anycubic Kobra 2 Pro 0.4 nozzle"
 	],
-	"accel_to_decel_enable": "1",
+	"accel_to_decel_enable": "0",
 	"accel_to_decel_factor": "50%",
 	"alternate_extra_wall": "0",
 	"bottom_shell_layers": "3",

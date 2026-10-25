@@ -99,8 +99,10 @@ enum class WipeTowerType {
     Type2,
 };
 
+// ANANAS SLICER: Moonraker is the only print host. Other values a project or preset may still carry
+// are rewritten by PrintConfigDef::handle_legacy().
 enum PrintHostType {
-    htPrusaLink, htPrusaConnect, htOctoPrint, htDuet, htUltiMaker, htFlashAir, htAstroBox, htRepetier, htMKS, htESP3D, htCrealityPrint, htObico, htFlashforge, htSimplyPrint, htElegooLink, ht3DPrinterOS, htMoonraker
+    htMoonraker
 };
 
 enum AuthorizationType {
@@ -180,6 +182,10 @@ enum class IroningType {
     Count,
 };
 
+// Smallest usable ironing line spacing. Anything tighter yields an unprintable number of lines,
+// and zero stops the fillers from making progress.
+constexpr double IRONING_SPACING_MIN = 0.05;
+
 //BBS
 enum class WallInfillOrder {
     InnerOuterInfill,
@@ -208,6 +214,16 @@ enum class WallSequence {
     InnerOuter,
     OuterInner,
     InnerOuterInner,
+    Count,
+};
+
+// How precise_outer_wall is realised by the Arachne wall generator.
+enum class PreciseOuterWallMethod
+{
+    // Shrink the outline before the walls are generated and move the outer wall back out.
+    OutlineShrink,
+    // Generate the walls on the true outline and move the walls behind the outer wall inwards.
+    ToolpathShift,
     Count,
 };
 
@@ -477,6 +493,25 @@ enum class InputShaperType : unsigned char {
     Disable
 };
 
+// Model the G-code time estimate is computed with. Only read for the Klipper G-code flavor; every
+// other flavor always uses the legacy planner. Serialized; keys must stay stable.
+enum class TimeModel : unsigned char {
+    // The Marlin-derived planner shared by all flavors.
+    Legacy = 0,
+    // KlipperMotionModel: a model of Klipper v0.13 motion planning, not firmware.
+    KlipperV013,
+};
+
+// Where the Klipper limits the estimate uses come from. Serialized; keys must stay stable.
+enum class KlipperLimitsSource : unsigned char {
+    // Not imported: derived from the profile's machine limits and Klipper's defaults.
+    None = 0,
+    // Imported from a printer.cfg file.
+    PrinterCfg,
+    // Imported from a running Klipper through Moonraker.
+    Moonraker,
+};
+
 // BBS
 enum ZHopType {
     zhtAuto = 0,
@@ -609,6 +644,12 @@ static std::string bed_type_to_gcode_string(const BedType type)
     return type_str;
 }
 
+// The plate a printer profile prints on when nothing selects one: its default_bed_type, given either
+// as a BedType key ("Textured PEI Plate") or as the legacy numeric value. Missing or invalid gives
+// the high temp plate (btPEI), as the GUI falls back to. This is the string half of Preset::get_default_bed_type, shared with the
+// CLI so a headless run resolves the same plate the GUI shows for the same printer profile.
+BedType default_bed_type_from_config(const ConfigBase &config);
+
 static std::string get_bed_temp_key(const BedType type)
 {
     if (type == btSuperTack)
@@ -698,6 +739,8 @@ CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(TimelapseType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(BedType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(SkirtType)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(InputShaperType)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(TimeModel)
+CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(KlipperLimitsSource)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(DraftShield)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(ForwardCompatibilitySubstitutionRule)
 CONFIG_OPTION_ENUM_DECLARE_STATIC_MAPS(GCodeThumbnailsFormat)
@@ -1418,6 +1461,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionBool,                 wipe_before_external_loop))
     ((ConfigOptionEnum<WallInfillOrder>, wall_infill_order))
     ((ConfigOptionBool,                 precise_outer_wall))
+    ((ConfigOptionEnum<PreciseOuterWallMethod>, precise_outer_wall_method))
     ((ConfigOptionPercent,              bridge_density))
     ((ConfigOptionFloat,                 filter_out_gap_fill))
     ((ConfigOptionFloatsOrPercentsNullable, small_perimeter_speed))
@@ -1527,6 +1571,22 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionFloat,                input_shaping_freq_y))
     ((ConfigOptionFloat,                input_shaping_damp_x))
     ((ConfigOptionFloat,                input_shaping_damp_y))
+
+    // Time estimate model for the Klipper flavor, and the Klipper limits snapshot it reads.
+    ((ConfigOptionEnum<TimeModel>,      time_model))
+    ((ConfigOptionEnum<KlipperLimitsSource>, klipper_limits_source))
+    ((ConfigOptionString,               klipper_limits_imported_at))
+    ((ConfigOptionFloat,                klipper_max_velocity))
+    ((ConfigOptionFloat,                klipper_max_accel))
+    ((ConfigOptionFloat,                klipper_minimum_cruise_ratio))
+    ((ConfigOptionFloat,                klipper_square_corner_velocity))
+    ((ConfigOptionFloat,                klipper_max_z_velocity))
+    ((ConfigOptionFloat,                klipper_max_z_accel))
+    ((ConfigOptionFloat,                klipper_max_extrude_only_velocity))
+    ((ConfigOptionFloat,                klipper_max_extrude_only_accel))
+    ((ConfigOptionFloat,                klipper_instantaneous_corner_velocity))
+    ((ConfigOptionFloat,                klipper_pressure_advance))
+    ((ConfigOptionFloat,                klipper_pressure_advance_smooth_time))
 )
 
 // This object is mapped to Perl as Slic3r::Config::GCode.
@@ -1599,8 +1659,6 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionIntsNullable,        filament_flush_temp))
     // Fast-purge flush temperature; consumed only when prime_volume_mode==pvmFast.
     ((ConfigOptionIntsNullable,        filament_flush_temp_fast))
-    // BBS
-    ((ConfigOptionBool,                scan_first_layer))
     ((ConfigOptionEnum<PowerLossRecoveryMode>, enable_power_loss_recovery))
     ((ConfigOptionBool,                enable_wrapping_detection))
     ((ConfigOptionInt,                 wrapping_detection_layers))
@@ -1683,13 +1741,14 @@ PRINT_CONFIG_CLASS_DEFINE(
 
     // SoftFever
     ((ConfigOptionBool,                use_firmware_retraction))
+    ((ConfigOptionBool,                firmware_owns_retraction))
+    ((ConfigOptionBool,                klipper_restore_state))
     ((ConfigOptionBool,                use_relative_e_distances))
     ((ConfigOptionBool,                accel_to_decel_enable))
     ((ConfigOptionPercent,             accel_to_decel_factor))
     ((ConfigOptionFloatsOrPercentsNullable, initial_layer_travel_speed))
     ((ConfigOptionFloatsOrPercentsNullable, initial_layer_travel_acceleration))
     ((ConfigOptionFloatsOrPercentsNullable, initial_layer_travel_jerk))
-    ((ConfigOptionBool,                bbl_calib_mark_logo))
     ((ConfigOptionBool,                disable_m73))
 
     // Orca: mmu

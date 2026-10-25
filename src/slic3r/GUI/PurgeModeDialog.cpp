@@ -18,7 +18,7 @@ static const wxColour BgNormalColor = wxColour("#FFFFFF");
 static const wxColour BgSelectColor = wxColour("#EBF9F0");
 
 static const wxColour BorderNormalColor   = wxColour("#CECECE");
-static const wxColour BorderSelectedColor = wxColour("#00AE42");
+static const wxColour BorderSelectedColor = wxColour("#3D4953");
 
 static const wxColour TextNormalBlackColor = wxColour("#262E30");
 static const wxColour TextNormalGreyColor  = wxColour("#6B6B6B");
@@ -29,7 +29,7 @@ PurgeModeDialog::PurgeModeDialog(wxWindow *parent, PurgeModeDialogType dialog_ty
     SetBackgroundColour(*wxWHITE);
     SetMinSize(wxSize(FromDIP(520), FromDIP(320)));
     SetMaxSize(wxSize(FromDIP(520), FromDIP(320)));
-    std::string icon_path = (boost::format("%1%/images/OrcaSlicerTitle.ico") % resources_dir()).str();
+    std::string icon_path = (boost::format("%1%/images/AnanasSlicer.ico") % resources_dir()).str();
     SetIcon(wxIcon(encode_path(icon_path.c_str()), wxBITMAP_TYPE_ICO));
 
     auto main_sizer = new wxBoxSizer(wxVERTICAL);

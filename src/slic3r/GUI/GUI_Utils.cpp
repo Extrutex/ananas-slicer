@@ -316,8 +316,8 @@ void update_dark_ui(wxWindow* window)
 
 void update_dark_config()
 {
-    wxSystemAppearance app = wxSystemSettings::GetAppearance();
-    GUI::wxGetApp().app_config->set("dark_color_mode", app.IsDark() ? "1" : "0");
+    // The colour mode is the app preference ("dark_color_mode"), not the system appearance:
+    // a system change must not overwrite it, only refresh what depends on it.
     wxGetApp().Update_dark_mode_flag();
 }
 

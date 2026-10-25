@@ -128,7 +128,7 @@ TEST_CASE("Wipe retraction preserves fractional speed with inward wipe disabled"
     INFO("relative E: " << relative_e);
     DynamicPrintConfig config = wipe_config("classic", false);
     config.set_deserialize_strict({
-        {"gcode_flavor", "marlin2"},
+        {"gcode_flavor", "klipper"},
         {"use_relative_e_distances", relative_e},
         {"retraction_speed", retraction_speed},
         {"retraction_length", "0.8"},
@@ -169,6 +169,77 @@ TEST_CASE("Wipe retraction preserves fractional speed with inward wipe disabled"
     CHECK_THAT(before_wipe, Catch::Matchers::WithinAbs(0.8 - expected_during, 0.00005));
 }
 
+// G11 restores exactly what G10 retracted. E moves during the wipe would pull back filament that
+// nothing restores, so with firmware retraction the wipe has to come after G10 and move XY only.
+TEST_CASE("Wipe under firmware retraction follows G10 and moves no filament", "[Wipe][Regression]")
+{
+    const char *relative_e = GENERATE("0", "1");
+    // The config validation rejects a printer-level wipe under firmware retraction, but a filament
+    // preset switches the wipe on through its override past that check.
+    const std::string wipe_source = GENERATE(as<std::string>{}, "printer", "filament");
+    CAPTURE(relative_e, wipe_source);
+    DynamicPrintConfig config = wipe_config("classic", false);
+    config.set_deserialize_strict({
+        {"gcode_flavor", "klipper"},
+        {"use_relative_e_distances", relative_e},
+        {"use_firmware_retraction", "1"},
+        {"retraction_length", "0.8"},
+        // Leave the whole retraction to the wipe, which is where it would be lost.
+        {"retract_before_wipe", "0%"},
+        {"retract_after_wipe", "0%"},
+        {"role_based_wipe_speed", "0"},
+        {"wipe_speed", "100"},
+        {"wipe_distance", "2"},
+    });
+    if (wipe_source == "filament")
+        // Only the filament override enables the wipe and leaves the retraction to it; without the
+        // override taking effect there would be no wipe at all.
+        config.set_deserialize_strict({
+            {"wipe", "0"},
+            {"retract_before_wipe", "100%"},
+            {"filament_wipe", "1"},
+            {"filament_retract_before_wipe", "0%"},
+            {"filament_retract_after_wipe", "0%"},
+        });
+    const std::string output = slice({make_cube(10., 10., 1.)}, config);
+    const auto &start_tag = GCodeProcessor::reserved_tag(GCodeProcessor::ETags::Wipe_Start);
+    const auto &end_tag = GCodeProcessor::reserved_tag(GCodeProcessor::ETags::Wipe_End);
+    int    wipes = 0, wipes_before_g10 = 0, g10 = 0, g11 = 0, wipe_moves = 0;
+    double retracted_by_e = 0.;
+    bool   in_wipe = false, fw_retracted = false;
+    GCodeReader parser;
+    parser.apply_config(config);
+    parser.parse_buffer(output, [&](GCodeReader &self, const GCodeReader::GCodeLine &line) {
+        if (line.comment().find(start_tag) != std::string_view::npos) {
+            in_wipe = true;
+            ++ wipes;
+            if (! fw_retracted)
+                ++ wipes_before_g10;
+        } else if (line.comment().find(end_tag) != std::string_view::npos) {
+            in_wipe = false;
+        } else if (line.cmd_is("G10")) {
+            fw_retracted = true;
+            ++ g10;
+        } else if (line.cmd_is("G11")) {
+            fw_retracted = false;
+            ++ g11;
+        } else {
+            if (in_wipe && line.dist_XY(self) > 0.)
+                ++ wipe_moves;
+            if (line.retracting(self))
+                retracted_by_e -= line.dist_E(self);
+        }
+    });
+
+    REQUIRE(wipes > 0);
+    CHECK(wipe_moves >= wipes);
+    CHECK(wipes_before_g10 == 0);
+    CHECK_THAT(retracted_by_e, Catch::Matchers::WithinAbs(0., 1e-9));
+    // The last retraction of the print is not restored.
+    CHECK(g10 - g11 <= 1);
+    CHECK(g11 > 0);
+}
+
 TEST_CASE("Inward wipe respects the minimum travel for retraction and Z hop", "[Wipe][Regression]")
 {
     const char *wall_generator = GENERATE("classic", "arachne");
@@ -179,7 +250,7 @@ TEST_CASE("Inward wipe respects the minimum travel for retraction and Z hop", "[
     DynamicPrintConfig config = wipe_config(
         wall_generator, true, "50%", "10%", false, "3", "inner-outer-inner wall");
     config.set_deserialize_strict({
-        {"gcode_flavor", "marlin2"},
+        {"gcode_flavor", "klipper"},
         {"use_relative_e_distances", relative_e},
         {"reduce_crossing_wall", reduce_crossing_wall},
         {"retraction_minimum_travel", minimum_travel},

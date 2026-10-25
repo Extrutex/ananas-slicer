@@ -5,6 +5,7 @@
 #include <exception>
 #include <sstream>
 #include <boost/optional.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/log/trivial.hpp>
 #include <boost/filesystem.hpp>
 #include <nlohmann/json.hpp>
@@ -17,23 +18,9 @@
 
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/Channel.hpp"
-#include "OctoPrint.hpp"
-#include "Duet.hpp"
-#include "UltiMaker.hpp"
-#include "FlashAir.hpp"
-#include "AstroBox.hpp"
-#include "Repetier.hpp"
-#include "MKS.hpp"
-#include "ESP3D.hpp"
-#include "CrealityPrint.hpp"
 #include "../GUI/PrintHostDialogs.hpp"
 #include "../GUI/MainFrame.hpp"
 #include "slic3r/plugin/PluginManager.hpp"
-#include "Obico.hpp"
-#include "Flashforge.hpp"
-#include "SimplyPrint.hpp"
-#include "ElegooLink.hpp"
-#include "3DPrinterOS.hpp"
 #include "Moonraker.hpp"
 
 namespace fs = boost::filesystem;
@@ -56,33 +43,8 @@ PrintHost* PrintHost::get_print_host(DynamicPrintConfig *config)
         }
     }
 
-    if (tech == ptFFF) {
-        const auto opt = config->option<ConfigOptionEnum<PrintHostType>>("host_type");
-        const auto host_type = opt != nullptr ? opt->value : htOctoPrint;
-
-        switch (host_type) {
-            case htOctoPrint: return new OctoPrint(config);
-            case htDuet:      return new Duet(config);
-            case htUltiMaker: return new UltiMaker(config);
-            case htFlashAir:  return new FlashAir(config);
-            case htAstroBox:  return new AstroBox(config);
-            case htRepetier:  return new Repetier(config);
-            case htPrusaLink: return new PrusaLink(config);
-            case htPrusaConnect: return new PrusaConnect(config);
-            case htMKS:       return new MKS(config);
-            case htESP3D:       return new ESP3D(config);
-            case htCrealityPrint:    return new CrealityPrint(config);
-            case htObico:     return new Obico(config);
-            case htFlashforge: return new Flashforge(config);
-            case htSimplyPrint: return new SimplyPrint(config);
-            case htElegooLink: return new ElegooLink(config);
-            case ht3DPrinterOS: return new C3DPrinterOS(config);
-            case htMoonraker: return new Moonraker(config);
-            default:          return nullptr;
-        }
-    } else {
-        return new SL1Host(config);
-    }
+    // ANANAS SLICER: Moonraker is the only print host, and there is no SLA host.
+    return tech == ptFFF ? new Moonraker(config) : nullptr;
 }
 
 std::string PrintHost::get_print_host_webui(DynamicPrintConfig* config)
@@ -90,25 +52,11 @@ std::string PrintHost::get_print_host_webui(DynamicPrintConfig* config)
     if (config == nullptr)
         return {};
 
-    std::string webui_url;
-    const auto* host_type_opt = config->option<ConfigOptionEnum<PrintHostType>>("host_type");
-    const auto  host_type     = host_type_opt != nullptr ? host_type_opt->value : htOctoPrint;
-
-    switch (host_type) {
-    case htElegooLink: {
-        webui_url = ElegooLink::get_print_host_webui(config);
-        break;
-    }
-    default: break;
-    }
-
-    if (webui_url.empty()) {
-        webui_url = config->opt_string("print_host_webui");
-        if (webui_url.empty())
-            webui_url = config->opt_string("print_host");
-        if (webui_url.empty())
-            return webui_url;
-    }
+    std::string webui_url = config->opt_string("print_host_webui");
+    if (webui_url.empty())
+        webui_url = config->opt_string("print_host");
+    if (webui_url.empty())
+        return webui_url;
 
     const bool has_http_scheme = boost::algorithm::istarts_with(webui_url, "http");
     const bool has_file_scheme = boost::algorithm::istarts_with(webui_url, "file:");

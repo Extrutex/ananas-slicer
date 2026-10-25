@@ -20,9 +20,8 @@ struct WipeTowerFootprint
     double brim_width = 0.; // printed width: auto (-1) resolved by height, laid in whole loops
 };
 
-// Which planner builds the tower: Bambu Lab printers always get Type1, the rest follow
-// wipe_tower_type. The rule Print::wipe_tower_type() and the CLI apply, read off the config so
-// the GUI and CLI placement can resolve it without a Print.
+// Which planner builds the tower: wipe_tower_type, read off the config so the GUI and CLI
+// placement can resolve it without a Print. Print::wipe_tower_type() applies the same rule.
 WipeTowerType resolve_wipe_tower_type(const ConfigBase &config);
 
 // First-layer outline of an estimated tower in tower-local scaled coordinates, brim excluded:

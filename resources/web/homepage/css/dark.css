@@ -1,30 +1,30 @@
 body
 {
-	background-color:#242428;
+	background-color:#0B0E11;
 }
 
 *
 {
-	border-color: #3E3E45;
+	border-color: #141A1F;
 }
 
 
 .TextS1
 {
-	color:#efeff0;
+	color:#D8E0E6;
 }
 
 .TextS2
 {
-	color:#B3B3B5;
+	color:#B4C0C9;
 }
 
 .ZScrol::-webkit-scrollbar-thumb {/*滚动条里面小方块*/
-    background-color: #939594;
+    background-color: #8B99A4;
 }
 
 .ZScrol::-webkit-scrollbar-track {/*滚动条里面轨道*/
-        background: #161817;
+        background: #07090B;
 }
 
 
@@ -33,12 +33,12 @@ body
 /*----Left Menu Button----*/
 .BtnItem
 {
-	color:#B3B3B5;
+	color:#B4C0C9;
 }
 
 .BtnItem:hover
 {
-	color: #efeff0;
+	color: #D8E0E6;
 	background-color: var(--row-hover);
 }
 
@@ -49,7 +49,7 @@ body
 
 .BtnItemSelected
 {
-	color: #efeff0;
+	color: #D8E0E6;
 	background-color: var(--row-hover);
 }
 
@@ -61,91 +61,51 @@ body
 /*-----Right Top MenuBtn-----*/
 .MenuItem:hover
 {
-	border-color: #00675b;
-	background-color: #223C3C;
+	border-color: #EEF3F6;
+	background-color: #222A31;
 }
 
 .FileImg
 {
-	background-color: #36363C; /*ORCA use darker color for dark theme for thumbnails*/
+	background-color: #141A1F; /*ORCA use darker color for dark theme for thumbnails*/
 }
 
 #recnet_context_menu
 {
-	color: #efeff0;
-	background-color:#242428;
+	color: #D8E0E6;
+	background-color:#0B0E11;
 	border: 0px;
 	box-shadow: 0px 0px 3px #DCDCDC;
 }
 
 .CT_Item:hover
 {
-	background-color:#00675b; /*ORCA color*/
+	background-color:#222A31; /*ORCA color*/
 }
 
 /*----User Manual------*/
 .UG_DESC
 {
-	color:#818183;
-}
-
-/*---Staff PIck----*/
-#HotModel_Swiper
-{
-	
-}
-
-.HotModel_NameText
-{
-	height: 32px;
-}
-
-.HotModelPiece
-{
-	border: 1px solid #4C4C55;
-	box-shadow: 0px 2px 12px rgba(0, 0, 0, 0.04);
-	background-color: #4C4C55;
-}
-
-#HotModel_RIGHT_Title
-{
-	color: #818183;
-}
-
-.swiper
-{
-    --swiper-navigation-color: #EFEFF0;/* 单独设置按钮颜色 */
-}
-
-.swiper-button-prev
-{
-	background: rgba(54, 54, 60, 0.88);
-    border: 1px solid rgba(129, 129, 131, 0.64);
-}
-
-.swiper-button-next
-{
-	background: rgba(54, 54, 60, 0.88);
-    border: 1px solid rgba(129, 129, 131, 0.64);
+	color:#5C6B77;
 }
 
 /*--- Account rows and account menu ---*/
 :root
 {
-	--row-hover            : #223C3C;
-	--warn-color           : #F07E4A;
-	--account-avatar-bg    : #3A3A40;
-	--account-avatar-glyph : #7E8785;
-	--account-surface      : #36363B;
-	--account-name         : #EFEFF0;
-	--account-meta         : #949494;
-	--account-border       : #4A4A51;
-	--account-divider      : #3A3A42;
-	--account-action       : #26A69A;
-	--account-danger       : #FF6A6A;
+	--row-hover            : #222A31;
+	--warn-color           : #FFC56A;
+	--account-avatar-bg    : #1A2127;
+	--account-avatar-glyph : #8B99A4;
+	--account-surface      : #141A1F;
+	--account-name         : #D8E0E6;
+	--account-meta         : #8B99A4;
+	--account-border       : #5C6B77;
+	--account-divider      : #1A2127;
+	--account-action       : #D8E0E6;
+	--account-danger       : #FF6F5E;
 	--account-danger-bg    : rgba(225, 71, 71, 0.16);
 	--account-warn-bg      : rgba(240, 126, 74, 0.16);  /*----var(--warn-color) at 16%----*/
-	--account-dot-off      : #5A5A62;
-	--account-dot-on       : #4CAF50;
+	--account-dot-off      : #3D4953;
+	--account-dot-on       : #74F0A7;
 	--account-menu-shadow  : 0 10px 28px rgba(0, 0, 0, 0.45);
 }

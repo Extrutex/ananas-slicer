@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" width="800" height="400" role="img" aria-label="Velocity over time for one printing move: the trapezoid printer.cfg allows versus the faster one the G-code requested with M204, with the segment above max_velocity hatched.">
+  <title>Velocity over time for one printing move: the trapezoid printer.cfg allows (10 000 mm/s², 200 mm/s) against the one the G-code requested with M204 S20000, which Klipper executes above the limit.</title>
+  <defs>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#ff6f5e" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- ground + inner frame -->
+  <rect x="0" y="0" width="800" height="400" fill="#0b0e11"/>
+  <rect x="0.5" y="0.5" width="799" height="399" fill="none" stroke="#262f37" stroke-width="1"/>
+
+  <!-- title block -->
+  <text x="40" y="44" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="18" font-weight="600" letter-spacing="2" fill="#eef3f6">THE LAST GATE</text>
+  <text x="40" y="66" xml:space="preserve" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="13" fill="#8b99a4">max_accel: 10000   square_corner_velocity: 5.0</text>
+
+  <!-- grid: 20 ms per 100 px, 50 mm/s per 40 px -->
+  <path d="M100 90V330M200 90V330M300 90V330M400 90V330M500 90V330M600 90V330M700 90V330M100 90H700M100 130H700M100 170H700M100 210H700M100 250H700M100 290H700M100 330H700" fill="none" stroke="#262f37" stroke-width="1" shape-rendering="crispEdges"/>
+  <!-- axes -->
+  <path d="M100 90V330H700" fill="none" stroke="#3d4953" stroke-width="1.5"/>
+
+  <!-- tick labels -->
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="11" fill="#8b99a4">
+    <g text-anchor="end">
+      <text x="92" y="334">0</text>
+      <text x="92" y="294">50</text>
+      <text x="92" y="254">100</text>
+      <text x="92" y="214">150</text>
+      <text x="92" y="174">200</text>
+      <text x="92" y="134">250</text>
+      <text x="92" y="94">300</text>
+    </g>
+    <g text-anchor="middle">
+      <text x="100" y="348">0</text>
+      <text x="200" y="348">20</text>
+      <text x="300" y="348">40</text>
+      <text x="400" y="348">60</text>
+      <text x="500" y="348">80</text>
+      <text x="600" y="348">100</text>
+      <text x="700" y="348">120</text>
+    </g>
+  </g>
+  <!-- axis titles -->
+  <text transform="translate(56 210) rotate(-90)" text-anchor="middle" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#8b99a4">velocity (mm/s)</text>
+  <text x="694" y="322" text-anchor="end" font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12" fill="#8b99a4">time (ms)</text>
+
+  <!-- over-limit area: trace 2 above max_velocity (t = 10 .. 66.5 ms) -->
+  <polygon points="150,170 162.5,130 420,130 432.5,170" fill="url(#hatch)" stroke="none"/>
+
+  <!-- trace 1: what printer.cfg allows (0..200 mm/s in 20 ms, cruise 60 ms, 16 mm) -->
+  <polyline points="100,330 200,170 500,170 600,330" fill="none" stroke="#d8e0e6" stroke-width="2.5" stroke-linejoin="round"/>
+  <!-- max_velocity limit line -->
+  <line x1="100" y1="170" x2="700" y2="170" stroke="#ffc56a" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <!-- trace 2: what the G-code requested (0..250 mm/s in 12.5 ms, cruise 51.5 ms, 16 mm) -->
+  <polyline points="100,330 162.5,130 420,130 482.5,330" fill="none" stroke="#4db9ff" stroke-width="2.5" stroke-linejoin="round"/>
+
+  <!-- labels -->
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="12">
+    <text x="170" y="118" fill="#4db9ff">M204 S20000 from the G-code</text>
+    <text x="136" y="304" fill="#b4c0c9">10 000 mm/s² (printer.cfg)</text>
+    <rect x="200" y="141" width="182" height="18" fill="#0b0e11"/>
+    <text x="291" y="154" text-anchor="middle" fill="#ff6f5e">executed above the limit</text>
+    <text x="694" y="164" text-anchor="end" font-size="11" fill="#ffc56a">max_velocity 200 mm/s (printer.cfg)</text>
+  </g>
+  <g font-family="'IBM Plex Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="11" fill="#8b99a4" text-anchor="end">
+    <text x="694" y="108">Klipper (since 2021-04-30):</text>
+    <text x="694" y="124">SET_VELOCITY_LIMIT and M204</text>
+    <text x="694" y="140">are not clamped to printer.cfg</text>
+  </g>
+
+  <!-- caption -->
+  <g font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="13" fill="#b4c0c9">
+    <text x="40" y="368">Klipper executes the limits the G-code sets, so an over-limit value from the slicer reaches the steppers</text>
+    <text x="40" y="386">unchanged; ANANAS SLICER treats printer.cfg as the envelope every value is checked against.</text>
+  </g>
+</svg>

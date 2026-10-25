@@ -94,7 +94,7 @@
 	"fan_kickstart": "0",
 	"fan_speedup_overhangs": "1",
 	"fan_speedup_time": "0",
-	"host_type": "octoprint",
+	"host_type": "moonraker",
 	"layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
 	"machine_pause_gcode": "PAUSE",
 	"machine_unload_filament_time": "0",

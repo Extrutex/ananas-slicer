@@ -44,7 +44,7 @@
 	"top_surface_speed": "200",
 	"gap_infill_speed": "200",
 	"sparse_infill_speed": "500",
-	"accel_to_decel_enable": "1",
+	"accel_to_decel_enable": "0",
 	"accel_to_decel_factor": "25%",
 	"travel_speed": "1000",
 	"enable_prime_tower": "0",

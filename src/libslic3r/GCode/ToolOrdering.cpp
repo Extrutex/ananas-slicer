@@ -1188,6 +1188,13 @@ void ToolOrdering::collect_extruder_statistics(bool prime_multi_material)
         sort_remove_duplicates(m_all_printing_extruders);
     }
 
+    m_last_layer_per_extruder.clear();
+    for (const LayerTools& lt : m_layer_tools) {
+        for (unsigned int ext : lt.extruders) {
+            m_last_layer_per_extruder[ext] = lt.print_z;
+        }
+    }
+
     if (prime_multi_material && ! m_all_printing_extruders.empty()) {
         // Reorder m_all_printing_extruders in the sequence they will be primed, the last one will be m_first_printing_extruder.
         // Then set m_first_printing_extruder to the 1st extruder primed.
@@ -1709,8 +1716,8 @@ MultiNozzleUtils::LayeredNozzleGroupResult ToolOrdering::get_recommended_filamen
     int              master_extruder_id = print_config.master_extruder_id.value - 1;
     std::vector<int> ret(filament_nums, master_extruder_id);
 
-    // Non-BBL multi-extruder printers do not support filament grouping: filament id == extruder id.
-    if (has_multiple_extruder && !print->is_BBL_printer()) {
+    // Multi-extruder printers do not support filament grouping: filament id == extruder id.
+    if (has_multiple_extruder) {
         for (size_t i = 0; i < filament_nums && i < extruder_nums; i++)
             ret[i] = (int)i;
         auto result_opt = LayeredNozzleGroupResult::create(ret, nozzle_list, used_filaments);
@@ -2994,9 +3001,6 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
                                                     grouping_result.get_nozzle_map());
         }
         std::transform(filament_maps.begin(), filament_maps.end(), filament_maps.begin(), [](int value) { return value - 1; });
-
-        if (m_print->is_BBL_printer())
-        check_filament_printable_after_group(used_filaments, filament_maps, print_config);
     }
     else {
         // by-object: grouping was decided in Print.cpp; just wrap the (0-based) config map.
@@ -3023,7 +3027,7 @@ void ToolOrdering::reorder_extruders_for_minimum_flush_volume(bool reorder_first
     if (!dynamic_reorder) {
         reorder_filaments_for_minimum_flush_volume(
             filament_lists,
-            m_print->is_BBL_printer() ? filament_maps : maps_without_group, // non-bbl printers do not support filament group yet
+            maps_without_group, // filament groups are not supported on Klipper printers yet
             layer_filaments,
             nozzle_flush_mtx,
             get_custom_seq,
@@ -3572,5 +3576,11 @@ int WipingExtrusions::get_support_interface_extruder_overrides(const PrintObject
     return -1;
 }
 
-
+bool ToolOrdering::is_last_extrusion_layer(coordf_t print_z, unsigned int extruder_id) const
+{
+    auto it = m_last_layer_per_extruder.find(extruder_id);
+    if (it == m_last_layer_per_extruder.end())
+        return true;
+    return print_z >= it->second - EPSILON;
+}
 } // namespace Slic3r

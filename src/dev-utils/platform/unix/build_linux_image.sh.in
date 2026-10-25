@@ -108,10 +108,9 @@ bundle_dependency_closure() {
     local target dep dep_real dep_key copied_path
     declare -A seen=()
     # Dependencies are resolved with ldd, which only searches the default
-    # loader path. Deps-built shared libraries (e.g. the FFmpeg stack) are not
-    # installed there and carry no RUNPATH of their own, so once copied into
-    # the bundle ldd can no longer resolve one sibling from another
-    # (libavcodec -> libavutil) and reports it as missing. Extend the loader
+    # loader path. Deps-built shared libraries are not installed there and
+    # carry no RUNPATH of their own, so once copied into the bundle ldd can no
+    # longer resolve one sibling from another and reports it as missing. Extend the loader
     # path with the bundle directory plus the source directories of files
     # already bundled, so every library that was resolved once keeps resolving
     # for its own dependencies. The audit script does the same

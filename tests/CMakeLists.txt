@@ -34,10 +34,7 @@ endif()
 # single-config generators (CMAKE_BUILD_TYPE set) and multi-config generators
 # (Ninja Multi-Config, Visual Studio) where CMAKE_BUILD_TYPE is empty and DLLs
 # must land in every per-config output directory. On Windows the loader finds
-# DLLs in the executable's directory; the Linux branch below does the same for
-# the deps-built FFmpeg libraries and adds an $ORIGIN rpath, since the ELF
-# loader does not search the executable's directory and the CI unit-test runner
-# only receives the tests artifact (no deps install).
+# DLLs in the executable's directory.
 function(orcaslicer_copy_test_dlls)
     if (WIN32)
         set(_configs ${CMAKE_CONFIGURATION_TYPES})
@@ -50,25 +47,6 @@ function(orcaslicer_copy_test_dlls)
             else()
                 orcaslicer_copy_dlls(COPY_DLLS "${_cfg}" "" _unused_dlls)
             endif()
-        endforeach()
-    elseif (UNIX AND NOT APPLE)
-        # Only test executables that link libslic3r_gui pull in the FFmpeg
-        # shared libraries (src/slic3r/CMakeLists.txt links PkgConfig::LIBAV
-        # into it). Copy them next to the executable and give it an $ORIGIN
-        # rpath so the loader finds them when the tests run on the CI unit-test
-        # runner, which only receives this build/tests tree.
-        get_target_property(_linked_libs ${_TEST_NAME}_tests LINK_LIBRARIES)
-        if (NOT "libslic3r_gui" IN_LIST _linked_libs)
-            return()
-        endif()
-
-        set_property(TARGET ${_TEST_NAME}_tests PROPERTY BUILD_RPATH "$ORIGIN")
-        set(_configs ${CMAKE_CONFIGURATION_TYPES})
-        if (NOT _configs)
-            set(_configs "${CMAKE_BUILD_TYPE}")
-        endif()
-        foreach(_cfg IN LISTS _configs)
-            orcaslicer_copy_sos(${_TEST_NAME}_tests "${_cfg}" "" _unused_sos)
         endforeach()
     endif()
 endfunction()
@@ -84,10 +62,14 @@ add_subdirectory(slic3rutils)
 add_subdirectory(fff_print)
 add_subdirectory(sla_print)
 add_subdirectory(filament_group)
+if (TARGET ananas_engine_core)
+    add_subdirectory(engine)
+endif ()
 
-# End-to-end checks of the orca-slicer binary. Linux only: they read result.json, which the CLI
-# writes on Linux only. src/ is added before tests/, so the target is known here.
-if (UNIX AND NOT APPLE AND TARGET OrcaSlicer)
+# End-to-end checks of the orca-slicer binary. Most read result.json, which the CLI writes on Linux
+# only; tests/cli/CMakeLists.txt registers those on Linux alone. src/ is added before tests/, so the
+# target is known here.
+if (UNIX AND TARGET OrcaSlicer)
     add_subdirectory(cli)
 endif ()
 

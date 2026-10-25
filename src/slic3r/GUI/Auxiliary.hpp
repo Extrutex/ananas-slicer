@@ -34,26 +34,26 @@
 #include <wx/spinctrl.h>
 #include <wx/artprov.h>
 #include <wx/webrequest.h>
+#include <wx/wrapsizer.h>
 #include <map>
 #include <vector>
 #include <memory>
 #include "Event.hpp"
 #include "libslic3r/ProjectTask.hpp"
 #include "wxExtensions.hpp"
-#include "slic3r/GUI/DeviceManager.hpp"
-#include "slic3r/GUI/MonitorBasePanel.h"
-#include "slic3r/GUI/StatusPanel.hpp"
-#include "slic3r/GUI/UpgradePanel.hpp"
-#include "slic3r/GUI/AmsWidgets.hpp"
-#include "Widgets/SideTools.hpp"
+#include "nlohmann/json.hpp"
+#include "slic3r/Utils/json_diff.hpp"
+#include "Widgets/Button.hpp"
+#include "Widgets/ComboBox.hpp"
+#include "Widgets/TextInput.hpp"
 #include "StagedBuild.hpp"
 
 #define AUFILE_GREY700 wxColour(107, 107, 107)
 #define AUFILE_GREY500 wxColour(158, 158, 158)
 #define AUFILE_GREY300 wxColour(238, 238, 238)
 #define AUFILE_GREY200 wxColour(248, 248, 248)
-#define AUFILE_BRAND wxColour(0, 150, 136)
-#define AUFILE_BRAND_TRANSPARENT wxColour("#E5F0EE") // ORCA color with %10 opacity
+#define AUFILE_BRAND wxColour(61, 73, 83)
+#define AUFILE_BRAND_TRANSPARENT wxColour("#E6EBEF") // ORCA color with %10 opacity
 //#define AUFILE_PICTURES_SIZE wxSize(FromDIP(300), FromDIP(300))
 //#define AUFILE_PICTURES_PANEL_SIZE wxSize(FromDIP(300), FromDIP(340))
 #define AUFILE_PICTURES_SIZE wxSize(FromDIP(168), FromDIP(168))
@@ -161,7 +161,6 @@ public:
     wxScrolledWindow *  m_scrolledWindow{nullptr};
     wxWrapSizer *       m_gsizer_content{nullptr};
     //AuFile *            m_button_add{nullptr};
-    Button *            m_button_del{nullptr};
     AuFile *            m_big_button_add{ nullptr };
     AuFilesHash         m_aufiles_list;
 
@@ -208,11 +207,6 @@ private:
     DesignerPanel * m_designer_panel= {nullptr};
 
     /* images */
-    wxBitmap  m_signal_strong_img;
-    wxBitmap  m_signal_middle_img;
-    wxBitmap  m_signal_weak_img;
-    wxBitmap  m_signal_no_img;
-    wxBitmap  m_printer_img;
     wxBitmap  m_arrow_img;
     wxWindow *create_side_tools();
 

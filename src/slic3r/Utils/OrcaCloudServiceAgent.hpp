@@ -238,42 +238,16 @@ public:
     int modify_printer_name(std::string dev_id, std::string dev_name) override;
 
     // ========================================================================
-    // ICloudServiceAgent Interface Implementation - Model Mall & Publishing
+    // ICloudServiceAgent Interface Implementation - Camera, Tasks & Profile
     // ========================================================================
     int get_camera_url(std::string dev_id, std::function<void(std::string)> callback) override;
-    int get_design_staffpick(int offset, int limit, std::function<void(std::string)> callback) override;
-    int start_publish(PublishParams params, OnUpdateStatusFn update_fn, WasCancelledFn cancel_fn, std::string* out) override;
-    int get_model_publish_url(std::string* url) override;
     int get_subtask(BBLModelTask* task, OnGetSubTaskFn getsub_fn) override;
-    int get_model_mall_home_url(std::string* url) override;
-    int get_model_mall_detail_url(std::string* url, std::string id) override;
     int get_my_profile(std::string token, unsigned int* http_code, std::string* http_body) override;
     int get_my_token(std::string ticket, unsigned int* http_code, std::string* http_body) override;
 
     // ========================================================================
-    // ICloudServiceAgent Interface Implementation - Analytics & Tracking
-    // ========================================================================
-    int track_enable(bool enable) override;
-    int track_remove_files() override;
-    int track_event(std::string evt_key, std::string content) override;
-    int track_header(std::string header) override;
-    int track_update_property(std::string name, std::string value, std::string type = "string") override;
-    int track_get_property(std::string name, std::string& value, std::string type = "string") override;
-    bool get_track_enable() override;
-
-    // ========================================================================
-    // ICloudServiceAgent Interface Implementation - Ratings & Reviews
-    // ========================================================================
-    int put_model_mall_rating(int design_id, int score, std::string content, std::vector<std::string> images, unsigned int& http_code, std::string& http_error) override;
-    int get_oss_config(std::string& config, std::string country_code, unsigned int& http_code, std::string& http_error) override;
-    int put_rating_picture_oss(std::string& config, std::string& pic_oss_path, std::string model_id, int profile_id, unsigned int& http_code, std::string& http_error) override;
-    int get_model_mall_rating_result(int job_id, std::string& rating_result, unsigned int& http_code, std::string& http_error) override;
-
-    // ========================================================================
     // ICloudServiceAgent Interface Implementation - Extra Features
     // ========================================================================
-    int get_mw_user_preference(std::function<void(std::string)> callback) override;
-    int get_mw_user_4ulist(int seed, int limit, std::function<void(std::string)> callback) override;
     std::string get_version() override;
 
     // ========================================================================
@@ -424,7 +398,6 @@ private:
 
     // Member variables - connection state
     bool is_connected{false};
-    bool enable_track{false};
     bool multi_machine_enabled{false};
 
     // Sync state

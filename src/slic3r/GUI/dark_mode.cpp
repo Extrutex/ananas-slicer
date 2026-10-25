@@ -71,37 +71,37 @@ namespace NppDarkMode
 
 	COLORREF GetBackgroundColor()
 	{
-		return IsEnabled() ? RGB(0x2B, 0x2B, 0x2B) : wxSystemSettings::GetColour(wxSYS_COLOUR_MENUBAR).GetRGB();
+		return IsEnabled() ? RGB(0x0F, 0x13, 0x17) /* carbon-850 */ : wxSystemSettings::GetColour(wxSYS_COLOUR_MENUBAR).GetRGB();
 	}
 
 	COLORREF GetSofterBackgroundColor()
 	{
-		return IsEnabled() ? RGB(0x40, 0x40, 0x40) : RGB(0xD9, 0xD9, 0xD9); //RGB(0x78, 0x78, 0x78);
+		return IsEnabled() ? RGB(0x22, 0x2A, 0x31) /* carbon-700 */ : RGB(0xD9, 0xD9, 0xD9); //RGB(0x78, 0x78, 0x78);
 	}
 
 	COLORREF GetTextColor()
 	{
-		return IsEnabled() ? RGB(0xF0, 0xF0, 0xF0) : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT).GetRGB();
+		return IsEnabled() ? RGB(0xD8, 0xE0, 0xE6) /* alu-100 */ : wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT).GetRGB();
 	}
 
 	COLORREF GetHotTextColor()
 	{
-		return IsEnabled() ? RGB(0xFF, 0xFF, 0xFF) : wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVEBORDER).GetRGB();
+		return IsEnabled() ? RGB(0xEE, 0xF3, 0xF6) /* alu-50 */ : wxSystemSettings::GetColour(wxSYS_COLOUR_ACTIVEBORDER).GetRGB();
 	}
 
 	COLORREF GetSofterTextColor()
 	{
-		return IsEnabled() ? RGB(0xF0, 0xF0, 0xF0) : RGB(0x64, 0x64, 0x64);
+		return IsEnabled() ? RGB(0xB4, 0xC0, 0xC9) /* alu-200 */ : RGB(0x64, 0x64, 0x64);
 	}
 
 	COLORREF GetDarkerTextColor()
 	{
-		return RGB(0xC0, 0xC0, 0xC0);
+		return RGB(0x8B, 0x99, 0xA4); // alu-300
 	}
 
 	COLORREF GetEdgeColor()
 	{
-		return RGB(0x80, 0x80, 0x80);
+		return RGB(0x5C, 0x6B, 0x77); // steel-400
 	}
 
 	HBRUSH GetBackgroundBrush()

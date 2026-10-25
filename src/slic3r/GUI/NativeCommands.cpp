@@ -1,4 +1,5 @@
 #include "NativeCommands.hpp"
+#include "libslic3r_version.h"
 
 #include "calib_dlg.hpp"
 #include "Camera.hpp"
@@ -17,7 +18,6 @@
 #include "Plater.hpp"
 #include "PluginsDialog.hpp"
 #include "PlateSettingsDialog.hpp"
-#include "DeviceCore/DevManager.h"
 
 #include <libslic3r/Model.hpp>
 #include <libslic3r/Utils.hpp>
@@ -491,14 +491,12 @@ std::vector<NativeCommand> build_command_catalog()
     });
 
     // ---- Printer / device connection ----
-    add_with_icon("sync_ams", _u8L("Synchronize Filament List from AMS"), _u8L("Printer"), "ams_fila_sync", [](const std::string&) {
-        Plater* plater     = wxGetApp().plater();
-        DeviceManager* dev = wxGetApp().getDeviceManager();
-        if (dev && dev->get_selected_machine() && plater) {
+    add_with_icon("sync_ams", _u8L("Synchronize Filament List from the Printer"), _u8L("Printer"), "ams_fila_sync", [](const std::string&) {
+        if (Plater* plater = wxGetApp().plater()) {
             plater->sidebar().sync_ams_list();
             return AppActionRunResult{AppActionRunResult::Level::Success};
         }
-        return AppActionRunResult{AppActionRunResult::Level::Info, _L("Connect a printer to synchronize the AMS filament list.")};
+        return AppActionRunResult{AppActionRunResult::Level::Info, _L("Open a project to synchronize the filament list.")};
     });
 
     // ---- Presets / cloud ----
@@ -596,7 +594,7 @@ std::vector<NativeCommand> build_command_catalog()
         wxGetApp().check_new_version_sf(true, 1);
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });
-    add_with_icon("help_about", _u8L("About OrcaSlicer"), _u8L("Help"), "OrcaSlicer_gradient_circle", [](const std::string&) {
+    add_with_icon("help_about", _u8L("About") + " " SLIC3R_APP_NAME, _u8L("Help"), "AnanasSlicer_symbol_dark", [](const std::string&) {
         Slic3r::GUI::about();
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });

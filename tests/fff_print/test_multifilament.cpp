@@ -2,6 +2,7 @@
 
 #include "libslic3r/GCode/GCodeProcessor.hpp"
 #include "libslic3r/GCodeReader.hpp"
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "test_helpers.hpp"
 #include "test_utils.hpp"
@@ -68,18 +69,42 @@ static std::vector<double> wait_park_xs(const std::string& gcode)
 // Estimated print time at each 1-based line of an exported G-code file, from a second
 // GCodeProcessor pass over it. MoveVertex::time is the duration of one move and gcode_id is the
 // line it came from (already rebased past the M73 insertions), so the running sum before the first
-// move of a line is the elapsed time at that line. The file carries its own config footer, so
-// process_file configures the processor -- including the shared s_IsBBLPrinter static that other
-// tests in this binary mutate -- from the settings the export itself used.
-static std::vector<double> elapsed_time_by_line(const std::string& gcode)
+// move of a line is the elapsed time at that line.
+//
+// The pass is configured from the export's own config footer -- including the shared
+// s_IsBBLPrinter static that other tests in this binary mutate -- but with `flavor` forced, and it
+// is fed the way GCode::do_export feeds the slicing-time processor (apply_config, then
+// process_buffer). It cannot go through process_file: that loads the footer through
+// handle_legacy(), which maps every stored flavor to "klipper", so a slice pinned to another
+// flavor would be re-estimated under Klipper's junction model and its "lead" would no longer
+// measure what the slice's own "time:" did.
+static std::vector<double> elapsed_time_by_line(const std::string& gcode, GCodeFlavor flavor)
 {
-    ScopedTemporaryFile temp_gcode(".gcode");
+    DynamicPrintConfig footer;
+    footer.apply(FullPrintConfig::defaults());
     {
-        std::ofstream os(temp_gcode.string());
-        os << gcode;
+        ScopedTemporaryFile temp_gcode(".gcode");
+        {
+            std::ofstream os(temp_gcode.string());
+            REQUIRE(os.good());
+            os << gcode;
+            REQUIRE(os.good());
+        }
+        footer.load_from_gcode_file(temp_gcode.string(), ForwardCompatibilitySubstitutionRule::EnableSilent);
     }
+    footer.set_key_value("gcode_flavor", new ConfigOptionEnum<GCodeFlavor>(flavor));
+    PrintConfig print_config;
+    print_config.apply(footer, true);
+
+    const auto* printer_model = footer.opt<ConfigOptionString>("printer_model");
+    GCodeProcessor::s_IsBBLPrinter = printer_model != nullptr && boost::starts_with(printer_model->value, "Bambu Lab");
+
     GCodeProcessor processor;
-    processor.process_file(temp_gcode.string());
+    processor.reset();
+    processor.initialize_result_moves();
+    processor.apply_config(print_config);
+    processor.process_buffer(gcode);
+    processor.finalize(false);
 
     constexpr size_t    NORMAL  = size_t(PrintEstimatedStatistics::ETimeMode::Normal);
     const size_t        n_lines = size_t(std::count(gcode.begin(), gcode.end(), '\n')) + 2;
@@ -105,7 +130,8 @@ static std::vector<double> elapsed_time_by_line(const std::string& gcode)
 // the active tool (the first-layer-to-other-layers bump) or one inside a block, the distance to the
 // next Tn is a layer time or a handful of moves and says nothing about preheat_time. Everything
 // else is dropped, so the trace does not move when travel, tower geometry or line numbering do.
-static std::vector<std::string> temperature_trace(const std::string& gcode)
+// `flavor` is the one `gcode` was sliced with; the lead is estimated under it.
+static std::vector<std::string> temperature_trace(const std::string& gcode, GCodeFlavor flavor)
 {
     std::vector<std::string> lines;
     std::istringstream       stream(gcode);
@@ -115,7 +141,7 @@ static std::vector<std::string> temperature_trace(const std::string& gcode)
             line.pop_back();
         lines.emplace_back(std::move(line));
     }
-    const std::vector<double> elapsed = elapsed_time_by_line(gcode);
+    const std::vector<double> elapsed = elapsed_time_by_line(gcode, flavor);
 
     const auto is_tool = [](const std::string& l) { return l.size() >= 2 && l[0] == 'T' && std::isdigit((unsigned char) l[1]); };
     const auto is_temp = [](const std::string& l) { return l.rfind("M104", 0) == 0 || l.rfind("M109", 0) == 0; };
@@ -301,6 +327,79 @@ TEST_CASE("Per-object wall filament override is honored", "[MultiFilament]")
         { {}, { { "outer_wall_filament_id", 2 }, { "inner_wall_filament_id", 2 } } });
     CHECK(tools_for_role(gcode, "perimeter") == std::set<int>{ 0, 1 });
     CHECK(tools_for_role(gcode, "infill")    == std::set<int>{ 0 }); // infill not overridden: stays on F1
+}
+
+// FanMover's guard against splitting a G1 inside custom gcode keys off the ";_FAN_MOVER_SKIP_START/END"
+// markers GCode::set_extruder() must emit around change_filament_gcode's output. Direct
+// toolchanges and Type2's wipe-tower toolchange (append_tcr2() calls set_extruder()) both go
+// through it; Type1's wipe-tower toolchange (WipeTowerIntegration::append_tcr(), append_tcr2's only
+// sibling caller of change_filament_gcode) needs the same bracketing of its own.
+TEST_CASE("Toolchange gcode is bracketed against FanMover splitting its moves", "[MultiFilament]")
+{
+    const std::string custom_gcode = "; fan full\nM106 P1 S255\nM400 S3\nG1 X77 F5000\nG1 X91 F3000\n";
+
+    // "direct": no prime tower, GCode::set_extruder() runs the toolchange. By-object sequencing
+    // with a per-object filament override is what makes one happen at all without a tower.
+    // "type1": a Type1 prime tower routes the toolchange through WipeTowerIntegration::append_tcr()
+    // instead (append_tcr2, Type2's equivalent, itself calls set_extruder() - so Type2 needs no
+    // separate case here).
+    const std::string path = GENERATE(as<std::string>{}, "direct", "type1");
+    CAPTURE(path);
+
+    std::string gcode_str;
+    if (path == "direct") {
+        const std::vector<std::vector<Slic3r::ConfigBase::SetDeserializeItem>> per_object_overrides = {
+            {}, { { "outer_wall_filament_id", "2" }, { "inner_wall_filament_id", "2" } }
+        };
+        DynamicPrintConfig config = multifilament_config(2, {
+            { "skirt_loops",           0 },
+            { "brim_type",             "no_brim" },
+            { "print_sequence",        "by object" },
+            { "change_filament_gcode", custom_gcode },
+            { "fan_speedup_time",      0.5 },
+            { "fan_kickstart",         0.1 },
+        });
+        gcode_str = slice_with_object_overrides({ cube(20), cube(20) }, config, per_object_overrides);
+    } else {
+        const std::vector<std::vector<Slic3r::ConfigBase::SetDeserializeItem>> per_object_overrides = {
+            { { "extruder", "1" } }, { { "extruder", "2" } }
+        };
+        DynamicPrintConfig config = multifilament_config(2, {
+            { "change_filament_gcode", custom_gcode },
+            { "fan_speedup_time",      0.5 },
+            { "fan_kickstart",         0.1 },
+            { "enable_prime_tower",    true },
+            { "wipe_tower_type",       "type1" },
+            { "prime_tower_width",     35 },
+            { "wipe_tower_x",          120 },
+            { "wipe_tower_y",          120 },
+            { "printable_area",        "0x0,200x0,200x200,0x200" },
+            { "skirt_loops",           0 },
+            { "brim_type",             "no_brim" },
+        });
+        gcode_str = slice_with_object_overrides({ cube(20), cube(20) }, config, per_object_overrides);
+    }
+
+    // The resolved-settings config footer echoes "change_filament_gcode = ..." with its value
+    // escaped, so drop it before counting or its own copy of "G1 X77 F5000" is miscounted.
+    const size_t footer_start = gcode_str.find("; CONFIG_BLOCK_START");
+    REQUIRE(footer_start != std::string::npos);
+    gcode_str.erase(footer_start);
+
+    auto count_occurrences = [](const std::string &haystack, const std::string &needle) {
+        size_t count = 0, pos = 0;
+        while ((pos = haystack.find(needle, pos)) != std::string::npos) {
+            ++count;
+            pos += needle.size();
+        }
+        return count;
+    };
+    const size_t total_waypoints = count_occurrences(gcode_str, "G1 X77 F5000");
+    const size_t bracketed       = count_occurrences(gcode_str, "M400 S3\nG1 X77 F5000");
+    REQUIRE(total_waypoints > 0);
+    CHECK(bracketed == total_waypoints);
+    // FanMover drops its own markers; only the start-of-print toolchange, which it never processes, keeps them.
+    CHECK(count_occurrences(gcode_str, ";_FAN_MOVER_SKIP_START") <= 1);
 }
 
 // With wait_for_temp_on_wipe_tower the blocking M109 moves from right after the Tn command to
@@ -600,9 +699,7 @@ TEST_CASE("Toolchange temperature commands are unchanged when the wipe tower wai
 {
     // 20x20x5 cubes at the default 0.2mm layer height are 25 layers, one filament each, so there is
     // a toolchange -- and a preheat ahead of it -- on every layer.
-    const std::string gcode = slice_with_object_overrides(
-        { make_cube(20., 20., 5.), make_cube(20., 20., 5.) },
-        multifilament_config(2, {
+    DynamicPrintConfig config = multifilament_config(2, {
             { "nozzle_diameter",                        "0.4,0.4" },
             { "printer_extruder_id",                    "1,2" },
             { "printer_extruder_variant",               "Direct Drive Standard,Direct Drive Standard" },
@@ -631,11 +728,21 @@ TEST_CASE("Toolchange temperature commands are unchanged when the wipe tower wai
             { "nozzle_temperature_initial_layer",       "215,215" },
             { "nozzle_temperature",                     "240,240" },
             { "wait_for_temp_on_wipe_tower",            0 },
-        }),
+        });
+    // The golden trace was captured under main's default flavor, legacy Marlin. The G-code
+    // generator writes Klipper whatever the flavor says, but the time estimator still models the
+    // configured flavor, so pin the one the golden's leads were estimated with. Set as an enum:
+    // handle_legacy() maps the "marlin" string to "klipper".
+    config.set_key_value("gcode_flavor", new ConfigOptionEnum<GCodeFlavor>(gcfMarlinLegacy));
+    const std::string gcode = slice_with_object_overrides(
+        { make_cube(20., 20., 5.), make_cube(20., 20., 5.) },
+        config,
         // Object-level, so the used-filament count that gates the prime tower is derived from it.
         { { { "extruder", 1 } }, { { "extruder", 2 } } });
 
-    const std::vector<std::string> trace = temperature_trace(gcode);
+    // The lead is re-estimated under the flavor the slice ran with, not the footer's (see
+    // elapsed_time_by_line).
+    const std::vector<std::string> trace = temperature_trace(gcode, config.opt_enum<GCodeFlavor>("gcode_flavor"));
     REQUIRE(trace.size() > 1);
     CHECK(gcode.find("_WAIT_FOR_TEMP_ON_WIPE_TOWER") == std::string::npos);
 
@@ -670,6 +777,12 @@ TEST_CASE("Toolchange temperature commands are unchanged when the wipe tower wai
                 golden.push_back(std::move(line));
         }
     }
+    // main wrote a start-of-print temperature block ahead of the start G-code. Klipper heats in
+    // PRINT_START, so that block is never written; compare from the priming onwards.
+    const auto priming = std::find_if(golden.begin(), golden.end(),
+        [](const std::string &entry) { return entry.find("; CP PRIMING START") != std::string::npos; });
+    REQUIRE(priming != golden.end());
+    golden.erase(golden.begin(), priming);
     REQUIRE(!golden.empty());
 
     // Reported separately from the golden comparison below: it is a different failure.
@@ -736,7 +849,8 @@ TEST_CASE("Each filament prints with its variant of the extruder's variant strin
             { "filament_extruder_variant",        "Direct Drive Standard;Direct Drive High Flow;Direct Drive Standard" },
             { "filament_self_index",              "1,1,2" },
             { "nozzle_temperature",               "211,239,223" },
-            { "nozzle_temperature_initial_layer", "211,239,223" },
+            // 5 above, so the first-to-second layer change writes the variant's temperature
+            { "nozzle_temperature_initial_layer", "216,244,228" },
             { "sparse_infill_filament_id",        filament },
             { "internal_solid_filament_id",       filament },
             { "top_surface_filament_id",          filament },
@@ -761,8 +875,12 @@ TEST_CASE("Each filament prints with its variant of the extruder's variant strin
             if (s != std::string::npos && std::stoi(line.substr(s + 2)) > 0)
                 temperatures.insert(std::stoi(line.substr(s + 2)));
         }
-        CHECK(temperatures == std::set<int>{ temperature });
-        CHECK(gcode.find("; start temperature " + std::to_string(temperature) + "\n") != std::string::npos);
+        // Only the filament's variant temperatures: its first layer one where a tool change on the
+        // first layer heats it, and the other layers' one from the second layer on.
+        CHECK(temperatures.count(temperature) == 1);
+        for (const int t : temperatures)
+            CHECK((t == temperature || t == temperature + 5));
+        CHECK(gcode.find("; start temperature " + std::to_string(temperature + 5) + "\n") != std::string::npos);
         // The config the slice ran with holds one value per filament, as the readers that index
         // it by filament (the wipe tower, the filament compatibility check) expect.
         CHECK(gcode.find("; nozzle_temperature = " + resolved + "\n") != std::string::npos);
@@ -892,4 +1010,77 @@ TEST_CASE("Each filament sets the pressure advance of its extruder variant on a 
         CHECK(pressure_advance_values(gcode) == expected);
         CHECK(gcode.find("; start pressure advance " + pressure_advance + "\n") != std::string::npos);
     }
+}
+
+TEST_CASE("Unused extruder turns off after its final layer on multi-object print", "[MultiFilament]")
+{
+    const std::string gcode = slice_with_object_overrides(
+        { make_cube(20., 20., 10.), make_cube(20., 20., 4.) },
+        multifilament_config(2, {
+            { "single_extruder_multi_material", 0 },
+            { "ooze_prevention",                1 },
+            { "standby_temperature_delta",      -40 },
+            { "nozzle_temperature",             "240,240" },
+        }),
+        {
+            { { "extruder", 1 }, { "layer_height", 0.20 } },
+            { { "extruder", 2 }, { "layer_height", 0.15 } }
+        });
+
+    int t1_s0_cooldown_count = 0;
+    int t0_s0_cooldown_count = 0;
+
+    std::istringstream stream(gcode);
+    for (std::string line; std::getline(stream, line);) {
+        if (line.find(";cooldown") != std::string::npos) {
+            if (line.find("M104 S0 T1") != std::string::npos)
+                ++t1_s0_cooldown_count;
+            if (line.find("M104 S0 T0") != std::string::npos)
+                ++t0_s0_cooldown_count;
+        }
+    }
+
+    // T1 (extruder 2, 4mm cube) gets exactly one S0 after its last layer.
+    // T0 (extruder 1, 10mm cube) never gets S0 mid-print.
+    CHECK(t1_s0_cooldown_count == 1);
+    CHECK(t0_s0_cooldown_count == 0);
+}
+
+TEST_CASE("Unused extruder turns off on non-IMEX three-tool print", "[MultiFilament]")
+{
+    const std::string gcode = slice_with_object_overrides(
+        { make_cube(20., 20., 4.), make_cube(20., 20., 10.), make_cube(20., 20., 10.) },
+        multifilament_config(3, {
+            { "single_extruder_multi_material", 0 },
+            { "ooze_prevention",                1 },
+            { "standby_temperature_delta",      -40 },
+            { "nozzle_temperature",             "240,240,240" },
+        }),
+        {
+            { { "extruder", 1 } },
+            { { "extruder", 2 } },
+            { { "extruder", 3 } }
+        });
+
+    bool premature_s0_t1 = false;
+    bool premature_s0_t2 = false;
+    double current_z     = 0.0;
+
+    GCodeReader reader;
+    reader.parse_buffer(gcode, [&](GCodeReader& /*self*/, const GCodeReader::GCodeLine& line) {
+        if (line.has_z())
+            current_z = line.z();
+
+        const std::string raw = line.raw();
+        if (raw.find(";cooldown") != std::string::npos && current_z < 9.0) {
+            if (raw.find("M104 S0 T1") != std::string::npos)
+                premature_s0_t1 = true;
+            if (raw.find("M104 S0 T2") != std::string::npos)
+                premature_s0_t2 = true;
+        }
+    });
+
+    // T1 and T2 print up to 10mm — neither should get S0 before that.
+    CHECK_FALSE(premature_s0_t1);
+    CHECK_FALSE(premature_s0_t2);
 }

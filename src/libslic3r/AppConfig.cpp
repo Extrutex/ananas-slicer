@@ -5,6 +5,7 @@
 //BBS
 #include "Preset.hpp"
 #include "Exception.hpp"
+#include "InstanceLock.hpp"
 #include "LocalesUtils.hpp"
 #include "Thread.hpp"
 #include "format.hpp"
@@ -40,8 +41,11 @@ using namespace nlohmann;
 
 namespace Slic3r {
 
-static const std::string VERSION_CHECK_URL = "https://check-version.orcaslicer.com/latest";
-static const std::string PROFILE_UPDATE_URL = "https://check-version.orcaslicer.com/profile";
+// ANANAS SLICER: no update service yet (PURGE_PLAN D5). Empty URLs disable the app version check and the
+// profile OTA, so ANANAS SLICER never reports to or pulls vendor profiles from the OrcaSlicer servers.
+// "version_check_url" / "orca_updater_url" in AnanasSlicer.conf still override these explicitly.
+static const std::string VERSION_CHECK_URL  = "";
+static const std::string PROFILE_UPDATE_URL = "";
 
 constexpr const char* CONFIG_ORCA_UPDATER_URL = "orca_updater_url";
 
@@ -354,9 +358,6 @@ void AppConfig::set_defaults()
     if (get("show_hints").empty())
         set_bool("show_hints", false);
 //#endif
-    if (get("enable_multi_machine").empty())
-        set_bool("enable_multi_machine", false);
-
     if (get("drc_bits").empty())
         set("drc_bits", DRC_BITS_DEFAULT_STR);
 
@@ -394,7 +395,7 @@ void AppConfig::set_defaults()
 
 #ifdef SUPPORT_DARK_MODE
     if (get("dark_color_mode").empty())
-        set("dark_color_mode", "0");
+        set("dark_color_mode", "1"); // dark is the native theme; light stays available in Preferences
 #endif
 
 //#ifdef SUPPORT_SYS_MENU
@@ -591,10 +592,6 @@ void AppConfig::set_defaults()
         set("recent_models", "0");
     }
 
-    // if (get("staff_pick_switch").empty()) {
-    //     set_bool("staff_pick_switch", false);
-    // }
-
     if (get("sync_system_preset").empty()) {
         set_bool("sync_system_preset", true);
     }
@@ -673,12 +670,6 @@ void AppConfig::set_defaults()
         set_bool("window_buttons_on_left", false);
 #endif
 
-    if (get("use_printer_agents").empty())
-    {
-        // false = legacy behavior using print hosts
-        set_bool("use_printer_agents", false);
-    }
-
     if (get("enable_ota").empty())
     {
         set_bool("enable_ota", false);
@@ -743,9 +734,12 @@ static bool verify_config_file_checksum(boost::nowide::ifstream &ifs)
 
 
 #ifdef USE_JSON_CONFIG
-std::string AppConfig::load()
+std::string AppConfig::load(bool read_only)
 {
     json j;
+
+    // Keep another instance from replacing or restoring the file mid-read.
+    InstanceLock instance_lock(read_only ? std::string() : lock_path());
 
     // 1) Read the complete config file into a boost::property_tree.
     namespace pt = boost::property_tree;
@@ -895,22 +889,7 @@ std::string AppConfig::load()
                     m_printer_settings[j_model["machine"].get<std::string>()] = j_model;
                 }
             } else if (it.key() == "local_machines") {
-                for (auto m = it.value().begin(); m != it.value().end(); ++m) {
-                    const auto&    p = m.value();
-                    BBLocalMachine local_machine;
-                    local_machine.dev_id = m.key();
-                    if (p.contains("dev_name"))
-                        local_machine.dev_name = p["dev_name"].get<std::string>();
-                    if (p.contains("dev_ip"))
-                        local_machine.dev_ip = p["dev_ip"].get<std::string>();
-                    if (p.contains("printer_type"))
-                        local_machine.printer_type = p["printer_type"].get<std::string>();
-                    if (p.contains("printer_agent_id"))
-                        local_machine.printer_agent_id = p["printer_agent_id"].get<std::string>();
-                    if (p.contains("access_code"))
-                        local_machine.access_code = p["access_code"].get<std::string>();
-                    m_local_machines[local_machine.dev_id] = local_machine;
-                }
+                // Bambu LAN printers of earlier versions; nothing reads them any more.
             } else {
                 if (it.value().is_object()) {
                     for (auto iter = it.value().begin(); iter != it.value().end(); iter++) {
@@ -996,7 +975,6 @@ void AppConfig::save()
     // The config is first written to a file with a PID suffix and then moved
     // to avoid race conditions with multiple instances of Slic3r
     const auto path = config_path();
-    std::string path_pid = (boost::format("%1%.%2%") % path % get_current_pid()).str();
 
     json j;
 
@@ -1116,53 +1094,18 @@ void AppConfig::save()
     for (const auto& preset : m_printer_settings) {
         j["orca_presets"].push_back(preset.second);
     }
-    for (const auto& local_machine : m_local_machines) {
-        json m_json;
-        m_json["dev_name"]         = local_machine.second.dev_name;
-        m_json["dev_ip"]           = local_machine.second.dev_ip;
-        m_json["printer_type"]     = local_machine.second.printer_type;
-        m_json["printer_agent_id"] = local_machine.second.printer_agent_id;
-        m_json["access_code"]      = local_machine.second.access_code;
-
-        j["local_machines"][local_machine.first] = m_json;
-    }
-    boost::nowide::ofstream c;
-    c.open(path_pid, std::ios::out | std::ios::trunc);
-    c << j.dump(1, '\t') << std::endl;
-
-#ifdef WIN32
-    // WIN32 specific: The final "rename_file()" call is not safe in case of an application crash, there is no atomic "rename file" API
-    // provided by Windows (sic!). Therefore we save a MD5 checksum to be able to verify file corruption. In addition,
-    // we save the config file into a backup first before moving it to the final destination.
-    c << appconfig_md5_hash_line(j.dump(1, '\t'));
-#endif
-
-    c.close();
-    if (c.fail()) {
-      BOOST_LOG_TRIVIAL(error) << "Failed to write new configuration to " << path_pid << "; aborting attempt to overwrite original configuration";
-      return;
-    }
-
-#ifdef WIN32
-    // Make a backup of the configuration file before copying it to the final destination.
-    std::string error_message;
-    std::string backup_path = (boost::format("%1%.bak") % path).str();
-    // Copy configuration file with PID suffix into the configuration file with "bak" suffix.
-    if (copy_file(path_pid, backup_path, error_message, false) != SUCCESS)
-        BOOST_LOG_TRIVIAL(error) << "Copying from " << path_pid << " to " << backup_path << " failed. Failed to create a backup configuration.";
-#endif
-
-    // Rename the config atomically.
-    // On Windows, the rename is likely NOT atomic, thus it may fail if PrusaSlicer crashes on another thread in the meanwhile.
-    // To cope with that, we already made a backup of the config on Windows.
-    rename_file(path_pid, path);
-    m_dirty = false;
+    const std::string config_str = j.dump(1, '\t');
+    if (write_config_file(path, config_str + "\n", config_str))
+        m_dirty = false;
 }
 
 #else
 
-std::string AppConfig::load()
+std::string AppConfig::load(bool read_only)
 {
+    // Keep another instance from replacing or restoring the file mid-read.
+    InstanceLock instance_lock(read_only ? std::string() : lock_path());
+
     // 1) Read the complete config file into a boost::property_tree.
     namespace pt = boost::property_tree;
     pt::ptree tree;
@@ -1300,7 +1243,6 @@ void AppConfig::save()
     // The config is first written to a file with a PID suffix and then moved
     // to avoid race conditions with multiple instances of Slic3r
     const auto path = config_path();
-    std::string path_pid = (boost::format("%1%.%2%") % path % get_current_pid()).str();
 
     std::stringstream config_ss;
     if (m_mode == EAppMode::Editor)
@@ -1336,38 +1278,38 @@ void AppConfig::save()
     // One empty line before the MD5 sum.
     config_ss << std::endl;
 
-    std::string config_str = config_ss.str();
-    boost::nowide::ofstream c;
-    c.open(path_pid, std::ios::out | std::ios::trunc);
-    c << config_str;
-#ifdef WIN32
-    // WIN32 specific: The final "rename_file()" call is not safe in case of an application crash, there is no atomic "rename file" API
-    // provided by Windows (sic!). Therefore we save a MD5 checksum to be able to verify file corruption. In addition,
-    // we save the config file into a backup first before moving it to the final destination.
-    c << appconfig_md5_hash_line(config_str);
-#endif
-    c.close();
-    if (c.fail()) {
-      BOOST_LOG_TRIVIAL(error) << "Failed to write new configuration to " << path_pid << "; aborting attempt to overwrite original configuration";
-      return;
-    }
-
-#ifdef WIN32
-    // Make a backup of the configuration file before copying it to the final destination.
-    std::string error_message;
-    std::string backup_path = (boost::format("%1%.bak") % path).str();
-    // Copy configuration file with PID suffix into the configuration file with "bak" suffix.
-    if (copy_file(path_pid, backup_path, error_message, false) != SUCCESS)
-        BOOST_LOG_TRIVIAL(error) << "Copying from " << path_pid << " to " << backup_path << " failed. Failed to create a backup configuration.";
-#endif
-
-    // Rename the config atomically.
-    // On Windows, the rename is likely NOT atomic, thus it may fail if PrusaSlicer crashes on another thread in the meanwhile.
-    // To cope with that, we already made a backup of the config on Windows.
-    rename_file(path_pid, path);
-    m_dirty = false;
+    const std::string config_str = config_ss.str();
+    if (write_config_file(path, config_str, config_str))
+        m_dirty = false;
 }
 #endif
+
+bool AppConfig::write_config_file(const std::string &path, std::string body, const std::string &checksum_source)
+{
+    // Everything before this is assembly; only the writes need the other instances kept out.
+    InstanceLock instance_lock(lock_path());
+#ifdef WIN32
+    // WIN32 specific: the final replace is not safe in case of an application crash, there is no atomic "rename file" API
+    // provided by Windows (sic!). Therefore we save a MD5 checksum to be able to verify file corruption. In addition,
+    // we save the config file into a backup first before moving it to the final destination.
+    body += appconfig_md5_hash_line(checksum_source);
+#endif
+    // Not flushed to the device: the idle handler saves on the GUI thread after
+    // any change, and the rename already gives a complete old or new file.
+    if (const std::error_code ec = write_file_atomically(path, body)) {
+        BOOST_LOG_TRIVIAL(error) << "Failed to write the configuration " << path << ": " << ec.message() << "; trying again in 10 s";
+        m_retry_save_at = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        return false;
+    }
+    m_retry_save_at = {};
+#ifdef WIN32
+    // Written after the config, so the backup never holds a state that was not confirmed written.
+    const std::string backup_path = (boost::format("%1%.bak") % path).str();
+    if (const std::error_code ec = write_file_atomically(backup_path, body))
+        BOOST_LOG_TRIVIAL(error) << "Failed to write the backup configuration " << backup_path << ": " << ec.message();
+#endif
+    return true;
+}
 
 bool AppConfig::get_variant(const std::string &vendor, const std::string &model, const std::string &variant) const
 {
@@ -1857,6 +1799,11 @@ void AppConfig::reset_selections()
     }
 }
 
+std::string AppConfig::lock_path()
+{
+    return Slic3r::data_dir().empty() ? std::string() : config_path() + ".lock";
+}
+
 std::string AppConfig::config_path()
 {
 #ifdef USE_JSON_CONFIG
@@ -1893,7 +1840,7 @@ bool AppConfig::exists()
 
 std::string AppConfig::load_if_exists()
 {
-    return boost::filesystem::exists(loading_path()) ? load() : std::string();
+    return boost::filesystem::exists(loading_path()) ? load(/*read_only=*/true) : std::string();
 }
 
 }; // namespace Slic3r

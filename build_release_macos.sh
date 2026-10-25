@@ -60,6 +60,13 @@ while getopts ":dpa:snt:xbc:i:j:Tuh" opt; do
         echo "   -i: Add a prefix to ignore during CMake dependency discovery (repeatable), defaults to /opt/local:/usr/local:/opt/homebrew"
         echo "   -j: Set the number of parallel build jobs (CMAKE_BUILD_PARALLEL_LEVEL)"
         echo "   -T: Build and run tests (set ORCA_TESTS_BUILD_ONLY=1 to build without running)"
+        echo
+        echo "Environment:"
+        echo "   ANANAS_SLICER_OSX_SYSROOT: SDK path or name (e.g. macosx26.5) for deps and slicer configure;"
+        echo "                          default for the slicer is the SDK recorded by the deps build"
+        echo "                          (deps/build/<arch>/OrcaSlicer_dep/ananas-slicer-sdk.txt, then CMakeCache.txt)"
+        echo "   ANANAS_SLICER_BUILD_DIR:   slicer build directory (absolute or relative to the repository),"
+        echo "                          default build/<arch>; not allowed with -a universal or -u"
         exit 0
         ;;
     * )
@@ -137,6 +144,163 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_BUILD_DIR="$PROJECT_DIR/build/$ARCH"
 DEPS_DIR="$PROJECT_DIR/deps"
 
+# ANANAS_SLICER_BUILD_DIR moves the slicer build tree (configure, build, packaged
+# app, tests) away from build/<arch>. The universal step lipos the fixed
+# build/arm64 and build/x86_64 trees, so the override is single-arch only.
+if [ -n "${ANANAS_SLICER_BUILD_DIR:-}" ]; then
+    if [ "$ARCH" = "universal" ] || [ "$BUILD_TARGET" = "universal" ]; then
+        echo "ERROR: ANANAS_SLICER_BUILD_DIR cannot be used for universal builds" >&2
+        exit 1
+    fi
+    case "$ANANAS_SLICER_BUILD_DIR" in
+        /*) ;;
+        *) ANANAS_SLICER_BUILD_DIR="$PROJECT_DIR/$ANANAS_SLICER_BUILD_DIR" ;;
+    esac
+    echo " - ANANAS_SLICER_BUILD_DIR: $ANANAS_SLICER_BUILD_DIR"
+fi
+
+# --- SDK selection -----------------------------------------------------------
+# The slicer must compile against the same SDK as its dependencies: a newer SDK
+# declares APIs (e.g. CGToneMapping) newer than the deployment target, and
+# -Werror=unguarded-availability-new then fails the build. The deps build
+# records its SDK in OrcaSlicer_dep/ananas-slicer-sdk.txt, the directory CI keeps
+# as the deps artifact; the slicer configure reads it from there.
+SDK_RECORD_NAME="ananas-slicer-sdk.txt"
+# Deps artifacts built before the rename to ANANAS SLICER carry the record under this name.
+SDK_RECORD_LEGACY_NAME="klipslice-sdk.txt"
+
+# Prints the absolute, symlink-free path of an SDK. A value containing "/" or
+# ending in ".sdk" is a path (a relative one resolves against the current
+# directory); any other value is an SDK name such as "macosx" or "macosx26.5",
+# resolved with xcrun. Returns 1 when the SDK cannot be located.
+function canonical_sdk_path() {
+    local value="$1"
+    local path
+    case "$value" in
+        */*|*.sdk) path="$value" ;;
+        *) path="$(xcrun --sdk "$value" --show-sdk-path 2>/dev/null)" || return 1 ;;
+    esac
+    if [ -z "$path" ] || [ ! -d "$path" ]; then
+        return 1
+    fi
+    (CDPATH='' cd -- "$path" && pwd -P)
+}
+
+# Prints the value of KEY from a KEY=VALUE file (first match, empty if absent).
+function read_key_value() {
+    awk -v key="$1" 'index($0, key "=") == 1 { print substr($0, length(key) + 2); exit }' "$2"
+}
+
+# Prints the CMAKE_OSX_SYSROOT of a CMake cache (empty if absent).
+function read_cache_sysroot() {
+    awk '/^CMAKE_OSX_SYSROOT:[A-Z]*=/ { sub(/^[^=]*=/, ""); print; exit }' "$1"
+}
+
+# Writes DEPS_BUILD_DIR/OrcaSlicer_dep/ananas-slicer-sdk.txt with the absolute path
+# and version of the SDK the deps were configured with.
+function write_deps_sdk_record() {
+    local deps_build_dir="$1"
+    local record="$deps_build_dir/OrcaSlicer_dep/$SDK_RECORD_NAME"
+    local configured sdk version
+    configured="$(read_cache_sysroot "$deps_build_dir/CMakeCache.txt")"
+    if [ -z "$configured" ]; then
+        # CMake left the sysroot empty, so the compiler used the active SDK.
+        configured="$(xcrun --show-sdk-path)" || {
+            echo "ERROR: xcrun cannot report the active SDK" >&2
+            return 1
+        }
+    fi
+    sdk="$(canonical_sdk_path "$configured")" || {
+        echo "ERROR: cannot locate the SDK the deps were configured with: $configured" >&2
+        return 1
+    }
+    version="$(xcrun --sdk "$sdk" --show-sdk-version 2>/dev/null)" || {
+        echo "ERROR: xcrun cannot report the version of SDK $sdk" >&2
+        return 1
+    }
+    printf 'sdk_path=%s\nsdk_version=%s\n' "$sdk" "$version" > "$record.tmp" || return 1
+    mv -f "$record.tmp" "$record" || return 1
+    echo "Recorded deps SDK $sdk (version $version) in $record"
+}
+
+# Prints the SDK the slicer must be configured with, in this order:
+#   1. ANANAS_SLICER_OSX_SYSROOT (already canonical, see below);
+#   2. the deps SDK record: its path, or when that path does not exist on this
+#      machine, the SDK of the same version under the active developer dir;
+#   3. the CMAKE_OSX_SYSROOT of the deps CMakeCache.txt (path or SDK name).
+# Prints nothing, with a warning, when CMake has to fall back to its default
+# SDK. Returns 1 when the deps cache names an SDK that xcrun cannot resolve.
+function resolve_slicer_sysroot() {
+    local deps_build_dir="$1"
+    local record="$deps_build_dir/OrcaSlicer_dep/$SDK_RECORD_NAME"
+    local cache="$deps_build_dir/CMakeCache.txt"
+    if [ ! -f "$record" ] && [ -f "$deps_build_dir/OrcaSlicer_dep/$SDK_RECORD_LEGACY_NAME" ]; then
+        record="$deps_build_dir/OrcaSlicer_dep/$SDK_RECORD_LEGACY_NAME"
+    fi
+    local value="" version="" sdk=""
+    if [ -n "${ANANAS_SLICER_OSX_SYSROOT:-}" ]; then
+        printf '%s\n' "$ANANAS_SLICER_OSX_SYSROOT"
+        return 0
+    fi
+    if [ -f "$record" ]; then
+        value="$(read_key_value sdk_path "$record")"
+        version="$(read_key_value sdk_version "$record")"
+        case "$value" in
+            /*) if sdk="$(canonical_sdk_path "$value")"; then
+                    printf '%s\n' "$sdk"
+                    return 0
+                fi ;;
+        esac
+        case "$version" in
+            ''|*[!0-9.]*) version="" ;;
+        esac
+        if [ -n "$version" ] && sdk="$(canonical_sdk_path "macosx$version")"; then
+            echo "NOTE: the deps SDK $value does not exist here; using $sdk (same SDK version $version)" >&2
+            printf '%s\n' "$sdk"
+            return 0
+        fi
+        echo "WARNING: the deps were built with SDK ${version:-of unknown version} ($value)," >&2
+        echo "         which is not installed here; CMake uses its default SDK, and" >&2
+        echo "         -Werror=unguarded-availability-new can fail the build if it is newer." >&2
+        echo "         Set ANANAS_SLICER_OSX_SYSROOT to the path of a MacOSX${version}.sdk to match the deps." >&2
+        return 0
+    fi
+    if [ -f "$cache" ]; then
+        value="$(read_cache_sysroot "$cache")"
+    fi
+    if [ -n "$value" ]; then
+        if sdk="$(canonical_sdk_path "$value")"; then
+            printf '%s\n' "$sdk"
+            return 0
+        fi
+        case "$value" in
+            */*|*.sdk)
+                echo "WARNING: the deps were built with SDK $value, which no longer exists;" >&2
+                echo "         CMake uses its default SDK. Set ANANAS_SLICER_OSX_SYSROOT to match the deps." >&2
+                return 0 ;;
+            *)
+                echo "ERROR: $cache names the SDK '$value', which xcrun cannot resolve." >&2
+                echo "       Set ANANAS_SLICER_OSX_SYSROOT to the SDK the deps were built with." >&2
+                return 1 ;;
+        esac
+    fi
+    echo "WARNING: no SDK recorded in $record or $cache and ANANAS_SLICER_OSX_SYSROOT unset;" >&2
+    echo "         CMake uses its default SDK. If it is newer than the SDK the deps were built with," >&2
+    echo "         -Werror=unguarded-availability-new can fail the build. Set ANANAS_SLICER_OSX_SYSROOT." >&2
+}
+
+# Relative override paths resolve against the directory the script is run
+# from; they are made absolute here because the configure steps run in the
+# deps and slicer build directories.
+if [ -n "${ANANAS_SLICER_OSX_SYSROOT:-}" ]; then
+    if ! ANANAS_SLICER_OSX_SYSROOT_ABS="$(canonical_sdk_path "$ANANAS_SLICER_OSX_SYSROOT")"; then
+        echo "ERROR: ANANAS_SLICER_OSX_SYSROOT is neither an existing SDK directory nor an SDK name xcrun can resolve: $ANANAS_SLICER_OSX_SYSROOT" >&2
+        exit 1
+    fi
+    export ANANAS_SLICER_OSX_SYSROOT="$ANANAS_SLICER_OSX_SYSROOT_ABS"
+    echo " - ANANAS_SLICER_OSX_SYSROOT: $ANANAS_SLICER_OSX_SYSROOT"
+fi
+
 # For Multi-config generators like Ninja and Xcode
 export BUILD_DIR_CONFIG_SUBDIR="/$BUILD_CONFIG"
 
@@ -162,10 +326,12 @@ function build_deps() {
                         -DCMAKE_OSX_ARCHITECTURES:STRING="${_ARCH}" \
                         -DCMAKE_OSX_DEPLOYMENT_TARGET="${OSX_DEPLOYMENT_TARGET}" \
                         -DCMAKE_IGNORE_PREFIX_PATH="${CMAKE_IGNORE_PREFIX_PATH}" \
+                        ${ANANAS_SLICER_OSX_SYSROOT:+"-DCMAKE_OSX_SYSROOT=$ANANAS_SLICER_OSX_SYSROOT"} \
                         ${CMAKE_POLICY_COMPAT}
                 fi
                 cmake --build . --config "$BUILD_CONFIG" --target deps
             )
+            write_deps_sdk_record "$DEPS_BUILD_DIR" || exit 1
         fi
     done
 }
@@ -220,7 +386,7 @@ function verify_python_runtime() {
     fi
     echo "  Verifying bundled Python runtime in $(basename "$app")..."
     local bad
-    bad=$(otool -arch all -L "$pybin" "$app/Contents/MacOS/OrcaSlicer" | grep "libpython" | grep -v "@rpath/" || true)
+    bad=$(otool -arch all -L "$pybin" "$app/Contents/MacOS/AnanasSlicer" | grep "libpython" | grep -v "@rpath/" || true)
     if [ -n "$bad" ]; then
         echo "ERROR: a bundled binary references libpython by absolute path (relocation regression):" >&2
         echo "$bad" >&2
@@ -228,8 +394,8 @@ function verify_python_runtime() {
     fi
     # otool -L shows load commands only; assert the consumer rpath separately.
     # Its loss is masked on the build host by CMake's absolute build-tree rpath.
-    if ! otool -arch all -l "$app/Contents/MacOS/OrcaSlicer" | grep -q "path @executable_path/python/lib "; then
-        echo "ERROR: OrcaSlicer lacks the @executable_path/python/lib rpath (relocation regression)" >&2
+    if ! otool -arch all -l "$app/Contents/MacOS/AnanasSlicer" | grep -q "path @executable_path/python/lib "; then
+        echo "ERROR: ANANAS SLICER lacks the @executable_path/python/lib rpath (relocation regression)" >&2
         exit 1
     fi
     if ! "$pybin" -c "import ssl"; then
@@ -245,9 +411,25 @@ function build_slicer() {
         # if ARCH is universal or equal to _ARCH
         if [ "$ARCH" == "universal" ] || [ "$ARCH" == "$_ARCH" ]; then
 
-            PROJECT_BUILD_DIR="$PROJECT_DIR/build/$_ARCH"
+            PROJECT_BUILD_DIR="${ANANAS_SLICER_BUILD_DIR:-$PROJECT_DIR/build/$_ARCH}"
             DEPS_BUILD_DIR="$DEPS_DIR/build/$_ARCH"
             DEPS="$DEPS_BUILD_DIR/OrcaSlicer_dep"
+
+            # Only a build directory named after the arch lets CMakeLists.txt
+            # derive DEP_BUILD_DIR, so a relocated build tree passes it.
+            DEP_BUILD_DIR_ARG=()
+            if [ -n "${ANANAS_SLICER_BUILD_DIR:-}" ]; then
+                DEP_BUILD_DIR_ARG=("-DDEP_BUILD_DIR=$DEPS_BUILD_DIR")
+            fi
+
+            SYSROOT_ARG=()
+            if [ "1." != "$BUILD_ONLY". ]; then
+                SLICER_SYSROOT="$(resolve_slicer_sysroot "$DEPS_BUILD_DIR")" || exit 1
+                if [ -n "$SLICER_SYSROOT" ]; then
+                    echo "Using SDK $SLICER_SYSROOT for the slicer (same as the deps)"
+                    SYSROOT_ARG=("-DCMAKE_OSX_SYSROOT=$SLICER_SYSROOT")
+                fi
+            fi
 
             echo "Building slicer for $_ARCH..."
             (
@@ -264,6 +446,8 @@ function build_slicer() {
                     -DCMAKE_OSX_ARCHITECTURES="${_ARCH}" \
                     -DCMAKE_OSX_DEPLOYMENT_TARGET="${OSX_DEPLOYMENT_TARGET}" \
                     -DCMAKE_IGNORE_PREFIX_PATH="${CMAKE_IGNORE_PREFIX_PATH}" \
+                    ${SYSROOT_ARG[@]+"${SYSROOT_ARG[@]}"} \
+                    ${DEP_BUILD_DIR_ARG[@]+"${DEP_BUILD_DIR_ARG[@]}"} \
                     ${CMAKE_POLICY_COMPAT}
             fi
             cmake --build . --config "$BUILD_CONFIG" --target "$SLICER_BUILD_TARGET"
@@ -272,7 +456,7 @@ function build_slicer() {
         # -T also runs the tests; ORCA_TESTS_BUILD_ONLY=1 builds them without
         # running, so CI can build here and run them in a dedicated job.
         if [ "1." == "$BUILD_TESTS". ] && [ "1." != "$ORCA_TESTS_BUILD_ONLY". ]; then
-            "$PROJECT_DIR/scripts/run_unit_tests.sh" "build/$_ARCH/tests" "$BUILD_CONFIG"
+            "$PROJECT_DIR/scripts/run_unit_tests.sh" "$PROJECT_BUILD_DIR/tests" "$BUILD_CONFIG"
         fi
 
         echo "Verify localization with gettext..."
@@ -287,18 +471,18 @@ function build_slicer() {
             mkdir -p OrcaSlicer
             cd OrcaSlicer
             # remove previously built app
-            rm -rf ./OrcaSlicer.app
+            rm -rf ./AnanasSlicer.app
             # fully copy newly built app
-            cp -pR "../src$BUILD_DIR_CONFIG_SUBDIR/OrcaSlicer.app" ./OrcaSlicer.app
+            cp -pR "../src$BUILD_DIR_CONFIG_SUBDIR/AnanasSlicer.app" ./AnanasSlicer.app
             # fix resources
-            resources_path=$(readlink ./OrcaSlicer.app/Contents/Resources)
-            rm ./OrcaSlicer.app/Contents/Resources
-            cp -R "$resources_path" ./OrcaSlicer.app/Contents/Resources
-            relocate_python_runtime ./OrcaSlicer.app
+            resources_path=$(readlink ./AnanasSlicer.app/Contents/Resources)
+            rm ./AnanasSlicer.app/Contents/Resources
+            cp -R "$resources_path" ./AnanasSlicer.app/Contents/Resources
+            relocate_python_runtime ./AnanasSlicer.app
             # delete .DS_Store file
-            find ./OrcaSlicer.app/ -name '.DS_Store' -delete
+            find ./AnanasSlicer.app/ -name '.DS_Store' -delete
 
-            verify_python_runtime ./OrcaSlicer.app
+            verify_python_runtime ./AnanasSlicer.app
             
             # Copy OrcaSlicer_profile_validator.app if it exists
             if [ -f "../src$BUILD_DIR_CONFIG_SUBDIR/OrcaSlicer_profile_validator.app/Contents/MacOS/OrcaSlicer_profile_validator" ]; then
@@ -320,7 +504,7 @@ function build_slicer() {
         #     ver=${ver}_dev
         # fi
 
-        # zip -FSr OrcaSlicer${ver}_Mac_${_ARCH}.zip OrcaSlicer.app
+        # zip -FSr OrcaSlicer${ver}_Mac_${_ARCH}.zip AnanasSlicer.app
 
     fi
     done
@@ -352,17 +536,17 @@ function build_universal() {
     echo "Building universal binary..."
 
     PROJECT_BUILD_DIR="$PROJECT_DIR/build/$ARCH"
-    ARM64_APP="$PROJECT_DIR/build/arm64/OrcaSlicer/OrcaSlicer.app"
-    X86_64_APP="$PROJECT_DIR/build/x86_64/OrcaSlicer/OrcaSlicer.app"
+    ARM64_APP="$PROJECT_DIR/build/arm64/OrcaSlicer/AnanasSlicer.app"
+    X86_64_APP="$PROJECT_DIR/build/x86_64/OrcaSlicer/AnanasSlicer.app"
 
     mkdir -p "$PROJECT_BUILD_DIR/OrcaSlicer"
-    UNIVERSAL_APP="$PROJECT_BUILD_DIR/OrcaSlicer/OrcaSlicer.app"
+    UNIVERSAL_APP="$PROJECT_BUILD_DIR/OrcaSlicer/AnanasSlicer.app"
     rm -rf "$UNIVERSAL_APP"
     cp -R "$ARM64_APP" "$UNIVERSAL_APP"
 
-    echo "Creating universal binaries for OrcaSlicer.app..."
+    echo "Creating universal binaries for AnanasSlicer.app..."
     lipo_dir "$UNIVERSAL_APP" "$X86_64_APP"
-    echo "Universal OrcaSlicer.app created at $UNIVERSAL_APP"
+    echo "Universal AnanasSlicer.app created at $UNIVERSAL_APP"
     verify_python_runtime "$UNIVERSAL_APP"
 
     # Create universal binary for profile validator if it exists

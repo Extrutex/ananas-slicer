@@ -269,8 +269,6 @@ function textInput(obj) {
 function CreateVendorBlock(vendorName)
 {
 	let alt = vendorName;
-	if( alt == "BBL" )
-		alt = "Bambu Lab";
 	if( alt == "Custom")
 		alt = "Custom Printer";
 	if( alt == "Other")
@@ -292,7 +290,7 @@ function CreateVendorBlock(vendorName)
 function CreatePrinterBlock(OneModel)
 {
 	let vendor = OneModel['vendor']
-	let vendorName = vendor=="BBL" ? "Bambu Lab" : vendor=="Custom" ? "Generic Printer" : vendor;
+	let vendorName = vendor=="Custom" ? "Generic Printer" : vendor;
 	let modelName  = OneModel['name'];
 
 	// Most of it unneeded. this can be applied in profiles

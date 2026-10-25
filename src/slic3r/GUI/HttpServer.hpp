@@ -122,7 +122,7 @@ public:
     boost::asio::ip::port_type get_port() const { return port; }
     void set_request_handler(const std::function<std::shared_ptr<Response>(const std::string&)>& m_request_handler);
 
-    static std::shared_ptr<Response> bbl_auth_handle_request(const std::string& url);
+    static std::shared_ptr<Response> default_auth_handle_request(const std::string& url);
     static std::shared_ptr<Response> auth_handle_request(const std::string& url, const std::string& provider);
 
 private:
@@ -146,7 +146,7 @@ private:
 
     std::unique_ptr<IOServer> server_{nullptr};
 
-    std::function<std::shared_ptr<Response>(const std::string&)> m_request_handler{&HttpServer::bbl_auth_handle_request};
+    std::function<std::shared_ptr<Response>(const std::string&)> m_request_handler{&HttpServer::default_auth_handle_request};
 };
 
 class session : public std::enable_shared_from_this<session>

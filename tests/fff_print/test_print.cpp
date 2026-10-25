@@ -12,6 +12,7 @@
 
 #include "libslic3r/libslic3r.h"
 #include "libslic3r/Print.hpp"
+#include "libslic3r/Slicing.hpp"
 #include "libslic3r/Layer.hpp"
 #include "libslic3r/Model.hpp"
 #include "libslic3r/GCodeReader.hpp"
@@ -19,13 +20,17 @@
 #include "libslic3r/Exception.hpp"
 #include "libslic3r/LifecycleEvents.hpp"
 
+#include "libslic3r/Utils.hpp"
+
 #include "test_helpers.hpp"
 #include "test_utils.hpp"
 
 #include <algorithm>
 #include <fstream>
+#include <regex>
 #include <iterator>
 #include <memory>
+#include <sstream>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -33,21 +38,18 @@
 using namespace Slic3r;
 using namespace Slic3r::Test;
 
-TEST_CASE("Timelapse g-code is emitted once per layer for Bambu and non-Bambu printers", "[Print][Regression]")
+TEST_CASE("Timelapse g-code is emitted once per layer for every printer structure", "[Print][Regression]")
 {
     struct PrinterCase {
         std::string name;
         std::string structure;
-        bool        is_bbl;
     };
     const PrinterCase printer = GENERATE(from_range(std::vector<PrinterCase>{
-        { "non-BBL undefined", "undefine", false },
-        { "non-BBL CoreXY",    "corexy",   false },
-        { "non-BBL i3",        "i3",       false },
-        { "non-BBL H-Bot",     "hbot",     false },
-        { "non-BBL Delta",     "delta",    false },
-        { "Bambu CoreXY",      "corexy",   true },
-        { "Bambu i3",          "i3",       true },
+        { "undefined", "undefine" },
+        { "CoreXY",    "corexy"   },
+        { "i3",        "i3"       },
+        { "H-Bot",     "hbot"     },
+        { "Delta",     "delta"    },
     }));
     INFO("printer: " << printer.name);
 
@@ -61,7 +63,6 @@ TEST_CASE("Timelapse g-code is emitted once per layer for Bambu and non-Bambu pr
         { "time_lapse_gcode",            "TIMELAPSE_TAKE_FRAME" },
     });
     Print print;
-    print.is_BBL_printer() = printer.is_bbl;
     Model model;
     init_print({ cube(20) }, print, model, config);
     const std::string gcode = Slic3r::Test::gcode(print);
@@ -122,6 +123,81 @@ SCENARIO("Changing the number of solid shell layers does not make all surfaces i
             }
         }
     }
+}
+
+// Two copies of one object share a single slice. When a copy that has sliced itself becomes identical to an
+// earlier object, it keeps its own layers while that object slices and only then takes the shared layers over.
+TEST_CASE("An object that starts sharing another object's slices keeps its own layers until it takes them over", "[Print][Regression]")
+{
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({
+        { "layer_height",               0.2 },
+        { "initial_layer_print_height", 0.2 },
+        { "raft_layers",                1 }, // each object gets support layers of its own
+        { "sparse_infill_density",      "20%" }, // object_a's override below differs from this
+    });
+    // Activates the slicing-pipeline hook installed for the second slice below.
+    config.set_key_value("slicing_pipeline_plugin", new ConfigOptionStrings({"probe"}));
+
+    Print print;
+    Model model;
+    init_print({cube(20)}, print, model, config);
+    ModelObject *object_a = model.objects.front();
+    // add_object() gives the copy extruder 1, and objects only share slices when their configs match.
+    object_a->config.set_key_value("extruder", new ConfigOptionInt(1));
+    ModelObject *object_b = model.add_object(*object_a); // shares object_a's mesh
+    for (ModelInstance *instance : object_b->instances)
+        instance->set_offset(instance->get_offset() + Vec3d(40., 0., 0.));
+    // A per-object override makes the objects differ, so each slices itself.
+    object_a->config.set_key_value("sparse_infill_density", new ConfigOptionPercent(40));
+
+    print.apply(model, config);
+    print.process();
+    REQUIRE(print.objects().size() == 2);
+    // The non-const accessors hand out the layer vectors themselves, which the checks below compare.
+    PrintObject *print_b = print.get_object(1);
+    REQUIRE(print_b->model_object()->id() == object_b->id()); // Print slices its own copy of the model
+    REQUIRE(print_b->get_shared_object() == nullptr);
+    const LayerPtrs        own_layers         = print_b->layers();
+    const SupportLayerPtrs own_support_layers = print_b->support_layers();
+    REQUIRE(!own_layers.empty());
+    REQUIRE(!own_support_layers.empty());
+
+    // Without the override the objects are identical again: print_a redoes the steps the setting invalidated,
+    // and print_b shares it.
+    object_a->config.erase("sparse_infill_density");
+    print.apply(model, config);
+    REQUIRE(print.objects().size() == 2);
+    PrintObject *print_a = print.get_object(0);
+
+    // Erasing the override invalidates print_a's posPrepareInfill and the steps after it. Its hook is the first one
+    // print_a fires, and it runs after print_b starts sharing but before print_b takes the shared layers over.
+    bool hook_fired          = false;
+    bool shared_while_a_runs = false;
+    bool kept_layers         = false;
+    bool kept_support_layers = false;
+    {
+        Print::set_slicing_pipeline_hook_fn([&](Print &, const PrintObject *object, SlicingPipelineStepPlugin) {
+            if (object != print_a || hook_fired)
+                return;
+            hook_fired          = true;
+            shared_while_a_runs = print_b->get_shared_object() == print_a;
+            kept_layers         = print_b->layers() == own_layers;
+            kept_support_layers = print_b->support_layers() == own_support_layers;
+        });
+        const ScopeGuard reset_hook([] { Print::set_slicing_pipeline_hook_fn(nullptr); });
+        print.process();
+    }
+
+    REQUIRE(hook_fired);
+    CHECK(print.objects()[1] == print_b);
+    CHECK(shared_while_a_runs);
+    CHECK(kept_layers);
+    CHECK(kept_support_layers);
+    CHECK(print_b->get_shared_object() == print_a);
+    REQUIRE(!print_a->layers().empty());
+    CHECK(print_b->layers() == print_a->layers());
+    CHECK(print_b->support_layers() == print_a->support_layers());
 }
 
 // ---------------------------------------------------------------------------
@@ -549,9 +625,6 @@ TEST_CASE("export_gcode writes G-code without a result pointer", "[Print][export
     Slic3r::Test::init_print({cube(20)}, print, model);
     print.process();
 
-    SECTION("non-BBL printer") {}
-    SECTION("BBL printer") { print.is_BBL_printer() = true; }
-
     ScopedTemporaryFile temp(".gcode");
     REQUIRE_NOTHROW(print.export_gcode(temp.string(), nullptr, nullptr));
 
@@ -559,6 +632,92 @@ TEST_CASE("export_gcode writes G-code without a result pointer", "[Print][export
     const std::string gcode((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 
     REQUIRE_FALSE(gcode.empty());
+}
+
+TEST_CASE("The G-code header keeps the OrcaSlicer producer line and names ANANAS SLICER after it", "[Print][export_gcode]")
+{
+    Print print;
+    Model model;
+    init_print({cube(20)}, print, model);
+    const std::string gcode = Slic3r::Test::gcode(print);
+    const std::string header = gcode.substr(0, gcode.find("; HEADER_BLOCK_END"));
+
+    // Moonraker v0.11 and later: the first "; generated by <name> <version> on <date> at <time>",
+    // the name is everything before the last space.
+    std::smatch generated;
+    REQUIRE(std::regex_search(header, generated,
+        std::regex(R"(; generated by (.+?) on \d{4}-\d{2}-\d{2} at \d{2}:\d{2}:\d{2})")));
+    const std::string producer = generated[1];
+    CHECK(producer == std::string("OrcaSlicer ") + SoftFever_VERSION);
+
+    // Moonraker up to v0.10 tries a fixed list of names in this order; OrcaSlicer must be the first
+    // one to match, and with the version.
+    for (const char* name : {"PrusaSlicer", "SuperSlicer"})
+        CHECK_FALSE(std::regex_search(header, std::regex(std::string(name) + R"(\s(.*)\son)")));
+    std::smatch legacy;
+    REQUIRE(std::regex_search(header, legacy, std::regex(R"(OrcaSlicer\s(.*)\son)")));
+    CHECK(legacy[1] == SoftFever_VERSION);
+
+    // Happy Hare (components/mmu_server.py): the first comment line matching SLICER_REGEX names the
+    // slicer, case-insensitively, and ORCASLICER_VERSION_REGEX reads the version.
+    std::istringstream lines(header);
+    std::string line, happy_hare_slicer;
+    const std::regex slicer_regex(R"(^;.*generated by ([a-z]*) .*$|^; (BambuStudio) .*$)", std::regex::icase);
+    while (happy_hare_slicer.empty() && std::getline(lines, line)) {
+        std::smatch m;
+        if (std::regex_match(line, m, slicer_regex))
+            happy_hare_slicer = m[1].matched ? m[1].str() : m[2].str();
+    }
+    CHECK(happy_hare_slicer == "OrcaSlicer");
+    CHECK(std::regex_search(header, std::regex(R"((^|\n);\s*generated by OrcaSlicer\s+\d+(\.\d+){0,3})", std::regex::icase)));
+
+    // The line after the producer line names the slicer.
+    const size_t own = header.find('\n', header.find("; generated by ")) + 1;
+    CHECK(header.substr(own, header.find('\n', own) - own) == std::string("; ") + SLIC3R_APP_NAME + " " + SoftFever_VERSION);
+
+    // The G-code loads back into the app.
+    ScopedTemporaryFile temp(".gcode");
+    {
+        std::ofstream os(temp.string());
+        os << gcode;
+    }
+    DynamicPrintConfig config;
+    config.load_from_gcode_file(temp.string(), ForwardCompatibilitySubstitutionRule::EnableSilent);
+    CHECK(config.has("layer_height"));
+}
+
+TEST_CASE("Exporting a sliced print again gives the same G-code", "[Print][export_gcode][Regression]")
+{
+    const int instances = GENERATE(1, 3);
+    CAPTURE(instances);
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    TestMesh           mesh   = TestMesh::ipadstand;
+    SECTION("infill reversed by chaining") { config.set_deserialize_strict({{"sparse_infill_pattern", "gyroid"}}); }
+    SECTION("support reversed by chaining") {
+        mesh = TestMesh::overhang;
+        config.set_deserialize_strict({{"enable_support", true}, {"support_interface_pattern", "concentric"}});
+    }
+    Print print;
+    Model model;
+    Slic3r::Test::init_print({Slic3r::Test::mesh(mesh)}, print, model, config, nullptr, true, instances);
+
+    const auto export_without_timestamp = [&print]() {
+        std::string gcode = Slic3r::Test::gcode(print);
+        const size_t line = gcode.find("; generated by ");
+        REQUIRE(line != std::string::npos);
+        gcode.erase(line, gcode.find('\n', line) - line);
+        return gcode;
+    };
+    const std::string first  = export_without_timestamp();
+    const std::string second = export_without_timestamp();
+
+    // Shows the first differing line on failure.
+    const size_t diff       = std::mismatch(first.begin(), first.end(), second.begin(), second.end()).first - first.begin();
+    const size_t line_start = diff == 0 ? 0 : first.rfind('\n', diff - 1) + 1;
+    INFO("first export:  " << first.substr(line_start, first.find('\n', diff) - line_start));
+    INFO("second export: " << second.substr(line_start, second.find('\n', diff) - line_start));
+    CHECK(diff == first.size());
+    CHECK(first.size() == second.size());
 }
 
 TEST_CASE("Sequential printing follows model order", "[Print]")
@@ -635,4 +794,321 @@ TEST_CASE("Slicing errors are reported per object with the object's name", "[Pri
     }
     CHECK(message.rfind("floating cube: ", 0) == 0);
     CHECK(message.find("empty first layer") != std::string::npos);
+}
+
+namespace {
+
+std::vector<std::string> lines_starting_with(const std::string &gcode, const std::string &prefix)
+{
+    std::vector<std::string> found;
+    std::istringstream in(gcode);
+    std::string line;
+    while (std::getline(in, line))
+        if (line.rfind(prefix, 0) == 0)
+            found.push_back(line);
+    return found;
+}
+
+size_t layer_change_count(const std::string &gcode)
+{
+    return lines_starting_with(gcode, ";" + GCodeProcessor::reserved_tag(GCodeProcessor::ETags::Layer_Change)).size();
+}
+
+// Seconds from the "1h 2m 3s" / "45s" / "0.500000s" form get_time_dhms() writes.
+double dhms_seconds(const std::string &text)
+{
+    double seconds = 0.;
+    std::istringstream in(text);
+    double value;
+    char   unit;
+    while (in >> value >> unit) {
+        switch (unit) {
+        case 'd': seconds += value * 86400.; break;
+        case 'h': seconds += value * 3600.; break;
+        case 'm': seconds += value * 60.; break;
+        case 's': seconds += value; break;
+        default: FAIL("unexpected time unit '" << unit << "' in \"" << text << "\"");
+        }
+    }
+    return seconds;
+}
+
+} // namespace
+
+TEST_CASE("Klipper G-code reports the layer count and every layer change to print_stats", "[Print][Klipper]")
+{
+    const std::string gcode = Slic3r::Test::slice({cube(20)}, {
+        { "gcode_flavor",               "klipper" },
+        { "layer_height",               0.2 },
+        { "initial_layer_print_height", 0.2 },
+    });
+    const size_t layers = layer_change_count(gcode);
+    REQUIRE(layers == 100);
+
+    const auto totals = lines_starting_with(gcode, "SET_PRINT_STATS_INFO TOTAL_LAYER=");
+    REQUIRE(totals.size() == 1);
+    CHECK(totals.front() == "SET_PRINT_STATS_INFO TOTAL_LAYER=" + std::to_string(layers));
+
+    const auto currents = lines_starting_with(gcode, "SET_PRINT_STATS_INFO CURRENT_LAYER=");
+    REQUIRE(currents.size() == layers);
+    for (size_t i = 0; i < currents.size(); ++i)
+        CHECK(currents[i] == "SET_PRINT_STATS_INFO CURRENT_LAYER=" + std::to_string(i + 1));
+    CHECK(gcode.find(totals.front()) < gcode.find(currents.front()));
+}
+
+TEST_CASE("Layer progress is left to the user's G-code when it already reports it", "[Print][Klipper]")
+{
+    const std::string gcode = Slic3r::Test::slice({cube(20)}, {
+        { "gcode_flavor",               "klipper" },
+        { "layer_height",               0.2 },
+        { "initial_layer_print_height", 0.2 },
+        { "machine_start_gcode",        "SET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\nG28" },
+        { "layer_change_gcode",         "SET_PRINT_STATS_INFO CURRENT_LAYER={layer_num + 1}" },
+    });
+    const size_t layers = layer_change_count(gcode);
+    REQUIRE(layers == 100);
+    const auto totals = lines_starting_with(gcode, "SET_PRINT_STATS_INFO TOTAL_LAYER=");
+    REQUIRE(totals.size() == 1);
+    CHECK(totals.front() == "SET_PRINT_STATS_INFO TOTAL_LAYER=" + std::to_string(layers));
+    CHECK(lines_starting_with(gcode, "SET_PRINT_STATS_INFO CURRENT_LAYER=").size() == layers);
+}
+
+TEST_CASE("Only the part of the layer progress the user's G-code leaves out is reported", "[Print][Klipper]")
+{
+    // The user reports the current layer, from the filament start G-code rather than the layer change
+    // one, and only mentions the total in a comment.
+    const std::string gcode = Slic3r::Test::slice({cube(20)}, {
+        { "gcode_flavor",               "klipper" },
+        { "layer_height",               0.2 },
+        { "initial_layer_print_height", 0.2 },
+        { "machine_start_gcode",        "G28 ; SET_PRINT_STATS_INFO TOTAL_LAYER comes from the slicer" },
+        { "filament_start_gcode",       "SET_PRINT_STATS_INFO CURRENT_LAYER=1" },
+    });
+    const size_t layers = layer_change_count(gcode);
+    REQUIRE(layers == 100);
+    const auto totals = lines_starting_with(gcode, "SET_PRINT_STATS_INFO TOTAL_LAYER=");
+    REQUIRE(totals.size() == 1);
+    CHECK(totals.front() == "SET_PRINT_STATS_INFO TOTAL_LAYER=" + std::to_string(layers));
+    // One filament start, and no line per layer from the slicer.
+    CHECK(lines_starting_with(gcode, "SET_PRINT_STATS_INFO CURRENT_LAYER=").size() == 1);
+}
+
+TEST_CASE("The header's first layer time is the time of the first layer's moves", "[Print][Regression]")
+{
+    Slic3r::Print print;
+    Slic3r::Model model;
+    init_print({cube(20)}, print, model, {
+        { "gcode_flavor",               "klipper" },
+        { "layer_height",               0.2 },
+        { "initial_layer_print_height", 0.2 },
+    });
+    print.set_status_silent();
+    const std::string gcode = Slic3r::Test::gcode(print);
+
+    const std::string prefix = "; estimated first layer printing time (normal mode) = ";
+    const auto header = lines_starting_with(gcode, prefix);
+    REQUIRE(header.size() == 1);
+    const double header_seconds = dhms_seconds(header.front().substr(prefix.size()));
+
+    // Re-run the time estimate over the exported file, exactly as the preview would.
+    ScopedTemporaryFile temp(".gcode");
+    {
+        std::ofstream out(temp.string());
+        out << gcode;
+    }
+    GCodeProcessor::s_IsBBLPrinter = false;
+    GCodeProcessor processor;
+    processor.apply_config(print.config());
+    processor.process_file(temp.string());
+    const double first_layer = processor.get_first_layer_time(PrintEstimatedStatistics::ETimeMode::Normal);
+    const double prepare     = processor.get_prepare_time(PrintEstimatedStatistics::ETimeMode::Normal);
+
+    // A 20 mm cube's first layer takes well over the second the start G-code alone (prepare time) does;
+    // the header used to print the latter.
+    REQUIRE(first_layer > 5.);
+    CHECK(first_layer > prepare + 2.);
+    // get_time_dhms truncates to whole seconds.
+    CHECK_THAT(header_seconds, Catch::Matchers::WithinAbs(first_layer, 1.5));
+}
+
+TEST_CASE("The build height check counts the Z shrinkage compensation once", "[Print][validate][Regression]")
+{
+    // printable_height is 100 mm and Z shrinks to 95 %, so the object is sliced 100 / 95 times taller.
+    // 92 mm become about 96.8 mm and fit; 97 mm become about 102.1 mm and only the compensation makes them too tall; 101 mm are too tall on their own.
+    const auto [height, expected] = GENERATE(table<double, std::string>({
+        { 92., "" },
+        { 97., "because of material shrinkage compensation" },
+        { 101., "exceeds the maximum build volume height." },
+    }));
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({
+        { "printable_height", 100. },
+        { "filament_shrinkage_compensation_z", "95%" },
+        { "layer_height", 0.2 },
+        { "initial_layer_print_height", 0.2 },
+        { "layer_change_gcode", "G92 E0\n" }, // validate() relative-E reset
+    });
+
+    Print print;
+    Model model;
+    init_print({ make_cube(20., 20., height) }, print, model, config);
+    const std::string error = print.validate().string;
+    INFO(error);
+    if (expected.empty())
+        CHECK(error.empty());
+    else
+        CHECK(error.find(expected) != std::string::npos);
+}
+
+TEST_CASE("The build height check counts the raft", "[Print][validate][Regression]")
+{
+    // printable_height is 100 mm; three raft layers lift the object by 0.9 mm.
+    const auto [height, fits] = GENERATE(table<double, bool>({ { 98.8, true }, { 99.8, false } }));
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({
+        { "printable_height", 100. },
+        { "raft_layers", 3 },
+        { "layer_height", 0.2 },
+        { "initial_layer_print_height", 0.2 },
+        { "layer_change_gcode", "G92 E0\n" }, // validate() relative-E reset
+    });
+
+    Print print;
+    Model model;
+    init_print({ make_cube(20., 20., height) }, print, model, config);
+    const SlicingParameters &slicing_params = print.objects().front()->slicing_parameters();
+    REQUIRE_THAT(slicing_params.object_print_z_min, Catch::Matchers::WithinAbs(0.9, EPSILON));
+    const std::string error = print.validate().string;
+    INFO(error);
+    if (fits)
+        CHECK(error.empty());
+    else
+        CHECK(error.find("maximum build volume height") != std::string::npos);
+}
+
+TEST_CASE("Filament shrinkage compensation scales the sliced object", "[Print][Regression]")
+{
+    // A 20 mm cube printed with a filament that shrinks to xy % / z % is sliced 20 * 100 / xy wide and,
+    // up to one layer, 20 * 100 / z tall.
+    const auto [xy, z] = GENERATE(table<double, double>({ { 100., 100. }, { 90., 100. }, { 100., 95. } }));
+    const double layer_height = 0.2;
+
+    Print print;
+    init_and_process_print({ cube(20.) }, print, {
+        { "filament_shrink", xy },
+        { "filament_shrinkage_compensation_z", z },
+        { "layer_height", layer_height },
+        { "initial_layer_print_height", layer_height },
+        { "precise_z_height", false },
+        { "raft_layers", 0 },
+        { "xy_contour_compensation", 0. },
+    });
+
+    const PrintObject &object = *print.objects().front();
+    const Layer &middle = *object.get_layer(int(object.layer_count() / 2));
+    const BoundingBox extents = get_extents(middle.lslices);
+    CHECK_THAT(unscale<double>(extents.size().x()), Catch::Matchers::WithinAbs(20. * 100. / xy, 0.01));
+    CHECK_THAT(unscale<double>(extents.size().y()), Catch::Matchers::WithinAbs(20. * 100. / xy, 0.01));
+    CHECK_THAT(object.layers().back()->print_z, Catch::Matchers::WithinAbs(20. * 100. / z, layer_height));
+}
+
+TEST_CASE("Filament shrinkage compensation follows the filaments the object prints with", "[Print][Regression]")
+{
+    // Filament 1 shrinks to 90 %, filament 2 not at all. An unused filament does not matter; two used filaments
+    // that disagree switch the compensation off and validate() warns about it.
+    const auto [wall_filament, expected_width] = GENERATE(table<int, double>({ { 1, 20. * 100. / 90. }, { 2, 20. } }));
+
+    Print print;
+    init_and_process_print({ cube(20.) }, print, multifilament_config(2, {
+        { "filament_shrink", "90%,100%" },
+        { "outer_wall_filament_id", wall_filament },
+        { "inner_wall_filament_id", wall_filament },
+        { "xy_contour_compensation", 0. },
+        { "layer_change_gcode", "G92 E0\n" }, // validate() relative-E reset
+    }));
+
+    const PrintObject &object = *print.objects().front();
+    const BoundingBox extents = get_extents(object.get_layer(int(object.layer_count() / 2))->lslices);
+    CHECK_THAT(unscale<double>(extents.size().x()), Catch::Matchers::WithinAbs(expected_width, 0.01));
+
+    std::vector<StringObjectException> warnings;
+    CHECK(print.validate(&warnings).string.empty());
+    const bool mismatch_warning = std::any_of(warnings.begin(), warnings.end(), [](const StringObjectException &w) {
+        return w.string.find("Filament shrinkage will not be used") != std::string::npos;
+    });
+    CHECK(mismatch_warning == (wall_filament == 2));
+}
+
+TEST_CASE("Applying the same model again keeps the filament shrinkage compensation", "[Print][Regression]")
+{
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict({ { "filament_shrink", "90%" }, { "xy_contour_compensation", 0. } });
+
+    Print print;
+    Model model;
+    init_print({ cube(20.) }, print, model, config);
+    const auto width = [&print]() {
+        print.process();
+        const PrintObject &object = *print.objects().front();
+        return unscale<double>(get_extents(object.get_layer(int(object.layer_count() / 2))->lslices).size().x());
+    };
+    CHECK_THAT(width(), Catch::Matchers::WithinAbs(20. * 100. / 90., 0.01));
+    print.apply(model, config);
+    CHECK_THAT(width(), Catch::Matchers::WithinAbs(20. * 100. / 90., 0.01));
+}
+
+TEST_CASE("Height ranges and modifiers count for the filament shrinkage compensation", "[Print][Regression]")
+{
+    // The model is complete before the first apply(), so no PrintRegion tells yet which filaments print.
+    enum class Setup { RangeWall, ModifierInfill, ModifierInheritingObjectFilament };
+    const Setup setup = GENERATE(Setup::RangeWall, Setup::ModifierInfill, Setup::ModifierInheritingObjectFilament);
+    // The object prints with the filament that shrinks to 90 %, the other one does not shrink.
+    const bool object_on_filament_2 = setup == Setup::ModifierInheritingObjectFilament;
+    DynamicPrintConfig config = multifilament_config(2, {
+        { "filament_shrink", object_on_filament_2 ? "100%,90%" : "90%,100%" },
+        { "xy_contour_compensation", 0. },
+        { "layer_change_gcode", "G92 E0\n" }, // validate() relative-E reset
+    });
+
+    Model model;
+    ModelObject *object = model.add_object();
+    object->add_volume(cube(20.));
+    DynamicPrintConfig override;
+    switch (setup) {
+    case Setup::RangeWall:
+        // The walls of a height range print with the other filament.
+        override.set_key_value("outer_wall_filament_id", new ConfigOptionInt(2));
+        // Every layer range must carry a layer_height (see layer_height_profile_from_ranges).
+        override.set_key_value("layer_height", new ConfigOptionFloat(0.2));
+        object->layer_config_ranges[{ 5., 10. }].assign_config(std::move(override));
+        break;
+    case Setup::ModifierInfill:
+        // The infill inside a modifier prints with the other filament.
+        override.set_key_value("sparse_infill_filament_id", new ConfigOptionInt(2));
+        object->add_volume(cube(10.), ModelVolumeType::PARAMETER_MODIFIER, false)->config.apply(override);
+        break;
+    case Setup::ModifierInheritingObjectFilament:
+        // The modifier only changes the infill density and keeps printing with the filament of the object.
+        object->config.set_key_value("extruder", new ConfigOptionInt(2));
+        override.set_key_value("sparse_infill_density", new ConfigOptionPercent(30));
+        object->add_volume(cube(10.), ModelVolumeType::PARAMETER_MODIFIER, false)->config.apply(override);
+        break;
+    }
+    object->add_instance()->set_offset(Vec3d(90., 90., 0.));
+    object->ensure_on_bed();
+
+    Print print;
+    print.apply(model, config);
+    print.process();
+
+    const PrintObject &print_object = *print.objects().front();
+    const BoundingBox extents = get_extents(print_object.get_layer(int(print_object.layer_count() / 2))->lslices);
+    const double expected_width = object_on_filament_2 ? 20. * 100. / 90. : 20.;
+    CHECK_THAT(unscale<double>(extents.size().x()), Catch::Matchers::WithinAbs(expected_width, 0.01));
+    std::vector<StringObjectException> warnings;
+    CHECK(print.validate(&warnings).string.empty());
+    const bool mismatch_warning = std::any_of(warnings.begin(), warnings.end(), [](const StringObjectException &w) {
+        return w.string.find("Filament shrinkage will not be used") != std::string::npos;
+    });
+    CHECK(mismatch_warning == ! object_on_filament_2);
 }

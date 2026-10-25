@@ -13,8 +13,6 @@
 <script type="text/javascript" src="../include/json2.js"></script>	
 <script type="text/javascript" src="../include/globalapi.js"></script>	
 
-<link rel="stylesheet" type="text/css" href="../include/swiper/swiper-bundle.min.css" />
-<script type="text/javascript" src="../include/swiper/swiper-bundle.min.js"></script>
 <script type="text/javascript" src="../data/text.js"></script>		
 	
 <script type="text/javascript" src="js/home.js"></script>
@@ -31,45 +29,12 @@
 			</span>
 			<span class="AccountText">
 				<span id="UserName" class="AccountName"></span>
-				<span class="AccountSecondary">Orca Cloud</span>
+				<span class="AccountSecondary">Cloud</span>
 			</span>
 			<span class="AccountSignIn trans" tid="t26">Login</span>
 			<svg class="AccountChevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 				<path d="M3 4.75L6 7.75L9 4.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
 			</svg>
-		</div>
-
-		<!-- Bambu Cloud, a secondary provider folded away under the main account -->
-		<div id="BambuCloudSection">
-			<div id="BambuCloudHeader" tabindex="0" role="button" aria-expanded="false" aria-controls="BambuCloudBody"
-				 onClick="ToggleBambuSection()">
-				<svg class="SectionChevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-					<path d="M4.5 2.5L8 6L4.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-				</svg>
-				<span class="SectionLabel trans" tid="orca6">Bambu Cloud</span>
-				<span id="BambuStatusDot"></span>
-			</div>
-
-			<div id="BambuCloudBody">
-				<div id="BambuAccount" class="AccountRow AccountRowCompact" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false"
-					 onClick="OnAccountRowClick('bambu')">
-					<span class="AccountAvatar">
-						<img id="BambuAvatarIcon" class="AccountAvatarImg" alt="" onerror="OnAvatarLoadError(this)" />
-					</span>
-					<span class="AccountText">
-						<span id="BambuUserName" class="AccountName"></span>
-						<span class="AccountSecondary trans" tid="orca8">Not signed in</span>
-					</span>
-					<span class="AccountSignIn trans" tid="t26">Login</span>
-					<svg class="AccountChevron" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-						<path d="M3 4.75L6 7.75L9 4.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-					</svg>
-				</div>
-
-				<div id="NoPluginTip">
-					<div id="NoPluginText"><a class="RedFont trans" tid="t76">Network plugin not detected. Click </a><a Class="LinkBtn trans" onClick="BeginDownloadNetworkPlugin()" tid="t77">here</a><a class="RedFont trans" tid="t78"> to install it.</a></div>
-				</div>
-			</div>
 		</div>
 
 		<!-- Shared account menu, anchored under the row it was opened from.
@@ -91,9 +56,11 @@
 			<div class="trans" tid="t28">recent</div> 
 		</div>
 	    <div class="BtnItem BtnShortcut" onClick="OpenUrlInLocalBrowser('https://cloud.orcaslicer.com')">
-			<div class="BtnIcon "><img class="ShortcutBrandIcon" src="../image/logo.png" /></div>
+			<div class="BtnIcon "><svg class="ShortcutBrandIcon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+				<path d="M6 15.5H14.25C16.05 15.5 17.5 14.05 17.5 12.25C17.5 10.55 16.2 9.15 14.55 9C14.3 6.45 12.15 4.5 9.6 4.5C7.35 4.5 5.45 6 4.85 8.1C3.5 8.55 2.5 9.85 2.5 11.4C2.5 13.65 4.05 15.5 6 15.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+			</svg></div>
 			<div class="ShortcutTextRow">
-				<div>OrcaCloud</div>
+				<div>Cloud</div>
 				<svg class="ShortcutMark" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
 					<path d="M6 3.5H3.5C2.95 3.5 2.5 3.95 2.5 4.5V12.5C2.5 13.05 2.95 13.5 3.5 13.5H11.5C12.05 13.5 12.5 13.05 12.5 12.5V10" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
 					<path d="M8.5 3.5H13.5V8.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
@@ -109,13 +76,6 @@
 <div id="ContentBoard" class="ZScrol" board="recent">
     <div style="height: 14px;"></div>	
 	<div id="MenuArea">
-<!--		<div class="MenuItem" onClick="OnClickModelDepot()">
-			<div class="MenuIcon"><img src="img/i6.png"></div>
-			<div>
-				<div class="trans TextS1" tid="t90">3D Model</div>
-				<div class="MenuDesc trans"  tid="t91">Download 3D Models</div>
-			</div>
-		</div>	-->	
 		<div class="MenuItem" onClick="OnClickNewProject()">
 			<div class="MenuIcon"><img src="img/i4.png"></div>
 			<div>

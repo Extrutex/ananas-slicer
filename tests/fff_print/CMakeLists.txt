@@ -23,12 +23,18 @@ add_executable(${_TEST_NAME}_tests
 	test_skirt_brim.cpp
 	test_slicing_pipeline_hook.cpp
 	test_support_material.cpp
+	# G-code thumbnail blocks (Base64 PNG) as Moonraker extracts them.
+	test_thumbnails.cpp
 	test_tree_support.cpp
 	test_trianglemesh.cpp
+	# Wall widths, volumes and positions measured against the rounded-rectangle bead model.
+	test_wall_geometry.cpp
 	test_wipe.cpp
 	test_wipe_tower.cpp
 	)
-target_link_libraries(${_TEST_NAME}_tests test_common libslic3r Catch2::Catch2WithMain)
+# libjpeg decodes the JPG thumbnails in test_thumbnails.cpp.
+find_package(JPEG REQUIRED)
+target_link_libraries(${_TEST_NAME}_tests test_common libslic3r Catch2::Catch2WithMain JPEG::JPEG)
 set_property(TARGET ${_TEST_NAME}_tests PROPERTY FOLDER "tests")
 
 orcaslicer_copy_test_dlls()

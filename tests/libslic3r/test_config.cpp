@@ -1289,3 +1289,103 @@ TEST_CASE("Static print configs compare, order and hash by their option values",
         REQUIRE(c.optptr("gcode_flavor") == &c.gcode_flavor);
     }
 }
+
+TEST_CASE("The G-code flavor offers Klipper only and defaults to it", "[Config]")
+{
+    const ConfigOptionDef *def = print_config_def.get("gcode_flavor");
+    REQUIRE(def != nullptr);
+    CHECK(def->enum_values == std::vector<std::string>{ "klipper" });
+    CHECK(FullPrintConfig::defaults().gcode_flavor.value == gcfKlipper);
+}
+
+TEST_CASE("A stored G-code flavor loads as Klipper and passes validation", "[Config]")
+{
+    const char *stored = GENERATE("marlin", "marlin2", "reprapfirmware", "repetier", "smoothie", "machinekit", "klipper");
+    INFO("stored gcode_flavor: " << stored);
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_deserialize_strict("gcode_flavor", stored);
+    CHECK(config.opt_enum<GCodeFlavor>("gcode_flavor") == gcfKlipper);
+    CHECK(config.validate().count("gcode_flavor") == 0);
+}
+
+TEST_CASE("A non-Klipper G-code flavor set past the loader fails validation", "[Config]")
+{
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
+    config.set_key_value("gcode_flavor", new ConfigOptionEnum<GCodeFlavor>(gcfMarlinFirmware));
+    CHECK(config.validate().count("gcode_flavor") == 1);
+}
+
+TEST_CASE("The print host type defaults to Moonraker", "[Config]")
+{
+    const ConfigOptionDef *def = print_config_def.get("host_type");
+    REQUIRE(def != nullptr);
+    REQUIRE(def->default_value.get() != nullptr);
+    CHECK(def->default_value.get()->getInt() == int(htMoonraker));
+}
+
+TEST_CASE("Moonraker is the only print host type offered", "[Config]")
+{
+    const ConfigOptionDef *def = print_config_def.get("host_type");
+    REQUIRE(def != nullptr);
+    CHECK(def->enum_values == std::vector<std::string>{"moonraker"});
+    CHECK(ConfigOptionEnum<PrintHostType>::get_enum_values().size() == 1);
+    CHECK(ConfigOptionEnum<PrintHostType>::get_enum_values().at("moonraker") == int(htMoonraker));
+}
+
+TEST_CASE("A stored print host type loads as Moonraker", "[Config]")
+{
+    const char *stored = GENERATE("octoprint", "crealityprint", "elegoolink", "flashforge", "prusalink", "duet",
+                                  "simplyprint", "3dprinteros", "moonraker");
+    INFO("stored host_type: " << stored);
+    DynamicPrintConfig config;
+    config.set_deserialize_strict("host_type", stored);
+    CHECK(config.opt_enum<PrintHostType>("host_type") == htMoonraker);
+}
+
+TEST_CASE("The default bed type of a printer profile resolves the way the GUI selects it", "[Config][BedType]")
+{
+    DynamicPrintConfig config;
+
+    SECTION("a bed type key") {
+        config.set_key_value("default_bed_type", new ConfigOptionString("Textured PEI Plate"));
+        CHECK(default_bed_type_from_config(config) == btPTE);
+    }
+    SECTION("the legacy numeric form") {
+        config.set_key_value("default_bed_type", new ConfigOptionString(std::to_string(int(btEP))));
+        CHECK(default_bed_type_from_config(config) == btEP);
+    }
+    SECTION("no default at all falls back to the high temp plate, not the option's Cool Plate default") {
+        CHECK(default_bed_type_from_config(config) == btPEI);
+        config.set_key_value("default_bed_type", new ConfigOptionString(""));
+        CHECK(default_bed_type_from_config(config) == btPEI);
+    }
+    SECTION("an invalid value falls back to the high temp plate") {
+        config.set_key_value("default_bed_type", new ConfigOptionString("Lava Plate"));
+        CHECK(default_bed_type_from_config(config) == btPEI);
+        config.set_key_value("default_bed_type", new ConfigOptionString("99"));
+        CHECK(default_bed_type_from_config(config) == btPEI);
+    }
+    SECTION("the value is never the Cool Plate the curr_bed_type option defaults to, unless the profile says so") {
+        CHECK(print_config_def.get("curr_bed_type")->default_value->getInt() == int(btPC));
+        config.set_key_value("default_bed_type", new ConfigOptionString("Cool Plate"));
+        CHECK(default_bed_type_from_config(config) == btPC);
+    }
+}
+
+TEST_CASE("Default options of enum lists get their definition's keys map", "[Config]")
+{
+    size_t enum_lists = 0;
+    for (const auto &[key, def] : print_config_def.options) {
+        if (def.type != coEnums || !def.default_value)
+            continue;
+        INFO(key);
+        const std::unique_ptr<ConfigOption> opt(def.create_default_option());
+        CHECK(*opt == *def.default_value);
+        const auto *nullable_enums = dynamic_cast<const ConfigOptionEnumsGenericNullable *>(opt.get());
+        const auto *enums          = dynamic_cast<const ConfigOptionEnumsGeneric *>(opt.get());
+        REQUIRE((nullable_enums != nullptr) != (enums != nullptr));
+        CHECK((nullable_enums != nullptr ? nullable_enums->keys_map : enums->keys_map) == def.enum_keys_map);
+        ++enum_lists;
+    }
+    CHECK(enum_lists > 0);
+}

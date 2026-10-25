@@ -1475,15 +1475,8 @@ void OrcaCloudServiceAgent::save_sync_state()
     if (sync_state_path.empty())
         return;
 
-    try {
-        std::string tmp_path = sync_state_path + ".tmp";
-        std::ofstream ofs(tmp_path, std::ios::out | std::ios::trunc);
-        if (ofs.good()) {
-            ofs << std::to_string(sync_state.last_sync_timestamp);
-            ofs.close();
-            boost::filesystem::rename(tmp_path, sync_state_path);
-        }
-    } catch (...) {}
+    if (const std::error_code ec = write_file_atomically(sync_state_path, std::to_string(sync_state.last_sync_timestamp)))
+        BOOST_LOG_TRIVIAL(warning) << "OrcaCloudServiceAgent: failed to save the sync state: " << ec.message();
 }
 
 void OrcaCloudServiceAgent::clear_sync_state()
@@ -1572,22 +1565,10 @@ void OrcaCloudServiceAgent::persist_user_secret(const std::string& secret)
             wxFileName::Mkdir(path.GetPath(), wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL);
         }
 
-        const std::string tmp_path = secret_fallback_path + ".tmp";
-        std::ofstream ofs(tmp_path, std::ios::out | std::ios::trunc | std::ios::binary);
-        if (ofs.good()) {
-            ofs << signed_payload;
-            ofs.flush();
-            ofs.close();
-
-            if (wxRenameFile(wxString::FromUTF8(tmp_path.c_str()), wxString::FromUTF8(secret_fallback_path.c_str()), true)) {
-                stored = true;
-            } else {
-                wxRemoveFile(wxString::FromUTF8(tmp_path.c_str()));
-                BOOST_LOG_TRIVIAL(warning) << "OrcaCloudServiceAgent: failed to atomically replace user secret file";
-            }
-        } else {
-            BOOST_LOG_TRIVIAL(warning) << "OrcaCloudServiceAgent: cannot open user secret file for write - " << secret_fallback_path;
-        }
+        if (const std::error_code ec = write_file_atomically(secret_fallback_path, signed_payload, /*binary=*/true))
+            BOOST_LOG_TRIVIAL(warning) << "OrcaCloudServiceAgent: cannot write user secret file " << secret_fallback_path << ": " << ec.message();
+        else
+            stored = true;
     } else {
         // Use wxSecretStore only
         wxSecretStore store = wxSecretStore::GetDefault();
@@ -2598,7 +2579,7 @@ int OrcaCloudServiceAgent::set_queue_on_main_fn(QueueOnMainFn fn)
 }
 
 // ============================================================================
-// Stub Implementations (Cloud Services, Model Mall, Analytics, Ratings)
+// Stub Implementations (Cloud Services, Model Mall, Ratings)
 // ============================================================================
 
 int OrcaCloudServiceAgent::get_my_message(int type, int after, int limit, unsigned int* http_code, std::string* http_body)
@@ -2709,47 +2690,9 @@ int OrcaCloudServiceAgent::get_camera_url(std::string dev_id, std::function<void
     return BAMBU_NETWORK_SUCCESS;
 }
 
-int OrcaCloudServiceAgent::get_design_staffpick(int offset, int limit, std::function<void(std::string)> callback)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: get_design_staffpick (stub)";
-    if (callback)
-        callback("[]");
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::start_publish(PublishParams params, OnUpdateStatusFn update_fn, WasCancelledFn cancel_fn, std::string* out)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: start_publish (stub)";
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::get_model_publish_url(std::string* url)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: get_model_publish_url (stub)";
-    if (url)
-        *url = "";
-    return BAMBU_NETWORK_SUCCESS;
-}
-
 int OrcaCloudServiceAgent::get_subtask(BBLModelTask* task, OnGetSubTaskFn getsub_fn)
 {
     BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: get_subtask (stub)";
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::get_model_mall_home_url(std::string* url)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: get_model_mall_home_url (stub)";
-    if (url)
-        *url = "";
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::get_model_mall_detail_url(std::string* url, std::string id)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: get_model_mall_detail_url (stub)";
-    if (url)
-        *url = "";
     return BAMBU_NETWORK_SUCCESS;
 }
 
@@ -2773,85 +2716,6 @@ int OrcaCloudServiceAgent::get_my_token(std::string ticket, unsigned int* http_c
     return -1;
 }
 
-int OrcaCloudServiceAgent::track_enable(bool enable)
-{
-    std::lock_guard<std::recursive_mutex> lock(state_mutex);
-    enable_track = enable;
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::track_remove_files()
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: track_remove_files (stub)";
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::track_event(std::string evt_key, std::string content)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: track_event (stub) - " << evt_key;
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::track_header(std::string header)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: track_header (stub)";
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::track_update_property(std::string name, std::string value, std::string type)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: track_update_property (stub) - " << name;
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::track_get_property(std::string name, std::string& value, std::string type)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: track_get_property (stub) - " << name;
-    value = "";
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-bool OrcaCloudServiceAgent::get_track_enable()
-{
-    std::lock_guard<std::recursive_mutex> lock(state_mutex);
-    return enable_track;
-}
-
-int OrcaCloudServiceAgent::put_model_mall_rating(
-    int design_id, int score, std::string content, std::vector<std::string> images, unsigned int& http_code, std::string& http_error)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: put_model_mall_rating (stub)";
-    http_code = 200;
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::get_oss_config(std::string& config, std::string country_code, unsigned int& http_code, std::string& http_error)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: get_oss_config (stub)";
-    config    = "{}";
-    http_code = 200;
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::put_rating_picture_oss(
-    std::string& config, std::string& pic_oss_path, std::string model_id, int profile_id, unsigned int& http_code, std::string& http_error)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: put_rating_picture_oss (stub)";
-    http_code = 200;
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::get_model_mall_rating_result(int job_id,
-                                                        std::string& rating_result,
-                                                        unsigned int& http_code,
-                                                        std::string& http_error)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: get_model_mall_rating_result (stub)";
-    rating_result = "{}";
-    http_code     = 200;
-    return BAMBU_NETWORK_SUCCESS;
-}
-
 std::string OrcaCloudServiceAgent::get_cloud_service_host() { return api_base_url; }
 
 std::string OrcaCloudServiceAgent::get_cloud_login_url(const std::string& language)
@@ -2861,22 +2725,6 @@ std::string OrcaCloudServiceAgent::get_cloud_login_url(const std::string& langua
         url += "?lang=" + language;
     }
     return url;
-}
-
-int OrcaCloudServiceAgent::get_mw_user_preference(std::function<void(std::string)> callback)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: get_mw_user_preference (stub)";
-    if (callback)
-        callback("{}");
-    return BAMBU_NETWORK_SUCCESS;
-}
-
-int OrcaCloudServiceAgent::get_mw_user_4ulist(int seed, int limit, std::function<void(std::string)> callback)
-{
-    BOOST_LOG_TRIVIAL(debug) << "OrcaCloudServiceAgent: get_mw_user_4ulist (stub)";
-    if (callback)
-        callback("[]");
-    return BAMBU_NETWORK_SUCCESS;
 }
 
 std::string OrcaCloudServiceAgent::get_version() { return "OrcaCloudServiceAgent 1.0.0"; }

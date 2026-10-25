@@ -7,6 +7,7 @@
 #endif
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -233,29 +234,32 @@ void name_tbb_thread_pool_threads_set_locale()
 	nthreads = 1;
 #endif
 
+	// Every task blocks until all of them run, so that each thread of the pool takes exactly one.
+	// The scheduler promises neither one task per index (only the simple partitioner does) nor
+	// nthreads threads: a worker can stay asleep, serve another arena or be excluded by the affinity
+	// mask, and the count then never reaches nthreads. The wait is therefore bounded. After the
+	// deadline the threads that did arrive carry on and share the remaining tasks rather than
+	// hanging the process; a worker that joins later keeps its default name and locale.
+	const auto				deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
 	size_t                  nthreads_running(0);
 	std::condition_variable cv;
 	std::mutex				cv_m;
 	auto					master_thread_id = std::this_thread::get_id();
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, nthreads, 1),
-        [&nthreads_running, nthreads, &master_thread_id, &cv, &cv_m](const tbb::blocked_range<size_t> &range) {
+        [&nthreads_running, nthreads, &master_thread_id, &cv, &cv_m, deadline](const tbb::blocked_range<size_t> &range) {
         	assert(range.begin() + 1 == range.end());
-			if (std::unique_lock<std::mutex> lk(cv_m);  ++nthreads_running == nthreads) {
+			if (std::unique_lock<std::mutex> lk(cv_m);  ++nthreads_running >= nthreads) {
 				lk.unlock();
         		// All threads are spinning.
         		// Wake them up.
     			cv.notify_all();
         	} else {
         		// Wait for the last thread to wake the others.
-			    cv.wait(lk, [&nthreads_running, nthreads]{return nthreads_running == nthreads;});
+			    cv.wait_until(lk, deadline, [&nthreads_running, nthreads]{return nthreads_running >= nthreads;});
         	}
         	auto thread_id = std::this_thread::get_id();
-			if (thread_id == master_thread_id) {
-				// The calling thread runs the 0'th task.
-				assert(range.begin() == 0);
-			} else {
-				assert(range.begin() > 0);
+			if (thread_id != master_thread_id) {
 				std::ostringstream name;
 		        name << "slic3r_tbb_" << range.begin();
 		        set_current_thread_name(name.str().c_str());
@@ -275,7 +279,8 @@ void name_tbb_thread_pool_threads_set_locale()
 					, "C", nullptr));
 #endif
     		}
-        });
+        },
+        tbb::simple_partitioner());
 }
 
 }

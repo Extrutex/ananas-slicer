@@ -66,12 +66,15 @@ WallToolPathsParams make_paths_params(const int layer_id, const PrintObjectConfi
 }
 
 WallToolPaths::WallToolPaths(const Polygons& outline, const coord_t bead_width_0, const coord_t bead_width_x,
-                             const size_t inset_count, const coord_t wall_0_inset, const coordf_t layer_height, const WallToolPathsParams &params)
+                             const size_t inset_count, const coord_t wall_0_inset, const coordf_t layer_height, const WallToolPathsParams &params,
+                             const coord_t inner_wall_shift, const size_t inner_wall_shift_first_bead)
     : outline(outline)
     , bead_width_0(bead_width_0)
     , bead_width_x(bead_width_x)
     , inset_count(inset_count)
     , wall_0_inset(wall_0_inset)
+    , inner_wall_shift(inner_wall_shift)
+    , inner_wall_shift_first_bead(inner_wall_shift_first_bead)
     , layer_height(layer_height)
     , print_thin_walls(Slic3r::Arachne::fill_outline_gaps)
     , min_feature_size(scaled<coord_t>(params.min_feature_size))
@@ -536,7 +539,10 @@ const std::vector<VariableWidthLines> &WallToolPaths::generate()
             wall_add_middle_threshold,
             max_bead_count,
             wall_0_inset,
-            wall_distribution_count
+            inner_wall_shift,
+            wall_distribution_count,
+            0.5,
+            inner_wall_shift_first_bead
         );
     const coord_t transition_filter_dist   = scaled<coord_t>(100.f);
     const coord_t allowed_filter_deviation = wall_transition_filter_deviation;

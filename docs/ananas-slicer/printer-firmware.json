@@ -1,0 +1,2782 @@
+[
+ {
+  "vendor": "Afinia",
+  "model": "Afinia H+1(HS)",
+  "stock_firmware": "Afinia is Tiertime's rebrand (the profile was added by a Tiertime developer in OrcaSlicer PR #10705). It shares the same uncertainty as the Tiertime HS line: Klipper-style macros in the profile, firmware unconfirmed.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/OrcaSlicer/OrcaSlicer/pull/10705",
+   "https://www.afinia.com/h1hs"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "I could not disprove UNCLEAR, but the evidence for Klipper is stronger than the claim says. (1) PR #10705 was written by GitHub user GuoGeTiertime, who works at Tiertime. It adds only the H+1(HS) profiles (0.4 and 0.6 nozzle). The profile inherits fdm_afinia_common.json, which sets gcode_flavor \"klipper\" with PRINT_START EXTRUDER=/BED=, PRINT_END and PAUSE. That is the same as fdm_tiertime_common.json, so Afinia H+1(HS) is a Tiertime rebrand. It is probably the UP300HS or a close sibling, but I did not confirm that. (2) The part the researcher missed: the same Tiertime developer keeps an actively changed Klipper fork, GuoGeTiertime/klipper. It is 178 commits ahead of Klipper3d/klipper, was last pushed 2026-09-05, and has branches NewHX71X, Probe, ProbeAdjust, RealTimeGCode and camera. Its commits touch a filament feeder and print_stats (operate_flag), with Chinese commit messages such as 'default save_config does not restart the device'. So the Tiertime HS line very likely runs a Klipper-derived firmware from the vendor. (3) Moonraker is not shown to be there. The developer's moonraker and fluidd forks are untouched (0 commits ahead, last pushed 2023). Tiertime's official pages (UP300HS, UP600HS) name only 'UP Studio 3.0 / OrcaSlicer', a 'Linux System' touchscreen (UP600HS), USB/WiFi/Ethernet and a proprietary print queue. They never mention Klipper, Moonraker, Fluidd or Mainsail. Tiertime's historical network stack is its own WandServer, a WebSocket interface on port 3333. (4) No official Afinia spec page for the H+1(HS) could be found: afinia.com/h1hs returns 404, and the Afinia store lists only the QD330. There is no community mod that adds Moonraker. Conclusion: this is most likely a stock Klipper fork without Moonraker out of the box, but no official source confirms it. Under the rule to keep only printers that really run Klipper with Moonraker as the print host, it should stay UNCLEAR and not be kept as a Moonraker target until someone confirms it on a real unit. Note: my web search budget was used up, so the research relied on WebFetch and the GitHub API."
+ },
+ {
+  "vendor": "Anycubic",
+  "model": "Anycubic Kobra 2 Max",
+  "stock_firmware": "Anycubic Kobra OS / GoKlipper (Go re-implementation) on Trigorilla Spe board",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/rinkhals-community/Rinkhals/",
+   "https://klipper.discourse.group/t/kobra2max-klipper/19222",
+   "https://klipper.discourse.group/t/klipper-install-anycubic-kobra-2/8549/125"
+  ],
+  "confidence": "medium",
+  "verdict": "NOT_KLIPPER",
+  "kept": false,
+  "second_opinion": "I could not refute it. The stock machine uses a Trigorilla Spe mainboard (SPE_A_V1.0.0) whose Allwinner R582-S3 ARM SoC controls the whole printer. It runs Anycubic's heavily modified, binary-packed Klipper derivative (Kobra OS / GoKlipper family), so it is not real Klipper and has no Moonraker. I found no real-Klipper firmware for the stock board. Rinkhals, the only established overlay, lists only Kobra 3 / 3 Max / 3 V2, Kobra 2 Pro (Trigorilla Spe B only), S1 and S1 Max. It does not list the Kobra 2 Max, and even on supported printers it keeps GoKlipper as the base and adds Moonraker/Mainsail on top. The Klipper Discourse threads say it is 'not (yet) possible to flash native Klipper to the stock mainboard of the Kobra 2 Max'. The only working path is replacing the mainboard, e.g. MKS Robin Nano v3.1 with a printables adapter plate, following the Klipper4Kobra2series configs. That is a hardware conversion, not a firmware mod of the stock printer, so it does not qualify as KLIPPER_VIA_ESTABLISHED_MOD. Confidence could be raised to medium-high. An optional note for the maintainer is the board-swap path (Discourse thread 'Anycubic Kobra 2 Pro/Plus/Max + MKS Robin Nano v3.1 = native Klipper')."
+ },
+ {
+  "vendor": "Anycubic",
+  "model": "Anycubic Kobra 2 Plus",
+  "stock_firmware": "Anycubic Kobra OS / GoKlipper on Trigorilla Spe board",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/rinkhals-community/Rinkhals/",
+   "https://klipper.discourse.group/t/klipper-install-anycubic-kobra-2/8549/125"
+  ],
+  "confidence": "medium",
+  "verdict": "NOT_KLIPPER",
+  "kept": false,
+  "second_opinion": "I could not refute the claim. The Rinkhals README lists these K3-family models: Kobra 3, Kobra 2 Pro, S1, 3 Max, 3 V2 and S1 Max. The Kobra 2 Plus is not on it. One search summary tied the 'k2p' app tag to the 2 Plus, but k2p stands for Kobra 2 Pro. I found no Rinkhals support for the 2 Plus or 2 Max. On Klipper Discourse, users report that the stock 2 Plus/Max board has no separate MCU to flash. The Allwinner R528 runs the motion control directly, so mainline Klipper cannot be flashed onto the stock hardware. The stock firmware is a closed, obfuscated Anycubic firmware derived from Klipper. It is not real Klipper and is not GPL-compliant. The only working real-Klipper path is to replace the mainboard, for example with an MKS Robin Nano v3.1. The configs are collected in the GitHub repo 1coderookie/Klipper4Kobra2series. A board swap is hardware replacement, not an established firmware mod for the stock machine, so NOT_KLIPPER stands. One detail in the claim is unconfirmed: whether the stock firmware is labelled 'GoKlipper'. Rinkhals ties GoKlipper to Kobra OS on the K3 family, but I found no source for the 2 Plus. The safer wording is 'Anycubic closed Klipper-derived firmware (Kobra OS) on R528'. Confidence: medium-high."
+ },
+ {
+  "vendor": "Anycubic",
+  "model": "Anycubic Kobra 2 Pro",
+  "stock_firmware": "GoKlipper (Kobra OS)",
+  "moonraker": "root/mod",
+  "mod_project": "Rinkhals + app-vanilla-klipper (experimental, upstream Klipper replaces GoKlipper), only Trigorilla Spe B v1.0.x board: https://github.com/rinkhals-community/Rinkhals",
+  "sources": [
+   "https://github.com/rinkhals-community/Rinkhals/",
+   "https://newreleases.io/project/github/rinkhals-community/Rinkhals.Apps/release/20260527_01",
+   "https://blog.octoeverywhere.com/how-to-install-klipper-on-your-anycubic-3d-printer/"
+  ],
+  "confidence": "medium",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "Anycubic",
+  "model": "Anycubic Kobra 3",
+  "stock_firmware": "GoKlipper (Kobra OS)",
+  "moonraker": "root/mod",
+  "mod_project": "Rinkhals + app-vanilla-klipper (experimental upstream Klipper): https://github.com/rinkhals-community/Rinkhals",
+  "sources": [
+   "https://github.com/rinkhals-community/Rinkhals/",
+   "https://newreleases.io/project/github/rinkhals-community/Rinkhals.Apps/release/20260527_01",
+   "https://blog.octoeverywhere.com/how-to-install-klipper-on-your-anycubic-3d-printer/"
+  ],
+  "confidence": "high",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "Anycubic",
+  "model": "Anycubic Kobra 3 Max",
+  "stock_firmware": "GoKlipper (Kobra OS)",
+  "moonraker": "root/mod",
+  "mod_project": "Rinkhals + app-vanilla-klipper (k3m build, experimental): https://github.com/rinkhals-community/Rinkhals",
+  "sources": [
+   "https://github.com/rinkhals-community/Rinkhals/",
+   "https://newreleases.io/project/github/rinkhals-community/Rinkhals.Apps/release/20260527_01"
+  ],
+  "confidence": "medium",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "Anycubic",
+  "model": "Anycubic Kobra 3 V2",
+  "stock_firmware": "GoKlipper (Kobra OS)",
+  "moonraker": "root/mod",
+  "mod_project": "Rinkhals (supported, fw 1.1.0.4/1.1.2.8) + app-vanilla-klipper (experimental): https://github.com/rinkhals-community/Rinkhals",
+  "sources": [
+   "https://github.com/rinkhals-community/Rinkhals/",
+   "https://newreleases.io/project/github/rinkhals-community/Rinkhals.Apps/release/20260527_01"
+  ],
+  "confidence": "medium",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "Anycubic",
+  "model": "Anycubic Kobra S1",
+  "stock_firmware": "GoKlipper (Kobra OS)",
+  "moonraker": "root/mod",
+  "mod_project": "Rinkhals + app-vanilla-klipper: https://github.com/rinkhals-community/Rinkhals",
+  "sources": [
+   "https://github.com/rinkhals-community/Rinkhals/",
+   "https://blog.octoeverywhere.com/how-to-install-klipper-on-your-anycubic-3d-printer/"
+  ],
+  "confidence": "high",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "Anycubic",
+  "model": "Anycubic Kobra S1 Max",
+  "stock_firmware": "GoKlipper (Kobra OS)",
+  "moonraker": "root/mod",
+  "mod_project": "Rinkhals (supported) + app-vanilla-klipper (ks1 build, experimental): https://github.com/rinkhals-community/Rinkhals",
+  "sources": [
+   "https://github.com/rinkhals-community/Rinkhals/",
+   "https://newreleases.io/project/github/rinkhals-community/Rinkhals.Apps/release/20260527_01"
+  ],
+  "confidence": "medium",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "Anycubic",
+  "model": "Anycubic Kobra X",
+  "stock_firmware": "Anycubic KlipperC++ / K4 base (C++ port, not Klipper); RSA-signed SWU updates",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/rinkhals-community/Rinkhals/"
+  ],
+  "confidence": "high",
+  "verdict": "NOT_KLIPPER",
+  "kept": false,
+  "second_opinion": "I could not refute the claim. The Rinkhals README lists its supported printers: Kobra 3, 3 Max, 3 V2, 2 Pro, S1 and S1 Max. It excludes the Kobra X explicitly. The README gives two reasons. First, Anycubic moved the Kobra X from the K3/GoKlipper base to a K4 software base, which is a C++ port of Klipper and not real Klippy. Second, firmware updates now need a trusted certificate, so \"SWU-based firmware injection similar to Rinkhals is not currently feasible on Kobra X\". I searched separately for a Kobra X root exploit or a Klipper/Moonraker mod and found no established project. The only related results were for other Kobra models or other vendors. So the stock firmware is not real Klipper, there is no stock Moonraker, and there is no working path to real Klipper. The Kobra X should be excluded from the Moonraker-only host list. The main caveat is that the model is new, so a community mod could appear later and the verdict should be checked again then. Confidence is high for the current state."
+ },
+ {
+  "vendor": "Artillery",
+  "model": "Artillery M1 Pro",
+  "stock_firmware": "Artillery Klipper + Moonraker",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/artillery-m1-pro"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Artillery",
+  "model": "Artillery Sidewinder X4 Plus",
+  "stock_firmware": "Klipper on screen-integrated host + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/compatibility/artillery-3d-sidewinder-x4-plus",
+   "https://simplyprint.io/setup-guide/artillery-3d/sidewinder-x4-plus/klipper-powered"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Artillery",
+  "model": "Artillery Sidewinder X4 Pro",
+  "stock_firmware": "Klipper on screen-integrated host + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/artillery-3d/sidewinder-x4-pro/klipper-powered"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "BIQU",
+  "model": "BIQU Hurakan",
+  "stock_firmware": "Klipper on BTT CB1 + Manta M4P, Moonraker + Mainsail + KlipperScreen preinstalled",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://biqu.equipment/products/biqu-hurakan"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Blocks",
+  "model": "BLOCKS Pro S100",
+  "stock_firmware": "The vendor-maintained profile uses PRINT_START and the Klipper-only SET_PRESSURE_ADVANCE command. Printago connects to Blocks printers through Moonraker. No vendor spec page could be retrieved.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/blocks-pro-s100",
+   "https://github.com/OrcaSlicer/OrcaSlicer/pull/15804"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "The claim rests on circular evidence. Printago's printer pages are auto-generated from the slicer profiles. The RF50 page from the same vendor says outright that the model \"hasn't been manually verified by Printago\", and its Moonraker text is generic boilerplate (Fuse bridge, port 7125). It says nothing about the Blocks hardware itself. PR #15804 only touches filaments, naming and bed types, and never mentions Klipper or Moonraker. The local profile does support Klipper: resources/profiles/Blocks/machine/fdm_klipper_common.json sets gcode_flavor \"klipper\", and the start G-code is \"PRINT_START EXTRUDER=... BED=...\". I could not find SET_PRESSURE_ADVANCE in the S100 profiles I checked, so that part of the claim is unverified. Vendor pages were unreachable (blocks3d.com refused the connection, blocks.tw did not resolve, blocks.com.tw failed the certificate check), and the web search budget was used up. No independent source confirms that stock Klipper ships on the printer, and none confirms Moonraker out of the box. The profile evidence makes stock Klipper likely, but that is not verified. If a verdict has to be picked, STOCK_KLIPPER (Moonraker status unknown) at low confidence is the most that can be said. This needs a vendor spec page or a user report before the model is treated as verified-Klipper with a Moonraker host."
+ },
+ {
+  "vendor": "Blocks",
+  "model": "BLOCKS RD50 V2",
+  "stock_firmware": "An IDEX printer (500x500x500 mm) with an actively heated chamber. It is described as running Klipper, reachable through Moonraker (Printago's description, not a vendor source).",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/blocks-rd50-v2"
+  ],
+  "confidence": "low",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Blocks",
+  "model": "BLOCKS RF50",
+  "stock_firmware": "Same vendor Klipper profile family (SET_PRESSURE_ADVANCE); Printago connects through Moonraker.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/blocks-rf50",
+   "https://github.com/OrcaSlicer/OrcaSlicer/pull/15804"
+  ],
+  "confidence": "low",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true,
+  "second_opinion": "I could not refute the claim, but the evidence is thin and none of it comes from the vendor. (1) The Printago printer page lists the RF50's firmware as 'Klipper' and says 'Printago can connect to this printer via Moonraker through our LAN client (Fuse)', on default port 7125 with an optional API key. That means Moonraker is reachable on a stock unit. (2) The local OrcaSlicer vendor profiles in resources/profiles/Blocks/machine/ have all BLOCKS RF50 nozzle variants inherit fdm_klipper_common.json. That file sets \"gcode_flavor\": \"klipper\", and the start G-code calls the PRINT_START EXTRUDER=... macro and SET_PRESSURE_ADVANCE, which are Klipper macro conventions. The Blocks RD50 V2 and Pro S100 are in the same family. (3) OrcaSlicer PR #15804 only fixes Blocks profiles. It says nothing about the firmware or the print host. I found no evidence of Marlin, GoKlipper or other proprietary firmware. Limits: my web search budget was used up, and I could not reach a vendor spec page (the guessed Blocks domains failed). So I could not independently confirm that the vendor ships Klipper and exposes Moonraker. Confidence is low to medium."
+ },
+ {
+  "vendor": "Chuanying",
+  "model": "Chuanying X1",
+  "stock_firmware": "Unknown. The per-nozzle start G-code is plain Marlin-style with center-origin coordinates. No vendor documentation was found, and Printago lists it as a closed vendor protocol.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/chuanying-x1"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false
+ },
+ {
+  "vendor": "Co Print",
+  "model": "Co Print ChromaSet",
+  "stock_firmware": "ChromaSet is Co Print's multi-color upgrade kit for Marlin printers. It includes the ChromaPad, which Co Print sells as a 'Klipper Control Pad', so the converted printer runs Klipper through the vendor's own kit.",
+  "moonraker": "root/mod",
+  "mod_project": "Co Print ChromaSet / ChromaPad (https://coprint3d.com)",
+  "sources": [
+   "https://coprint3d.com/collections/all",
+   "https://all3dp.com/4/this-kickstarter-wants-to-bring-a-multi-filament-system-to-klipper-printers/"
+  ],
+  "confidence": "medium",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "CoLiDo",
+  "model": "CoLiDo DIY 4.0",
+  "stock_firmware": "Unknown. The original CoLiDo DIY line (2016) was Marlin-era. The profile says klipper with an OctoPrint host but no source confirms it, and Printago lists it as a closed protocol.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/colido-diy-4-0",
+   "https://www.fabbaloo.com/2016/02/colidos-surprisingly-diverse-line-of-3d-printers"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "I could not refute the claim either way. No independent source says what firmware the CoLiDo DIY 4.0 runs, and I found no established Klipper mod for it. Upstream OrcaSlicer PR #9247 added the profile (DIY 4.0, X16, 160 V2, SR1, DIY 4.0 V2) in April 2025. It was submitted by 'staff1010' and approved with only 'LGTM'. Nothing in it mentions firmware. The local profile does look like a modern Klipper machine: gcode_flavor klipper, PRINT_START/PRINT_END macros, adaptive bed-mesh fields, 20000 mm/s² accel and 800 mm/s max speed. That makes me doubt the researcher's framing of a 2016 Marlin-era machine; the profile probably describes a newer relaunched model. But the profile values look copied from Orca's generic Klipper template, and the host is set to octoprint. The profile is not vendor evidence. Printago says the printer uses a proprietary communications layer, which points away from stock Moonraker. colido.com has no DIY 4.0 product page (404), and the fabbaloo page returned 403. My web-search budget for this session was used up, so I could not look further. With conflicting and weak evidence, UNCLEAR with low confidence stands. Under the rule of keeping only printers that really run Klipper, this model should not be treated as confirmed Klipper."
+ },
+ {
+  "vendor": "CoLiDo",
+  "model": "CoLiDo DIY 4.0 V2",
+  "stock_firmware": "Unknown. The profile says klipper but no vendor documentation was found. Printago lists it as a closed protocol.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/colido-diy-4-0-v2"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false
+ },
+ {
+  "vendor": "CoLiDo",
+  "model": "CoLiDo SR1",
+  "stock_firmware": "Only an aggregator (Printago) claims Klipper with Moonraker. There is no vendor or community confirmation.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/colido-sr1"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false
+ },
+ {
+  "vendor": "Comgrow",
+  "model": "Comgrow T300",
+  "stock_firmware": "Klipper preinstalled + Moonraker + Mainsail/Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/comgrow/t300.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Comgrow",
+  "model": "Comgrow T500",
+  "stock_firmware": "Current (Sovol-sold, 7in Klipper screen) version ships Klipper preinstalled + WiFi; early 2023 units were Marlin (upstream Orca T500 profile was Marlin)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.sovol.tech/products/comgrow-t500-large-format-klipper-3d-printer-linear-rails",
+   "https://www.amazon.com/clp/B0CH886RQS",
+   "https://simplyprint.io/compatibility/comgrow-t500"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality CR-10 SE",
+  "stock_firmware": "Creality OS (vendor-patched Klipper, 'quasi-Klipper')",
+  "moonraker": "root/mod",
+  "mod_project": "Root in settings + CR-10 SE fork of Guilouz Creality Helper Script (https://github.com/Guilouz/Creality-Helper-Script)",
+  "sources": [
+   "https://all3dp.com/4/creality-announces-cr-10-se-3d-printer-running-quasi-klipper-creality-os/",
+   "https://simplyprint.io/setup-guide/creality/cr-10-se.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality CR-M4 SE",
+  "stock_firmware": "Unknown; new SE variant (420mm, 500mm/s). Vendor profile uses klipper gcode flavor and shares PSU with Creality Hi, which hints at Creality OS, but no source confirms. The original CR-M4 is Marlin.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/cr-m4",
+   "https://www.tomshardware.com/reviews/creality-cr-m4"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "I couldn't refute UNCLEAR. My web-search budget was used up, so I checked the profiles directly through the GitHub API and fetched pages. Creality's official product and wiki pages for the CR-M4 SE returned 404 at every URL I tried, and the site search shows no such model. The evidence points both ways. Pointing toward Klipper: Creality's own CrealityPrint profile for the CR-M4 SE sets gcode_flavor \"klipper\", while the original CR-M4 profile says \"marlin\". The SE profile also reuses the K1 build-plate model and allows 8000 mm/s² acceleration. Pointing against it: the SE's start G-code is the generic Marlin/Ender-style block (M220/M221, G28, purge lines) with no START_PRINT macro. Creality's real Klipper machines (Hi, K1 Max) call START_PRINT in their profiles. host_type is \"octoprint\" in all of these profiles, so it tells us nothing. I found no source for the SE's stock firmware, Creality OS, or Moonraker access. There is no established Klipper mod either: the only one I found is bcdesign3d/CR-M4-Klipper, which covers the original CR-M4 (a README and one printer.cfg, 1 star, last push 2025-02), so it doesn't count. A slicer profile flag is not proof of what firmware ships. Keep it UNCLEAR at low confidence until a Creality spec page or firmware release confirms it."
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality Ender-3 S1 Sonic",
+  "stock_firmware": "Ender-3 S1 (Marlin) driven by Creality Sonic Pad = Creality's Klipper host (Klipper+Moonraker+Fluidd on the pad)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.creality.com/blog/creality-to-advance-3d-printing-with-industrys-first-klipper-integrated-sonic-pad",
+   "https://simplyprint.io/setup-guide/creality/ender-3-s1-pro/sonic-pad/fluidd-setup"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality Ender-3 V3",
+  "stock_firmware": "Creality OS (vendor-patched Klipper), CoreXZ",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.creality.com/en/ender-series/ender-3-v3/quick-start-guide/how-to-control-the-ender-3-v3-using-fluidd-over-a-local-area-network"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality Ender-3 V3 KE",
+  "stock_firmware": "Creality OS (vendor-patched Klipper)",
+  "moonraker": "root/mod",
+  "mod_project": "Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/ender-3-v3-ke.md",
+   "https://guilouz.github.io/Creality-Helper-Script-Wiki/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality Ender-3 V3 Plus",
+  "stock_firmware": "Creality OS (vendor-patched Klipper), CoreXZ",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.creality.com/en/ender-series/ender-3-v3-plus/quick-start-guide",
+   "https://simplyprint.io/setup-guide/creality/ender-3-v3-plus.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality Ender-3 V4",
+  "stock_firmware": "Creality OS (Klipper-based), expert mode + root",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.creality.com/de/products/ender-3-v4"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality Ender-5 Max",
+  "stock_firmware": "Creality OS (vendor-patched Klipper), fw >= V1.2.0.21 for root",
+  "moonraker": "root/mod",
+  "mod_project": "Root + Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/compatibility/creality-ender-5-max",
+   "https://simplyprint.io/setup-guide/creality/ender-5-max.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality Ender-5 S1 Sonic",
+  "stock_firmware": "Ender-5 S1 (Marlin) driven by Creality Sonic Pad = Creality's Klipper host (Klipper+Moonraker+Fluidd on the pad)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.creality.com/blog/creality-to-advance-3d-printing-with-industrys-first-klipper-integrated-sonic-pad"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality Hi",
+  "stock_firmware": "Creality OS (vendor-patched Klipper)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://forum.creality.com/t/upgrading-the-pre-installed-moonraker-and-fluidd-packages/43309"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K1",
+  "stock_firmware": "Creality OS (vendor-patched Klipper), own web UI/port 9999",
+  "moonraker": "root/mod",
+  "mod_project": "Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k1.md",
+   "https://guilouz.github.io/Creality-Helper-Script-Wiki/"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K1 Max",
+  "stock_firmware": "Creality OS (vendor-patched Klipper)",
+  "moonraker": "root/mod",
+  "mod_project": "Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k1-max.md",
+   "https://guilouz.github.io/Creality-Helper-Script-Wiki/"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K1 Max_CFS-C",
+  "stock_firmware": "Creality OS (vendor-patched Klipper); K1 Max with CFS-C upgrade",
+  "moonraker": "root/mod",
+  "mod_project": "Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k1-max.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K1 SE",
+  "stock_firmware": "Creality OS (vendor-patched Klipper)",
+  "moonraker": "root/mod",
+  "mod_project": "Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k1-se.md"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K1 SE_CFS-C",
+  "stock_firmware": "Creality OS (vendor-patched Klipper); K1 SE with CFS-C upgrade",
+  "moonraker": "root/mod",
+  "mod_project": "Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k1-se.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K1C",
+  "stock_firmware": "Creality OS (vendor-patched Klipper); 2025 K1C lacks web UI stock",
+  "moonraker": "root/mod",
+  "mod_project": "Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k1c.md",
+   "https://forum.creality.com/t/k1c-2025-orcaslicer-workarounds-for-missing-web-interface/47164"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K1C_CFS-C",
+  "stock_firmware": "Creality OS (vendor-patched Klipper); K1C with CFS-C upgrade",
+  "moonraker": "root/mod",
+  "mod_project": "Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k1c.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K1_CFS-C",
+  "stock_firmware": "Creality OS (vendor-patched Klipper); K1 with CFS-C upgrade",
+  "moonraker": "root/mod",
+  "mod_project": "Creality Helper Script (Guilouz) https://github.com/Guilouz/Creality-Helper-Script",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k1.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K2",
+  "stock_firmware": "Creality OS (vendor-patched Klipper)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k2.md",
+   "https://docs.printago.io/docs/connecting-printers/creality"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K2 Plus",
+  "stock_firmware": "Creality OS (vendor-patched Klipper), Moonraker 7125 + Fluidd 4408",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k2-plus.md",
+   "https://docs.printago.io/docs/connecting-printers/creality",
+   "https://wiki.creality.com/en/k2-flagship-series/k2-plus/3rd-party-slicing"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K2 Pro",
+  "stock_firmware": "Creality OS (vendor-patched Klipper)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k2-pro.md",
+   "https://docs.printago.io/docs/connecting-printers/creality"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality K2 SE",
+  "stock_firmware": "Creality OS (vendor-patched Klipper), Fluidd on 4408",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/k2-se.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality SPARKX i7",
+  "stock_firmware": "Creality OS (vendor-patched Klipper); existing moonraker.conf, Fluidd on 4408 (root for SSH)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/creality/sparkx-i7.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Creality",
+  "model": "Creality Sermoon M300",
+  "stock_firmware": "Unknown; only Creality wiki manual/parts pages found, no firmware info. Vendor profile uses klipper flavor + START_PRINT macro (hints at Creality OS), unverified.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.creality.com/zh/sermoon-series/sermoon-m300"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "I tried to refute the claim and could not, so UNCLEAR stands at low confidence. No source I found says what firmware the M300 runs. The Creality wiki page for the M300 and its subpages (user manual, parts list, multi-color guide) mention no firmware at all: no Klipper, no Creality OS, no Moonraker, no Fluidd or Mainsail, no root or LAN web UI. I searched GitHub code for \"Sermoon M300\" and found nothing but slicer profiles. There are no community mod or root projects. OrcaSlicer PR #13948 added the profile by porting it from CrealityPrint v7.1.0 and says nothing about firmware. Two hints point toward a Klipper-based Creality OS, like the K1 and K2 machines. First, the M300 is built around Creality's CFS multi-color system, a touchscreen, Creality Cloud and Creality Print, the same ecosystem as the K2. Second, the profile uses the klipper G-code flavor and a START_PRINT macro. But the host_type is octoprint, not moonraker, and older Sermoon models used Marlin, so the hints are not proof. The Creality product, store and English wiki pages return 404. My search budget ran out before I could check Creality's firmware or GPL releases, so I cannot confirm STOCK_KLIPPER_NO_MOONRAKER either. Recommendation: keep it UNCLEAR and do not route it to Moonraker until Creality's firmware release notes or source code, or a teardown or root report, confirm Klipper."
+ },
+ {
+  "vendor": "Cubicon",
+  "model": "Cubicon xCeler-I",
+  "stock_firmware": "Unknown. The vendor (Hyvision) profile uses klipper flavor with START_PRINT EXTRUDER_TEMP/BED_TEMP and an octoprint host type, but neither the PRs nor the OrcaForCubicon repo state the firmware.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/SoftFever/OrcaSlicer/pull/10373",
+   "https://github.com/Hyvision/OrcaForCubicon"
+  ],
+  "confidence": "low",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true,
+  "second_opinion": "I disagree with UNCLEAR. The researcher missed the vendor's own docs in the Hyvision/OrcaForCubicon repo (Hyvision makes Cubicon). The file cubicon/doc/build-volume-guard-firmware.md is titled \"기종별 출력 제한 — 펌웨어(Klipper) 작업 문서\", which means \"per-model print limit: firmware (Klipper) work document\". It hands the Cubicon firmware team printer.cfg edits for the xCeler-Mini, xCeler-I (250x250x290) and xCeler-Plus: [gcode_macro START_PRINT] checks REQ_X/Y/Z, uses action_raise_error, and needs a [respond] section. It also says Klipper macros ignore parameters they don't use, so older machines in the field won't break when they get the new slicer files. So the machines in the field run a Klipper printer.cfg with vendor macros. That makes the firmware stock Klipper (possibly vendor-patched), not Marlin. The OrcaSlicer profile agrees: gcode_flavor is klipper and the start G-code is START_PRINT EXTRUDER_TEMP/BED_TEMP. It overrides the Marlin default in the common Cubicon file. On Moonraker, the same doc says Moonraker and Mainsail handle UTF-8 but some LCD firmwares break Korean text, so messages should be in English. That points to a Moonraker/Mainsail stack alongside the LCD, but I found no spec page that confirms Moonraker is reachable out of the box. The octoprint host_type in the profile does not rule it out, because OrcaSlicer's OctoPrint host type also works against Moonraker. Confidence is high that the firmware is Klipper and medium that Moonraker is stock; the fallback would be STOCK_KLIPPER_NO_MOONRAKER. I could not reach the Cubicon website (3dcubicon.com shows a captcha and cubicon.com redirects to a parked domain), and the WebSearch budget was used up. mod_project: none needed."
+ },
+ {
+  "vendor": "Cubicon",
+  "model": "Cubicon xCeler-Mini",
+  "stock_firmware": "Same as the xCeler-I: Klipper-style profile, firmware unconfirmed. Printago lists it as a closed protocol.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/OrcaSlicer/OrcaSlicer/pull/13172",
+   "https://printago.io/printers/cubicon-xceler-mini"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false
+ },
+ {
+  "vendor": "Cubicon",
+  "model": "Cubicon xCeler-Plus",
+  "stock_firmware": "Same as the xCeler-I: Klipper-style profile, firmware unconfirmed.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/OrcaSlicer/OrcaSlicer/actions/runs/20736409763"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "UNCLEAR is still the right verdict, but the researcher's note that the firmware is unconfirmed is too weak. OrcaSlicer PR #11771, which added the xCeler-Plus, was opened by GitHub user 'Hyvision'. HyVision System is the company that makes Cubicon printers. The PR says: \"Printing test passed with Klipper firmware\". The bundled machine profile (resources/profiles/Cubicon/machine/Cubicon xCeler-Plus 0.4 nozzle.json) uses gcode_flavor=klipper and the Klipper macros START_PRINT, END_PRINT and PAUSE. That is strong circumstantial evidence for stock Klipper, or a vendor-patched Klipper. I still could not verify it independently. The 3dcubicon.com vendor site returned a CAPTCHA page. The 'Hyvision' GitHub account belongs to an individual, not a company organization, and it has no Klipper or Moonraker repos. My search budget was used up before I could find vendor spec pages or community reports. Nothing shows Moonraker running on the printer, and the profile sets host_type to octoprint, not moonraker. So I cannot tell STOCK_KLIPPER_MOONRAKER apart from STOCK_KLIPPER_NO_MOONRAKER. I found no established third-party Klipper mod and no evidence that the printer runs non-Klipper firmware. Before keeping it in a Moonraker-only fork, check a vendor manual or a real unit for Moonraker (port 7125 or a Mainsail/Fluidd web UI)."
+ },
+ {
+  "vendor": "Custom",
+  "model": "Generic Klipper Printer",
+  "stock_firmware": "Klipper (generic self-built profile)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.klipper3d.org/",
+   "https://moonraker.readthedocs.io/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Custom",
+  "model": "Generic ToolChanger Printer",
+  "stock_firmware": "Klipper (generic self-built toolchanger profile)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.klipper3d.org/"
+  ],
+  "confidence": "medium",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "DeltaMaker",
+  "model": "DeltaMaker 2",
+  "stock_firmware": "Built-in Raspberry Pi. DeltaMaker publishes its own Klipper configs (deltamaker-mainsail-base.cfg, the Skybox Klipper host MCU) and keeps a Klipper fork. Older units shipped with OctoPrint, and the change date is unknown.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/DeltaMaker/deltamaker-config",
+   "https://www.deltamaker.com/products/deltamaker-2",
+   "https://github.com/DeltaMaker/klipper"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "DeltaMaker",
+  "model": "DeltaMaker 2T",
+  "stock_firmware": "The tall variant, with the same vendor Klipper and Mainsail config set and the same caveat that older units ran OctoPrint.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/DeltaMaker/deltamaker-config"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "DeltaMaker",
+  "model": "DeltaMaker 2XT",
+  "stock_firmware": "The extra-tall variant, with the same vendor Klipper and Mainsail config set.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/DeltaMaker/deltamaker-config"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Elegoo",
+  "model": "Elegoo Centauri",
+  "stock_firmware": "Elegoo OS (Klipper-derived, closed, SDCP protocol)",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/OpenCentauri/cosmos",
+   "https://printer-hub.ru/en/posts/elegoo-centauri-2-known-issues"
+  ],
+  "confidence": "low",
+  "verdict": "NOT_KLIPPER",
+  "kept": false,
+  "second_opinion": "I could not refute the claim. The stock firmware of the Centauri family is Elegoo's own closed firmware. It contains Klipper code and Klipper license notices (Elegoo published the source in Sept 2025 after first denying it used Klipper), but it is a vendor re-implementation, not klippy. It exposes no Moonraker and uses Elegoo's SDCP protocol. That is the same situation as Anycubic's GoKlipper, so under the maintainer's rule it does not count as real Klipper. The only real-Klipper path is OpenCentauri COSMOS (Klipper/Kalico on Yocto Linux). By its own README it is early beta and \"not currently stable\", and it only covers the Centauri Carbon (CC1 in beta, CC2 in alpha). No source lists support for the plain Elegoo Centauri, so it is not an established mod for this model. OpenCentauri cc-fw-tools only patches the stock Elegoo firmware and does not add Klipper or Moonraker. One caveat: the name 'Elegoo Centauri' is ambiguous. Printer-hub describes an open-frame 'Centauri 2' that went on sale in June 2026 and runs its own 'lite' firmware branch, and I found no proof that this is the same machine as the Orca profile. If COSMOS matures and adds this model, it would become KLIPPER_VIA_ESTABLISHED_MOD. Confidence: medium."
+ },
+ {
+  "vendor": "Elegoo",
+  "model": "Elegoo Centauri 2",
+  "stock_firmware": "Elegoo OS 'lite' branch (Klipper-derived, locked: SSH removed, downgrade blocked since 2026-05)",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://printer-hub.ru/en/posts/elegoo-centauri-2-known-issues",
+   "https://github.com/OpenCentauri/cosmos"
+  ],
+  "confidence": "medium",
+  "verdict": "NOT_KLIPPER",
+  "kept": false,
+  "second_opinion": "I could not refute the claim. The Centauri 2 is a separate machine from the Centauri Carbon 1 and 2. It is an open-frame CoreXY printer (256 mm cube, launched 2026-06-24) that runs Elegoo's own 'lite' firmware branch (for example lite1.03.02.26). No source I found shows Moonraker running on it stock, and nothing shows a working mod that puts real Klipper on it. Firmware 02.00.02.00 (2026-05-28) removed SSH, and downgrades have been blocked across the series since then. OpenCentauri COSMOS is Klipper/Kalico firmware, but its README only covers the CC1 (beta) and the CC2 (alpha in testing), and never mentions the Centauri 2. The printer-hub page says outright that nothing targets the Centauri 2 yet. One small correction to the stock_firmware field: printer-hub calls the firmware proprietary and not Klipper. Calling it 'Klipper-derived' is a reasonable guess because the Centauri Carbon firmware is a modified port of an old Klipper 0.9.x (all3dp), but no source confirms that for the Centauri 2. Either way the verdict does not change, because the firmware is locked and there is no real-Klipper path. Confidence stays medium: the model is new and the main source is a single third-party site. If COSMOS support for the Centauri 2 appears later, this would become KLIPPER_VIA_ESTABLISHED_MOD."
+ },
+ {
+  "vendor": "Elegoo",
+  "model": "Elegoo Centauri Carbon",
+  "stock_firmware": "Elegoo OS (heavily modified Klipper-derived, SDCP API, no Moonraker)",
+  "moonraker": "root/mod",
+  "mod_project": "OpenCentauri COSMOS (Klipper/Kalico firmware, EARLY BETA - not production-stable): https://github.com/OpenCentauri/cosmos",
+  "sources": [
+   "https://github.com/OpenCentauri/cosmos",
+   "https://all3dp.com/4/elegoo-releases-centauri-carbon-firmware-code-but-questions-remain/"
+  ],
+  "confidence": "low",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "Elegoo",
+  "model": "Elegoo Centauri Carbon 2",
+  "stock_firmware": "Elegoo OS (Klipper-derived, closed, SDCP)",
+  "moonraker": "n/a",
+  "mod_project": "OpenCentauri COSMOS CC2 only in private alpha (not usable yet): https://github.com/OpenCentauri/cosmos",
+  "sources": [
+   "https://github.com/OpenCentauri/cosmos",
+   "https://printer-hub.ru/en/posts/elegoo-centauri-2-known-issues"
+  ],
+  "confidence": "medium",
+  "verdict": "NOT_KLIPPER",
+  "kept": false,
+  "second_opinion": "I could not refute the claim. The stock firmware is ELEGOO OS. It borrows Klipper code, but it is heavily changed to run on a single chip, whereas real Klipper splits the work between a host computer and a separate controller chip. Elegoo itself says the firmware is not Klipper. It has no Moonraker; you reach it through Elegoo's own SDCP protocol and Elegoo Connect. The only project that puts real Klipper/Kalico on it is OpenCentauri COSMOS. Its README says the CC2 version is still an alpha under test, with a public beta coming 'shortly'. For CC2, the OpenCentauri page itself only shows a camera fix. The board-swap route to mainline Klipper is documented only for the original Centauri Carbon. So there is no established, working path to real Klipper today. Watch COSMOS: if the CC2 beta comes out, this model may move to KLIPPER_VIA_ESTABLISHED_MOD. Confidence: medium."
+ },
+ {
+  "vendor": "Elegoo",
+  "model": "Elegoo Neptune 4",
+  "stock_firmware": "Elegoo-patched Klipper + Moonraker + Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/elegoo/neptune-4-pro.md",
+   "https://printago.io/printers/elegoo-neptune-4"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Elegoo",
+  "model": "Elegoo Neptune 4 Max",
+  "stock_firmware": "Elegoo-patched Klipper + Moonraker + Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/elegoo/neptune-4-pro.md"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Elegoo",
+  "model": "Elegoo Neptune 4 Plus",
+  "stock_firmware": "Elegoo-patched Klipper + Moonraker (proxied via nginx port 80, 7125 closed externally)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/elegoo-neptune-4-plus",
+   "https://raspberry.tips/en/?p=16938"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Elegoo",
+  "model": "Elegoo Neptune 4 Pro",
+  "stock_firmware": "Elegoo-patched Klipper + Moonraker + Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/elegoo/neptune-4-pro.md",
+   "https://klipper.discourse.group/t/klipper-config-files-for-neptune-4-pro/10674"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Elegoo",
+  "model": "Elegoo OrangeStorm Giga",
+  "stock_firmware": "Elegoo-patched Klipper + Moonraker + Fluidd (Neptune 4 platform)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/elegoo/neptune-4-pro.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Eryone",
+  "model": "Eryone ER20 Klipper",
+  "stock_firmware": "Marlin (Eryone STM32 board); 'ER20 Klipper' profile is a community profile for user-converted machines (OrcaSlicer PR #10607), no official Eryone Klipper edition found",
+  "moonraker": "root/mod",
+  "mod_project": "Generic Klipper+Moonraker on external SBC, community ER20 conversion (no dedicated project) - https://github.com/SoftFever/OrcaSlicer/pull/10607",
+  "sources": [
+   "https://github.com/SoftFever/OrcaSlicer/pull/10607",
+   "https://github.com/Eryone/STM32/issues/8",
+   "https://forum.drucktipps3d.de/forum/thread/42569-eryone-er-20-auf-klipper-umstellen/"
+  ],
+  "confidence": "low",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true,
+  "second_opinion": "I could not refute the verdict. The researcher's evidence was weak, though, and I found a stronger source they missed. Upstream Klipper itself ships an official board config for this printer, config/printer-eryone-er20-2021.cfg in Klipper3d/klipper. It maps the ER-20's STM32F103 board with a 16KiB HID bootloader and TMC2209 steppers. So the real-Klipper path is mainline Klipper plus Moonraker on an external SBC. It is not just an ad-hoc community conversion. I found no sign that Eryone sells a stock Klipper edition. Eryone/STM32 issue #8 shows no vendor answer on Klipper flashing, and the 'ER20 Klipper' profile in OrcaSlicer PR #10607 came from a community member (Hangtimehippie), not from Eryone. The stock firmware stays Marlin and Moonraker is root/mod, so the verdict holds. Corrections: mod_project should be 'Mainline Klipper (upstream config printer-eryone-er20-2021.cfg) + Moonraker on SBC', and confidence can go from low to medium. My web search budget was used up, so I checked GitHub directly and did not re-check Eryone's own product page."
+ },
+ {
+  "vendor": "Eryone",
+  "model": "Thinker X400",
+  "stock_firmware": "Klipper (open firmware) + Moonraker",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.notebookcheck.com/Thinker-X400-3D-Drucker-bietet-grossen-Bauraum-und-offene-Firmware.1132410.0.html",
+   "https://printago.io/printers/eryone-thinker-x400"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "FLSun",
+  "model": "FLSun S1",
+  "stock_firmware": "FLSun Klipper + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.flsun3d.com/en/home/software",
+   "https://simplyprint.io/setup-guide/flsun/s1/enable-simplyprint/moonraker"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "FLSun",
+  "model": "FLSun T1",
+  "stock_firmware": "FLSun Klipper + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.flsun3d.com/en/home/software",
+   "https://simplyprint.io/setup-guide/flsun/t1/enable-simplyprint"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "FLSun",
+  "model": "FLSun V400",
+  "stock_firmware": "Klipper on Speeder Pad host + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/Guilouz/Klipper-Flsun-Speeder-Pad/wiki",
+   "https://wiki.flsun3d.com/en/home/software"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Flashforge",
+  "model": "Flashforge AD5X",
+  "stock_firmware": "Flashforge-patched Klipper behind proprietary app, no web UI",
+  "moonraker": "root/mod",
+  "mod_project": "ZMOD: https://github.com/ghzserg/zmod",
+  "sources": [
+   "https://github.com/ghzserg/zmod",
+   "https://simplyprint.io/setup-guide/flashforge/ad5x.md",
+   "https://revspace.nl/Flashforge_AD5X"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Flashforge",
+  "model": "Flashforge Adventurer 5M",
+  "stock_firmware": "Flashforge-patched Klipper (restricted), proprietary app/API",
+  "moonraker": "root/mod",
+  "mod_project": "ZMOD https://github.com/ghzserg/zmod ; Forge-X https://github.com/DrA1ex/ff5m ; Klipper Mod https://github.com/xblax/flashforge_ad5m_klipper_mod",
+  "sources": [
+   "https://github.com/xblax/flashforge_ad5m_klipper_mod",
+   "https://github.com/ghzserg/zmod",
+   "https://github.com/DrA1ex/ff5m"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Flashforge",
+  "model": "Flashforge Adventurer 5M Pro",
+  "stock_firmware": "Flashforge-patched Klipper (restricted), proprietary app/API",
+  "moonraker": "root/mod",
+  "mod_project": "ZMOD https://github.com/ghzserg/zmod ; Forge-X https://github.com/DrA1ex/ff5m ; Klipper Mod https://github.com/xblax/flashforge_ad5m_klipper_mod",
+  "sources": [
+   "https://github.com/xblax/flashforge_ad5m_klipper_mod",
+   "https://github.com/ghzserg/zmod"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Flashforge",
+  "model": "Flashforge Adventurer A5",
+  "stock_firmware": "unknown - no vendor spec/firmware info found (Orca profile uses klipper flavor, but not evidence)",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://www.flashforge.com/pages/download-center"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "I could not refute UNCLEAR. The A5 does exist. Flashforge ships its own profiles for it in FlashForge/Orca-Flashforge, and they reached upstream OrcaSlicer through PR #14733 (opened 2026-07-12). Every A5 preset inherits from the 'Flashforge Adventurer 5M Pro' base. The profiles use gcode_flavor=klipper and host_type=octoprint, and they reuse the 5M bed and hotend models. This makes a 5M-derived machine likely, and the 5M/5M Pro/AD5X ship with an old vendor-patched Klipper and no Moonraker. But slicer profile data does not prove what firmware runs on the printer. Evidence I checked: (1) flashforge.com has no A5 product page. The obvious URLs return 404, and the Shopify products.json lists only the 5M and 5M Pro, so there is no vendor spec or firmware statement. (2) The established mods that put real Klipper and Moonraker on Flashforge machines do not list the A5. ZMOD covers FF5M/5M Pro/AD5X/Creator 5/Creator 5 Pro. Forge-X (DrA1ex/ff5m) and xblax's klipper mod cover only the AD5M (Pro). A search of GitHub issues found no A5 references either. So KLIPPER_VIA_ESTABLISHED_MOD cannot apply, and nothing confirms STOCK_KLIPPER_*. Caveat: this session's WebSearch budget ran out part-way. I did not search non-English or regional launch coverage, such as Chinese-market listings, which may exist. Re-check once Flashforge publishes an A5 spec or firmware page, or once ZMOD adds support. Until then, following the maintainer's rule to keep only verified Klipper printers, UNCLEAR (and therefore excluded) is correct."
+ },
+ {
+  "vendor": "Flashforge",
+  "model": "Flashforge Creator 5",
+  "stock_firmware": "Flashforge proprietary app on Klipper 0.12-era tree",
+  "moonraker": "root/mod",
+  "mod_project": "ZMOD (v1.9.9) https://github.com/ghzserg/zmod ; Reforge (pre-release, full Klipper+Moonraker+Mainsail) https://github.com/Klipper4FlashForge/firmware",
+  "sources": [
+   "https://github.com/ghzserg/zmod",
+   "https://github.com/Klipper4FlashForge/firmware"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Flashforge",
+  "model": "Flashforge Creator 5 Pro",
+  "stock_firmware": "Flashforge proprietary app on Klipper 0.12-era tree",
+  "moonraker": "root/mod",
+  "mod_project": "ZMOD (v1.9.9) https://github.com/ghzserg/zmod ; Reforge (pre-release) https://github.com/Klipper4FlashForge/firmware",
+  "sources": [
+   "https://github.com/ghzserg/zmod",
+   "https://github.com/Klipper4FlashForge/firmware",
+   "https://github.com/Monstrofil/creator5-toolchange"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Flashforge",
+  "model": "Flashforge Guider 3 Ultra",
+  "stock_firmware": "Flashforge locked-down Klipper-based firmware",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://3dprint.com/306674/3d-printer-review-the-flashforge-guider-3-ultra-an-unfinished-beast/",
+   "https://www.flashforge.com/a/docs/guider-3-ultra/firmware-release-note"
+  ],
+  "confidence": "low",
+  "verdict": "STOCK_KLIPPER_NO_MOONRAKER",
+  "kept": true,
+  "second_opinion": "I could not refute the claim. Two independent sources point to a modified Klipper on the stock firmware. First, a 3dprint.com reviewer found Klipper in the printer's logs. Second, a Klipper Discourse thread on a Flashforge license violation lists the Guider 3, 3 Plus and 3 Ultra among the Flashforge printers confirmed to run modified Klipper. Flashforge itself calls the firmware closed source and denies using Klipper code, so the evidence is mixed but leans toward Klipper. Moonraker does not ship stock. The printer talks through Flashforge's own network API and cloud. I searched GitHub and the wider web and found no established root or Klipper/Moonraker mod for the Guider 3 Ultra. Mods of that kind exist only for the AD5M (xblax), the Creator 5 (pappicio/ffc5) and the Adventurer 3 (SSH only). So moonraker='n/a' and an empty mod_project are correct. Because nothing puts Moonraker on this printer, it has no working path to Moonraker, which is the only print host. Under the maintainer's rule it should not be offered as a Moonraker print host, even though its firmware is Klipper-based. I would raise confidence from low to medium, since two independent sources confirm Klipper in the firmware."
+ },
+ {
+  "vendor": "Flashforge",
+  "model": "Flashforge Guider4",
+  "stock_firmware": "Flashforge proprietary (likely Klipper-based like other new FF models, unverified)",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://www.fabbaloo.com/?p=230135",
+   "https://printago.io/printers/flashforge-guider4-pro"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "I could not refute the claim. I found no source that proves either Klipper firmware or a Klipper mod for this printer. There are signs it probably runs a Klipper-based stock firmware with no Moonraker (STOCK_KLIPPER_NO_MOONRAKER), but none of them are proof. (1) In OrcaSlicer, the 'Flashforge Guider4 0.4 nozzle' profile inherits from 'Flashforge Adventurer 5M Pro 0.4 Nozzle'. The AD5M runs stock Klipper, and Flashforge has published that GPL source as FlashForge/AD5M_Series_Klipper. The Guider4 profile also sets gcode_flavor=klipper and a start G-code built on the START_GCODE macro, just like the AD5M. But host_type is octoprint, which here means Flashforge's own LAN integration, not Moonraker. (2) Flashforge has published no GPL Klipper source for the Guider 4. Its GitHub org has only AD5M_Series_Klipper, OrcaSlicer and Orca-Flashforge. (3) None of the established Flashforge Klipper mods list the Guider 4 in their README: ghzserg/zmod (AD5M/5M Pro/AD5X/Creator 5 Pro), DrA1ex/ff5m (Forge-X), xblax/flashforge_ad5m_klipper_mod and Klipper4FlashForge/firmware (Creator 5/5 Pro). zmod's docs mention 'Guider 4 Pro' only in the name of a Russian Telegram community chat, not as a supported printer. (4) Searching GitHub code for Guider4 finds only slicer profile copies, no firmware or rooting projects. (5) printago's Guider4 Pro page just says 'coming soon' and has no firmware details. The Fabbaloo page returned 403, so I could not check it. So Moonraker is 'n/a' (not stock, no known mod), and mod_project stays empty. The printer should not be kept as a Moonraker target until someone confirms stock Klipper plus Moonraker or a working mod. If the maintainer wants to reclassify, the most likely correct verdict is STOCK_KLIPPER_NO_MOONRAKER, with low-to-medium confidence. Note: my web search budget ran out partway through, so I could not check Reddit or forum threads."
+ },
+ {
+  "vendor": "Flashforge",
+  "model": "Flashforge Guider4 Pro",
+  "stock_firmware": "Flashforge proprietary (likely Klipper-based, unverified)",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://www.fabbaloo.com/?p=230135",
+   "https://printago.io/printers/flashforge-guider4-pro"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false
+ },
+ {
+  "vendor": "FlyingBear",
+  "model": "FlyingBear Ghost7",
+  "stock_firmware": "Klipper-based (vendor profile uses Klipper macros PRINT_START/BED_MESH_CLEAR; vendor page does not state firmware); Moonraker listed by Printago LAN connector",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/flyingbear-ghost7",
+   "https://3dflyingbear.com/products/flying-bear-ghost7-3d-printer-with-auto-platform-swap-5-color-printing-600mm-s-speed"
+  ],
+  "confidence": "low",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true,
+  "second_opinion": "I tried to refute the claim and could not. The stock-Klipper evidence is stronger than the researcher showed. The official OrcaSlicer vendor profile 'FlyingBear Ghost7 0.4 nozzle' inherits 'fdm_klipper_common' (gcode_flavor klipper). Its vendor start G-code (v1.0.1-20250822) calls SET_PRINT_STATS_INFO TOTAL_LAYER=..., CLEAR_PAUSE, BED_MESH_CLEAR and PRINT_START. SET_PRINT_STATS_INFO and CLEAR_PAUSE are native Klippy commands, which suggests real (vendor-patched) klippy rather than a GoKlipper-style reimplementation. Flying Bear's other current machines (S1, Reborn3) also use Klipper profiles, and there is a large community of Flying Bear Klipper users (Ghost 4S/5/6 Klipper repos on GitHub). I found no evidence of Marlin or proprietary firmware on the Ghost7. Weak points: (1) Flying Bear's product page names no firmware and mentions only 'Wi-Fi connectivity', and there is no Ghost7 download center (the S1, Reborn 3 and Ghost 5/6 each have one). (2) The Printago page is generic boilerplate ('Moonraker should be running... on most Klipper installs'), not proof of stock Moonraker. (3) I found no Ghost7 root/mod project and no confirmed Fluidd/Mainsail screenshot. My web-search budget ran out, so I could not check forums or reviews on whether Moonraker port 7125 is open. Low confidence on the Moonraker part is right. Before shipping a Moonraker print-host preset, get a user report or a manual check of port 7125."
+ },
+ {
+  "vendor": "FlyingBear",
+  "model": "FlyingBear Reborn3",
+  "stock_firmware": "Klipper (vendor: 'Core XY structure perfectly matched with Klipper Firmware'), WiFi/Ethernet",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://3dflyingbear.com/products/flying-bear-3d-printer-reborn-3",
+   "https://printago.io/printers/flyingbear-reborn3"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "FlyingBear",
+  "model": "FlyingBear S1",
+  "stock_firmware": "Klipper with native Klipper UI on 4.3in screen, WiFi",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://3dflyingbear.com/products/flying-bear-high-speed-3d-printer-s1",
+   "https://printago.io/printers/flyingbear-s1"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Ginger Additive",
+  "model": "Ginger G1",
+  "stock_firmware": "The vendor site says 'Klipper-based control'. The vendor profile targets host G1OS.local and uses KAMP leveling macros. Moonraker is inferred from G1OS rather than stated by the vendor.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://gingeradditive.com",
+   "https://printago.io/printers/ginger-additive-ginger-g1"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "InfiMech",
+  "model": "InfiMech EX",
+  "stock_firmware": "The successor to the TX. Its profile uses the same versioned Klipper start macros as the TX, and Printago connects to it through Moonraker. There is no independent EX teardown.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/infimech-ex",
+   "https://github.com/jimmyjon711/InfimechTxUpgrade"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "InfiMech",
+  "model": "InfiMech EX+APS",
+  "stock_firmware": "The EX with the APS option. Treated the same as the EX (Klipper with Moonraker).",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/infimech-ex-aps"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "InfiMech",
+  "model": "InfiMech TX",
+  "stock_firmware": "Stock Klipper (v0.10) on a Makerbase MKS host (user mks) with Moonraker and Fluidd. A community guide upgrades it from Klipper 10 to 12.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/jimmyjon711/InfimechTxUpgrade",
+   "https://printago.io/printers/infimech-tx"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "InfiMech",
+  "model": "InfiMech TX Hardened Steel Nozzle",
+  "stock_firmware": "The same TX machine with a different nozzle: stock Klipper with Moonraker and Fluidd.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/jimmyjon711/InfimechTxUpgrade"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Kingroon",
+  "model": "Kingroon KLP1",
+  "stock_firmware": "Klipper preinstalled on built-in host + Moonraker + Mainsail/Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://obico.io/blog/kingroon-klipper-remote-access-and-ai/",
+   "https://www.framboise314.fr/wp-content/uploads/2023/12/KLP1_Notice-EN-V2.1.pdf"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Kingroon",
+  "model": "Kingroon KP3S PRO V2",
+  "stock_firmware": "Klipper preinstalled + Moonraker + Mainsail/Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://obico.io/blog/kingroon-klipper-remote-access-and-ai/",
+   "https://simplyprint.io/setup-guide/kingroon/kp3s-pro-v2.md"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Kingroon",
+  "model": "Kingroon KP3S V1",
+  "stock_firmware": "Marlin (Robin Nano/Mini clone board)",
+  "moonraker": "root/mod",
+  "mod_project": "Upstream Klipper config printer-kingroon-kp3s-2020.cfg + external SBC (MainsailOS) - https://github.com/Klipper3d/klipper/tree/master/config",
+  "sources": [
+   "https://3dprintbeginner.com/how-to-install-klipper-on-kingroon-kp3s/",
+   "https://github.com/Klipper3d/klipper/tree/master/config"
+  ],
+  "confidence": "medium",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "LH",
+  "model": "LH Stinger",
+  "stock_firmware": "Klipper/Kalico (self-sourced or FYSETC kit)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/lhndo/LH-Stinger"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "LH",
+  "model": "LH Stinger MMU",
+  "stock_firmware": "Klipper/Kalico with LHS Pico MMU addon",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/lhndo/LH-Stinger"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "LONGER",
+  "model": "LONGER LK10",
+  "stock_firmware": "Vendor states Klipper high-speed board + WiFi/LAN (released 2026-04); Moonraker/web UI not documented anywhere found",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://www.longer.net/products/lk10-fdm-3d-printer",
+   "https://www.igeekphone.com/longer-lk10-3d-printer-review-high-speed-klipper-performance-meets-precision-printing/"
+  ],
+  "confidence": "low",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true,
+  "second_opinion": "UNCLEAR is too cautious. LONGER's own downloads show the LK10 runs Klipper out of the box. (1) LONGER's official sample G-code for the LK10 (Drive folder linked from longer.net/pages/download-lk10, sliced with the vendor's OrcaSlicer profile) has 'gcode_flavor = klipper'. It uses commands only Klipper understands: EXCLUDE_OBJECT_DEFINE/START/END, SET_VELOCITY_LIMIT ACCEL_TO_DECEL/SQUARE_CORNER_VELOCITY, and custom Klipper macros (START_PRINT_PREPARE, START_PRINT_COOL_PURGE, START_PRINT_FINAL_HEAT). It also has 'host_type = octoprint', 'printer_model = LONGER LK10'. (2) The official LK10 user manual (spec table) lists LAN + WiFi. Chapter 'Connect the LK10 to OrcaSlicer' says: 'Select \"Octo/Klipper\" as the host type, enter the IP address ... click \"Test\"'. So there is a network host API reachable out of the box with no root. OrcaSlicer's Octo/Klipper host is the one used for Moonraker, which answers it through its OctoPrint-compatible API. (3) Product page: 'Klipper High-Speed Board'. Caveat: no LONGER document names Moonraker, Mainsail or Fluidd explicitly. The host could in theory be a vendor shim that only mimics the OctoPrint API, so the Moonraker part is inferred, not documented. Confidence is medium: Klipper itself is high, Moonraker is medium. If strict Moonraker proof is required, fall back to STOCK_KLIPPER_NO_MOONRAKER pending a hardware check (port 7125 / /server/info). NOT_KLIPPER and UNCLEAR are both refuted. Web search budget was exhausted, so community/Reddit confirmation was not possible. No GitHub repos for the LK10 exist, so there is also no mod project."
+ },
+ {
+  "vendor": "LONGER",
+  "model": "LONGER LK10 Plus",
+  "stock_firmware": "Vendor states Klipper high-speed board + WiFi/LAN/USB; Moonraker/web UI not documented anywhere found",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://www.longer.net/products/lk10-fdm-3d-printer",
+   "https://www.igeekphone.com/longer-lk10-plus-3d-printer-review-large-build-volume-meets-high-speed-performance/"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "I could not refute the claim, and new evidence partly backs it up. The \"Klipper\" part is now better supported than the researcher showed. The vendor's own product page (longer.net/products/lk10-plus-fdm-3d-printer) lists a \"Klipper High-Speed Board\" and a 4.3-inch touchscreen. The official OrcaSlicer LONGER profile for the LK10 Plus uses gcode_flavor \"klipper\". Its start G-code calls custom macros (START_PRINT_PREPARE, START_PURGE_WIPE, START_PRINT_FINAL_HEAT, START_PRIME_LINES), which points to a Klipper-style macro setup on the printer. The Moonraker part is still unknown. The official page says nothing about WiFi, LAN, a web UI, Moonraker, Mainsail or Fluidd. Only the iGeekphone review mentions WiFi/LAN/USB, and it does not say how the printer is reached over the network. A GitHub search for \"LK10 klipper\" found no repositories, so there are no community root or Moonraker mods and no public printer.cfg. So the printer is probably stock Klipper, maybe a vendor fork, but I cannot confirm Moonraker, so neither STOCK_KLIPPER_MOONRAKER nor STOCK_KLIPPER_NO_MOONRAKER can be chosen. If a single category had to be forced, the likelier one is STOCK_KLIPPER_NO_MOONRAKER, at low confidence. I found no evidence that it is Marlin. Confidence: medium that it runs Klipper, low on Moonraker. Limit: my web-search budget was used up, so this check relied on direct page fetches plus the GitHub API and raw-file downloads."
+ },
+ {
+  "vendor": "MagicMaker",
+  "model": "MM BoneKing",
+  "stock_firmware": "Unknown. No vendor documentation was found. The profile says klipper with a PRINT_START macro, and Printago lists it as a closed protocol.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/magicmaker-mm-boneking"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false
+ },
+ {
+  "vendor": "MagicMaker",
+  "model": "MM hj SK",
+  "stock_firmware": "Unknown. No vendor documentation was found. The profile says klipper, but its start G-code is plain G-code.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/mm-hj-sk"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false
+ },
+ {
+  "vendor": "Mellow",
+  "model": "M1",
+  "stock_firmware": "Mellow's machined build of the open flatpack design. Its integrated board combines a Fly D5 with a Fly Pi Lite v2 host and runs Klipper. Moonraker is expected from Mellow's FlyOS stack, but no source confirms it for the M1 specifically.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/eponra/flatpack",
+   "https://mellow.klipper.cn/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "OpenEYE",
+  "model": "OpenEYE Peacock V2",
+  "stock_firmware": "The vendor profile targets host openeye3dpi.local (a Pi host) and uses Happy Hare Klipper MMU macros (MMU_START_SETUP) and SET_PRINT_STATS_INFO, which points to Klipper on a Pi. The vendor site (openeye.tech) did not respond.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/OrcaSlicer/OrcaSlicer/pull/11745",
+   "https://github.com/OrcaSlicer/OrcaSlicer/blob/main/resources/profiles/OpenEYE/process/0.16mm%20Standard%20@OpenEYE%20Peacock%20V2.json"
+  ],
+  "confidence": "low",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true,
+  "second_opinion": "I could not refute the claim, and the Orca profile gives more support than the researcher cited. In fdm_openeye_common.json: gcode_flavor \"klipper\", host_type \"octoprint\" (the value Orca's \"Octo/Klipper\" host type uses, which covers Moonraker), print_host \"openeye3dpi.local\" (a Pi host). The Peacock V2 machine profile uses Klipper-only commands: SET_PRINT_STATS_INFO, Happy Hare MMU_START_SETUP / MMU_START_CHECK / MMU_START_LOAD_INITIAL_TOOL / _MMU_UPDATE_HEIGHT / MMU_END, and START_PRINT with adaptive-mesh parameters. Happy Hare only runs on real Klipper, so a GoKlipper or other non-Klipper firmware is very unlikely. I found no evidence of Marlin or proprietary firmware. Limits: www.openeye.tech does not resolve in DNS (ENOTFOUND), the OrcaSlicer PR #11745 description says nothing about firmware or host, and my web search budget was used up, so I found no independent vendor spec page. Moonraker being there out of the box is inferred from the profile's host setup, not confirmed by the vendor. The vendor site being unreachable also raises the question whether the product is still on sale. Confidence stays low to medium."
+ },
+ {
+  "vendor": "OrcaArena",
+  "model": "Orca Arena X1 Carbon",
+  "stock_firmware": "Not a buyable product. It is a 2023 test profile by OrcaSlicer's author (SoftFever) built on Bambu X1 bed and hotend models. The X1 Carbon hardware runs Bambu's proprietary firmware, and I found no established way to put real Klipper on it.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/OrcaSlicer/OrcaSlicer/commit/e0ac508f6a08fea91475c7118a4c5b4952e699b6",
+   "https://github.com/OrcaSlicer/OrcaSlicer/pull/15796"
+  ],
+  "confidence": "medium",
+  "verdict": "NOT_KLIPPER",
+  "kept": false,
+  "second_opinion": "I agree the profile should be removed, because it does not describe a printer anyone can buy. I found no shop, spec page or firmware for an 'Orca Arena' product. The vendor URL is empty locally, and PR #15796 only pointed it at orcaslicer.com. So no real machine exists that runs Klipper, and the rule \"keep only printers that really run Klipper\" excludes it.\n\nThe researcher's reasoning is partly wrong, though. It says the profile stands for Bambu X1C hardware running Bambu firmware, but the local profile says otherwise. In resources/profiles/OrcaArena/machine/fdm_bbl_3dp_001_common.json, the base preset that 'Orca Arena X1 Carbon 0.4 nozzle' inherits from sets \"gcode_flavor\": \"klipper\". Its start G-code also calls a Klipper PRINT_START macro (\"PRINT_START EXTRUDER=... BED=...\"). Only fdm_machine_common.json falls back to marlin. So it is a Klipper-flavored reference profile that borrows Bambu-style file names, bed and hotend models, not a Bambu machine profile.\n\nThat does not make it a real Klipper printer. It is not a DIY design either (there are no build docs or BOM), and no mod project applies to hardware that does not exist.\n\nLimits of this check:\n- WebFetch summaries of the PR and commit were unreliable. One called it a 'real 3D printer product' and one invented 'Arena P1P' models, and nothing supports either claim.\n- My web-search budget was used up, so I could not do an independent product search.\n- Confidence is medium."
+ },
+ {
+  "vendor": "Peopoly",
+  "model": "Peopoly Magneto X",
+  "stock_firmware": "Klipper + Moonraker + Mainsail/Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/peopoly/magneto-x.md"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Phrozen",
+  "model": "Phrozen Arco",
+  "stock_firmware": "Phrozen Klipper fork + Moonraker fork + Fluidd (official repo); community 'arco-unleashed' migrates to Klipper v0.13",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/phrozen3d/Phrozen_ARCO",
+   "https://github.com/solutionphil/arco-unleashed"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Positron3D",
+  "model": "The Positron",
+  "stock_firmware": "Klipper (open-source kit by Positron3D/LDO)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.jeffgeerling.com/blog/2024/positron-upside-down-and-portable-3d-printer/",
+   "https://simplyprint.io/setup-guide/positron-3d/positron-v3"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Qidi",
+  "model": "Qidi Q1 Pro",
+  "stock_firmware": "QIDI-patched Klipper + Moonraker + Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/QIDITECH/QIDI_Q1_Pro",
+   "https://github.com/Phil1988/FreeDi"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Qidi",
+  "model": "Qidi Q2",
+  "stock_firmware": "QIDI-patched Klipper + Moonraker + Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://simplyprint.io/setup-guide/qidi-tech/q2.md",
+   "https://github.com/53Aries/Q2-Klipper"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Qidi",
+  "model": "Qidi Q2C",
+  "stock_firmware": "QIDI-patched Klipper (vendor FAQ: 'runs on Klipper firmware'); same QIDI stack as Q2",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://eu.qidi3d.com/pages/qidi-q2c-faq",
+   "https://au.qidi3d.com/pages/qidi-q2c-techspecs"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Qidi",
+  "model": "Qidi X-Max 3",
+  "stock_firmware": "QIDI-patched Klipper + Moonraker + Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/QIDITECH/QIDI_MAX3",
+   "https://github.com/QIDITECH/moonraker"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Qidi",
+  "model": "Qidi X-Max 4",
+  "stock_firmware": "QIDI-patched Klipper + Moonraker + Fluidd (same generation as Plus4/Q2)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/QIDITECH/moonraker",
+   "https://github.com/QIDITECH/QIDI_PLUS4"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Qidi",
+  "model": "Qidi X-Plus 3",
+  "stock_firmware": "QIDI-patched Klipper + Moonraker + Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/QIDITECH/moonraker",
+   "https://github.com/Phil1988/FreeQIDI"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Qidi",
+  "model": "Qidi X-Plus 4",
+  "stock_firmware": "QIDI-patched Klipper + Moonraker + Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/QIDITECH/QIDI_PLUS4",
+   "https://github.com/Phil1988/FreeDi"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Qidi",
+  "model": "Qidi X-Plus 5",
+  "stock_firmware": "QIDI-patched Klipper (Plus5, successor of Plus4)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.qidi3d.com/en/Plus5/intro-Plus5",
+   "https://all3dp.com/4/qidis-new-plus5-brings-an-18-bigger-bed-for-749-handles-up-to-16-spools/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Qidi",
+  "model": "Qidi X-Smart 3",
+  "stock_firmware": "QIDI-patched Klipper + Moonraker + Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/QIDITECH/moonraker",
+   "https://github.com/Phil1988/FreeQIDI"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "RH3D",
+  "model": "E3NG v1.2S",
+  "stock_firmware": "A DIY kit that rebuilds an Ender-3 (Ender-3 NG by RH3D). The vendor profile uses PRINT_START with EXTRUDER, BED and CHAMBER parameters, and community toolchanger and gantry mods for it exist.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/emna2881/E3NG-Toolchanger",
+   "https://github.com/HeavilyModdedEnder3/E3NG-x-Monolith",
+   "https://printago.io/printers/rh3d-e3ng-v12s"
+  ],
+  "confidence": "medium",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "RH3D",
+  "model": "VIRTU E3",
+  "stock_firmware": "An RH3D DIY kit in the same family, using the same vendor Klipper PRINT_START profile.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/OrcaSlicer/OrcaSlicer/pull/14707",
+   "https://printago.io/printers/rh3d-virtu-e3"
+  ],
+  "confidence": "low",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Cast",
+  "stock_firmware": "Klipper via RatOS (RatRig DIY kit); little public detail on V-Cast itself",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/ratrig-v-cast",
+   "https://os.ratrig.com/docs/introduction/"
+  ],
+  "confidence": "medium",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 3 200",
+  "stock_firmware": "Klipper via RatOS (Klipper+Moonraker+Mainsail)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://v-core.ratrig.com/firmware/",
+   "https://os.ratrig.com/docs/introduction/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 3 300",
+  "stock_firmware": "Klipper via RatOS",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://v-core.ratrig.com/firmware/",
+   "https://os.ratrig.com/docs/introduction/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 3 400",
+  "stock_firmware": "Klipper via RatOS",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://v-core.ratrig.com/firmware/",
+   "https://os.ratrig.com/docs/introduction/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 3 500",
+  "stock_firmware": "Klipper via RatOS",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://v-core.ratrig.com/firmware/",
+   "https://os.ratrig.com/docs/introduction/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 300",
+  "stock_firmware": "Klipper via RatOS 2.x",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction",
+   "https://simplyprint.io/setup-guide/rat-rig/v-core-4-0-400mm"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 400",
+  "stock_firmware": "Klipper via RatOS 2.x",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction",
+   "https://simplyprint.io/setup-guide/rat-rig/v-core-4-0-400mm"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 500",
+  "stock_firmware": "Klipper via RatOS 2.x",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction",
+   "https://simplyprint.io/setup-guide/rat-rig/v-core-4-0-500mm"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 HYBRID 300",
+  "stock_firmware": "Klipper via RatOS 2.x",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 HYBRID 400",
+  "stock_firmware": "Klipper via RatOS 2.x",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 HYBRID 500",
+  "stock_firmware": "Klipper via RatOS 2.x",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 IDEX 300",
+  "stock_firmware": "Klipper via RatOS 2.x (IDEX support)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 IDEX 300 COPY MODE",
+  "stock_firmware": "Klipper via RatOS 2.x (IDEX copy mode)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 IDEX 300 MIRROR MODE",
+  "stock_firmware": "Klipper via RatOS 2.x (IDEX mirror mode)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 IDEX 400",
+  "stock_firmware": "Klipper via RatOS 2.x (IDEX support)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 IDEX 400 COPY MODE",
+  "stock_firmware": "Klipper via RatOS 2.x (IDEX copy mode)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 IDEX 400 MIRROR MODE",
+  "stock_firmware": "Klipper via RatOS 2.x (IDEX mirror mode)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 IDEX 500",
+  "stock_firmware": "Klipper via RatOS 2.x (IDEX support)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 IDEX 500 COPY MODE",
+  "stock_firmware": "Klipper via RatOS 2.x (IDEX copy mode)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Core 4 IDEX 500 MIRROR MODE",
+  "stock_firmware": "Klipper via RatOS 2.x (IDEX mirror mode)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://os.ratrig.com/docs/2.0.x/introduction"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Ratrig",
+  "model": "RatRig V-Minion",
+  "stock_firmware": "Klipper via RatOS (officially supported)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.ratrig.com/product-details/v-minion-1-0",
+   "https://os.ratrig.com/docs/introduction/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "RolohaunDesign",
+  "model": "Rolohaun Delta Flyer Refit",
+  "stock_firmware": "Klipper (LDO DIY delta kit, Manta E3EZ / BTT boards)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://store.dremc.com.au/products/ldo-rolohaun-delta-flyer-diy-3d-printer-kit",
+   "https://www.fabreeko.com/products/delta-flyer-kit-by-ldo"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "RolohaunDesign",
+  "model": "Rook MK1 LDO",
+  "stock_firmware": "Klipper (LDO DIY CoreXY kit, BTT M4P + CB1)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://west3d.com/products/rook-mk1-3d-printer-kit-by-rolohaun-1",
+   "https://fabreeko.com/products/rook-mk1-3d-printer-by-ldo-motors"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "SecKit",
+  "model": "SecKit SK-Tank",
+  "stock_firmware": "A DIY CoreXY kit with a large community of modders. The vendor profile uses START_PRINT Klipper macros, and builders run Klipper with Moonraker.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/seckit-sk-tank",
+   "https://www.printables.com/model/142277-sk-tank-cf-bmg-dual-5015s-mount",
+   "https://github.com/SecKit/Breezer"
+  ],
+  "confidence": "medium",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "SecKit",
+  "model": "Seckit Go3",
+  "stock_firmware": "A SecKit DIY kit. The vendor profile uses Klipper START_PRINT, and Printago connects through Moonraker.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://printago.io/printers/seckit-go3"
+  ],
+  "confidence": "medium",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Snapmaker",
+  "model": "Snapmaker U1",
+  "stock_firmware": "Snapmaker fork of Klipper (~20% modified) + Moonraker fork + Fluidd fork, GPL sources published 2026-03-30",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.snapmaker.com/blog/snapmaker-u1-firmware-now-on-github",
+   "https://github.com/Snapmaker/u1-moonraker",
+   "https://all3dp.com/4/snapmaker-open-sources-its-u1-klipper-code-with-a-day-to-spare/"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Sovol",
+  "model": "Sovol SV06 ACE",
+  "stock_firmware": "Sovol Klipper + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/Sovol3d",
+   "https://www.sovol3d.com/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Sovol",
+  "model": "Sovol SV06 Plus ACE",
+  "stock_firmware": "Sovol Klipper + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/Sovol3d",
+   "https://www.sovol3d.com/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Sovol",
+  "model": "Sovol SV07 Plus",
+  "stock_firmware": "Klipper on Klipad50 screen host + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/Sovol3d",
+   "https://www.sovol3d.com/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Sovol",
+  "model": "Sovol SV08",
+  "stock_firmware": "Sovol Klipper fork + Moonraker + Mainsail (open source)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/Sovol3d/SV08"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Sovol",
+  "model": "Sovol SV08 MAX",
+  "stock_firmware": "Sovol Klipper + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/Sovol3d",
+   "https://www.sovol3d.com/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Sovol",
+  "model": "Sovol Zero",
+  "stock_firmware": "Sovol Klipper + Moonraker + Mainsail",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/Sovol3d",
+   "https://www.sovol3d.com/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Tiertime",
+  "model": "Tiertime UP300 HS",
+  "stock_firmware": "Tiertime firmware on an integrated Linux 7-inch touchscreen. The vendor's own Orca profile (by GuoGeTiertime) uses klipper flavor plus PRINT_START/PRINT_END macros, which suggests a Klipper-based core, but nothing public confirms it. Tiertime only documents Klipper for the Cetus2 Wand Server.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://www.tiertime.com/up300hs/",
+   "https://support.tiertime.com/hc/en-us/articles/29021442701081-Wand-Server-Firmware-Update-including-Klipper",
+   "https://printago.io/printers/tiertime-up300-hs"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "I couldn't refute the claim, so I agree it stays UNCLEAR. The Tiertime product page names only UP Studio 3.0 / OrcaSlicer and USB/WiFi/Ethernet. It never mentions Klipper, Moonraker, Mainsail, Fluidd or a network print API. The OrcaSlicer profile gives mixed signals. fdm_tiertime_common.json uses gcode_flavor 'klipper' with PRINT_START/PRINT_END macros, but that file says it was made for the UP400 Pro. fdm_machine_common.json in the same vendor folder uses gcode_flavor 'marlin' and a start gcode with custom Tiertime M-codes (M970/M974). No Tiertime profile sets host_type (no Moonraker). A 'klipper' flavor in a slicer profile does not prove the stock firmware is Klipper. I found no public Klipper firmware, Moonraker endpoint or community Klipper mod for the UP300 HS. Printago's page now returns 404. The Tiertime support article on Klipper for the Wand Server returned 403. My web search budget ran out, so I couldn't check forums further. My confidence is low. For ANANAS SLICER, the printer should not be kept as a Moonraker host unless new evidence turns up."
+ },
+ {
+  "vendor": "Tiertime",
+  "model": "Tiertime UP310 Pro",
+  "stock_firmware": "Same situation as the UP300 HS: the vendor profile uses Klipper-style macros, but no public source confirms Klipper and no Moonraker is documented. Printago lists it as a closed vendor protocol.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://www.tiertime.com/up310pro/",
+   "https://printago.io/printers/tiertime-up310-pro"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false,
+  "second_opinion": "I could not refute the claim, but the research was limited: the web-search budget was used up, so I checked a small set of pages directly. What I found: (1) The vendor profile (resources/profiles/Tiertime/machine/fdm_tiertime_common.json) sets gcode_flavor \"klipper\" and uses the macros PRINT_START and PRINT_END. That is only a weak hint, because any firmware with custom macros could accept those names, and many Orca vendor profiles pick the klipper flavor without running Klipper. (2) The PR that added the Tiertime profiles (OrcaSlicer #9739, by a Tiertime employee, GuoGeTiertime) and the later Tiertime PRs never mention firmware, Klipper or Moonraker. (3) tiertime.com has no UP310 Pro page; tiertime.com/up310pro/ returns 404, as does the Printago page the researcher cited. The sister UP300HS page names only UP Studio 3.0/OrcaSlicer, Cloud Print Settings and a Print Queue, with USB/WiFi/Ethernet. It says nothing about Klipper, Mainsail, Fluidd or Moonraker. (4) A GitHub repository search for Tiertime + Klipper finds only a small hobby add-on board for the older Cetus2 (Awesome-Toys/Cetus2_Klipper_, 1 star), which is not established and does not cover the UP310 Pro. There is no established mod that puts real Klipper on the UP310 Pro. Stock Klipper is neither confirmed nor ruled out, so UNCLEAR at low confidence stands. Practical point for ANANAS SLICER: nothing documents Moonraker, so under the rule 'Moonraker only, real Klipper only' this model should not be routed to Moonraker until Klipper is proven. Leaning NOT_KLIPPER, since Tiertime uses its own UP Studio and cloud ecosystem."
+ },
+ {
+  "vendor": "Tiertime",
+  "model": "Tiertime UP400 Pro",
+  "stock_firmware": "Same situation as the UP300 HS: the vendor profile uses Klipper-style macros, but no public source confirms Klipper and no Moonraker is documented. Printago lists it as a closed vendor protocol.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://www.tiertime.com/up400pro/",
+   "https://printago.io/printers/tiertime-up400-pro"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false
+ },
+ {
+  "vendor": "Tiertime",
+  "model": "Tiertime UP600 HS",
+  "stock_firmware": "The spec page lists a Linux 7-inch touchscreen but names no firmware. The vendor profile uses Klipper-style macros, but Klipper and Moonraker are unconfirmed.",
+  "moonraker": "n/a",
+  "mod_project": "",
+  "sources": [
+   "https://www.tiertime.com/up600hs",
+   "https://printago.io/printers/tiertime-up600-hs"
+  ],
+  "confidence": "low",
+  "verdict": "UNCLEAR",
+  "kept": false
+ },
+ {
+  "vendor": "TwoTrees",
+  "model": "TwoTrees SK1",
+  "stock_firmware": "Klipper + Moonraker + Fluidd on built-in host",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.tomshardware.com/3d-printing/two-trees-sk1-review",
+   "https://taoofmac.com/space/blog/2024/03/02/1900"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "TwoTrees",
+  "model": "TwoTrees SP-5 Klipper",
+  "stock_firmware": "Marlin (Sapphire Plus / SP-5, MKS Robin Nano); profile targets Klipper-converted units",
+  "moonraker": "root/mod",
+  "mod_project": "Upstream Klipper configs printer-twotrees-sapphire-plus-sp-5-v1/v1.1 + external SBC - https://github.com/Klipper3d/klipper/blob/master/config/printer-twotrees-sapphire-plus-sp-5-v1.1-2021.cfg",
+  "sources": [
+   "https://github.com/Klipper3d/klipper/blob/master/config/printer-twotrees-sapphire-plus-sp-5-v1.1-2021.cfg",
+   "https://github.com/Travis90x/Klipper-config"
+  ],
+  "confidence": "medium",
+  "verdict": "KLIPPER_VIA_ESTABLISHED_MOD",
+  "kept": true
+ },
+ {
+  "vendor": "Vivedino",
+  "model": "Troodon 2.0 - Klipper",
+  "stock_firmware": "Klipper pre-installed (Formbot/Vivedino Voron-2.4-based, Octopus + Raspberry Pi); Mainsail/Fluidd",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://www.tinymachines3d.com/products/drop-ship-troodon-2-pro",
+   "https://simplyprint.io/setup-guide/vivedino/troodon-2-0/klipper-powered/enable-simplyprint/moonraker"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "EXO42 IDRE",
+  "stock_firmware": "Volumic's official config repo holds Klipper configs (printer_exo42idre.cfg, macros_idre.cfg) for Manta8/Octopus boards and CB1/CB2/Pi hosts. The system scripts install and update Moonraker under /home/Volumic, with KlipperScreen and Crowsnest.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic",
+   "https://imprimante-3d-volumic.com/en/imprimante/exo-42/"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "EXO42 Performance",
+  "stock_firmware": "Official Volumic Klipper config printer_exo42p.cfg; Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "EXO42 Stage 2",
+  "stock_firmware": "Official Volumic Klipper config printer_exo42s2.cfg; Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "EXO65 IDRE",
+  "stock_firmware": "Official Volumic Klipper config printer_exo65idre.cfg; Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "EXO65 Performance",
+  "stock_firmware": "Official Volumic Klipper config printer_exo65p.cfg; Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "EXO65 Stage 2",
+  "stock_firmware": "Official Volumic Klipper config printer_exo65s2.cfg; Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "SH65 IDRE",
+  "stock_firmware": "Official Volumic Klipper config printer_sh65idre.cfg; Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "SH65 Performance",
+  "stock_firmware": "Official Volumic Klipper config printer_sh65p.cfg; Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "SH65 Stage 2",
+  "stock_firmware": "Official Volumic Klipper config printer_sh65s2.cfg; Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic",
+   "https://www.3dnatives.com/lab-3dnatives-imprimante-3d-sh65-volumic-15092022"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "VS30MK3 Stage 2",
+  "stock_firmware": "Official Volumic Klipper configs (model_vs30.cfg, stage2vs30.cfg, board_ultralumic_vs30m.cfg, crowsnest_vs30.conf); Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "VS30SC2 Performance",
+  "stock_firmware": "Official Volumic Klipper configs (printer_vs30scp.cfg, stage3vs30sc.cfg); Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Volumic",
+  "model": "VS30SC2 Stage 2",
+  "stock_firmware": "Official Volumic Klipper configs (board_ultralumic_vs30sc.cfg, stage2vs30.cfg); Moonraker is stock.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/VOLUMIC/.volumic"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Voron",
+  "model": "Voron 0.1",
+  "stock_firmware": "Klipper (Voron Design self-sourced/kit)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vorondesign.com/",
+   "https://github.com/VoronDesign/Voron-0"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Voron",
+  "model": "Voron 2.4 250",
+  "stock_firmware": "Klipper (Voron Design DIY)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vorondesign.com/build/software/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Voron",
+  "model": "Voron 2.4 300",
+  "stock_firmware": "Klipper (Voron Design DIY)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vorondesign.com/build/software/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Voron",
+  "model": "Voron 2.4 350",
+  "stock_firmware": "Klipper (Voron Design DIY)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vorondesign.com/build/software/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Voron",
+  "model": "Voron Switchwire 250",
+  "stock_firmware": "Klipper (Voron Design DIY)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vorondesign.com/build/software/",
+   "https://github.com/VoronDesign/Voron-Switchwire"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Voron",
+  "model": "Voron Trident 250",
+  "stock_firmware": "Klipper (Voron Design DIY)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vorondesign.com/build/software/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Voron",
+  "model": "Voron Trident 300",
+  "stock_firmware": "Klipper (Voron Design DIY)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vorondesign.com/build/software/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Voron",
+  "model": "Voron Trident 350",
+  "stock_firmware": "Klipper (Voron Design DIY)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vorondesign.com/build/software/"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Vzbot",
+  "model": "Vzbot 235 AWD",
+  "stock_firmware": "Klipper (open-source DIY build, AWD via Klipper config)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vzbot.org/vz235_printed",
+   "https://github.com/VzBoT3D/VzBoT-Vz235"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Vzbot",
+  "model": "Vzbot 330 AWD",
+  "stock_firmware": "Klipper (open-source DIY build)",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://docs.vzbot.org/vz330_printed",
+   "https://github.com/VzBoT3D/VzBoT-Vz330"
+  ],
+  "confidence": "high",
+  "verdict": "DIY_KLIPPER",
+  "kept": true
+ },
+ {
+  "vendor": "Wanhao France",
+  "model": "D12 230 PRO SMARTPAD DIRECT",
+  "stock_firmware": "The D12 mainboard is Marlin 2, but the SMARTPAD bundle is a Yumi Lab Klipper control device with Mainsail (yumios.local), flashed with Klipper MCU firmware. The profile uses Klipper SAVE_VARIABLE macros.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.yumi-lab.com/PRINTERS/WANHAO_D12/",
+   "https://printago.io/printers/wanhao-france-d12-230-pro-smartpad-direct"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Wanhao France",
+  "model": "D12 230 PRO SMARTPAD MONO DUAL",
+  "stock_firmware": "Same Yumi Lab SmartPad setup: Klipper with Mainsail.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.yumi-lab.com/PRINTERS/WANHAO_D12/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Wanhao France",
+  "model": "D12 230 PRO SMARTPAD MONO DUAL PoopTool",
+  "stock_firmware": "Same Yumi Lab SmartPad setup: Klipper with Mainsail.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.yumi-lab.com/PRINTERS/WANHAO_D12/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Wanhao France",
+  "model": "D12 300 PRO SMARTPAD DIRECT",
+  "stock_firmware": "Same Yumi Lab SmartPad setup: Klipper with Mainsail.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.yumi-lab.com/PRINTERS/WANHAO_D12/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Wanhao France",
+  "model": "D12 300 PRO SMARTPAD MONO DUAL",
+  "stock_firmware": "Same Yumi Lab SmartPad setup: Klipper with Mainsail.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.yumi-lab.com/PRINTERS/WANHAO_D12/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Wanhao France",
+  "model": "D12 300 PRO SMARTPAD MONO DUAL PoopTool",
+  "stock_firmware": "Same Yumi Lab SmartPad setup: Klipper with Mainsail.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.yumi-lab.com/PRINTERS/WANHAO_D12/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Wanhao France",
+  "model": "D12 500 PRO SMARTPAD DIRECT",
+  "stock_firmware": "Same Yumi Lab SmartPad setup: Klipper with Mainsail.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.yumi-lab.com/PRINTERS/WANHAO_D12/",
+   "https://printago.io/printers/wanhao-france-d12-500-pro-smartpad-direct"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Wanhao France",
+  "model": "D12 500 PRO SMARTPAD MONO DUAL",
+  "stock_firmware": "Same Yumi Lab SmartPad setup: Klipper with Mainsail. This is one of the remaining Wanhao France models in resources/profiles/Wanhao France.json.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.yumi-lab.com/PRINTERS/WANHAO_D12/",
+   "https://printago.io/printers/wanhao-france-d12-500-pro-smartpad-mono-dual"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Wanhao France",
+  "model": "D12 500 PRO SMARTPAD MONO DUAL PoopTool",
+  "stock_firmware": "Same Yumi Lab SmartPad setup: Klipper with Mainsail. This is one of the remaining Wanhao France models in resources/profiles/Wanhao France.json.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://wiki.yumi-lab.com/PRINTERS/WANHAO_D12/",
+   "https://printago.io/printers/wanhao-france-d12-500-pro-smartpad-mono-dual-pooptool"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "WonderMaker",
+  "model": "WonderMaker ZR",
+  "stock_firmware": "WonderMaker CoreXY machines run stock Klipper, Moonraker and Fluidd on a Rockchip RK3308. The ZR base model is assumed to share the ZR Ultra platform.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/anselor/Wondermaker_plus",
+   "https://printago.io/printers/wondermaker-zr"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "WonderMaker",
+  "model": "WonderMaker ZR Ultra",
+  "stock_firmware": "A Klipper-based toolchanger with stock Klipper, Moonraker and Fluidd on an RK3308. OrcaSlicer supports filament sync with it over Moonraker.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/anselor/Wondermaker_plus",
+   "https://www.fabbaloo.com/news/wondermaker-unveils-zr-ultra-affordable-toolchanging-3d-printer-set-to-disrupt-market",
+   "https://github.com/OrcaSlicer/OrcaSlicer/pull/15226"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "WonderMaker",
+  "model": "WonderMaker ZR Ultra S",
+  "stock_firmware": "A variant of the ZR Ultra with the same stock Klipper, Moonraker and Fluidd stack.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://github.com/OrcaSlicer/OrcaSlicer/pull/15179",
+   "https://github.com/anselor/Wondermaker_plus"
+  ],
+  "confidence": "high",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Z-Bolt",
+  "model": "Z-Bolt S1000",
+  "stock_firmware": "Klipper on Raspberry Pi (manufacturer chose Klipper over Marlin); Moonraker presence inferred from third-party integrations",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://habr.com/en/articles/460453",
+   "https://printago.io/printers/z-bolt-s1000"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Z-Bolt",
+  "model": "Z-Bolt S1000 Dual",
+  "stock_firmware": "Klipper on Raspberry Pi",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://habr.com/en/articles/460453",
+   "https://printago.io/printers/z-bolt-s1000-dual"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Z-Bolt",
+  "model": "Z-Bolt S300",
+  "stock_firmware": "Klipper on Raspberry Pi",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://habr.com/en/articles/460453",
+   "https://printago.io/printers/z-bolt-s300"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Z-Bolt",
+  "model": "Z-Bolt S300 Dual",
+  "stock_firmware": "Klipper on Raspberry Pi",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://habr.com/en/articles/460453",
+   "https://printago.io/printers/z-bolt-s300-dual"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Z-Bolt",
+  "model": "Z-Bolt S400",
+  "stock_firmware": "Klipper on Raspberry Pi",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://habr.com/en/articles/460453",
+   "https://printago.io/printers/z-bolt-s400"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Z-Bolt",
+  "model": "Z-Bolt S400 Dual",
+  "stock_firmware": "Klipper on Raspberry Pi",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://habr.com/en/articles/460453",
+   "https://printago.io/printers/z-bolt-s400-dual"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Z-Bolt",
+  "model": "Z-Bolt S600",
+  "stock_firmware": "Klipper on Raspberry Pi",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://habr.com/en/articles/460453",
+   "https://printago.io/printers/z-bolt-s600"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Z-Bolt",
+  "model": "Z-Bolt S600 Dual",
+  "stock_firmware": "Klipper on Raspberry Pi",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://habr.com/en/articles/460453",
+   "https://printago.io/printers/z-bolt-s600-dual"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "Z-Bolt",
+  "model": "Z-Bolt S800 Dual",
+  "stock_firmware": "Klipper on Raspberry Pi",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://habr.com/en/articles/460453",
+   "https://printago.io/printers/z-bolt-s800-dual"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "re3D",
+  "model": "re3D Gigabot 4",
+  "stock_firmware": "re:3D moved the whole Gigabot 4 / Terabot 4 / GigabotX 2 / TerabotX 2 generation to Klipper on the UltiMachine ArchiMajor board, with a touchscreen and WiFi. re:3D also blogs about Klipper. Moonraker is inferred from the web and WiFi features.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://facfox.com/news/re3d-launches-gigabot-4-terabot-4-gigabotx-2-and-terabotx-2-3d-printer-hardware/",
+   "https://re3d.org/gigabotx/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "re3D",
+  "model": "re3D Gigabot 4 XLT",
+  "stock_firmware": "An XLT variant of the Gigabot 4 (Klipper on ArchiMajor).",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://facfox.com/news/re3d-launches-gigabot-4-terabot-4-gigabotx-2-and-terabotx-2-3d-printer-hardware/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "re3D",
+  "model": "re3D GigabotX 2",
+  "stock_firmware": "A pellet machine running Klipper on ArchiMajor.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://facfox.com/news/re3d-launches-gigabot-4-terabot-4-gigabotx-2-and-terabotx-2-3d-printer-hardware/",
+   "https://printago.io/printers/re3d-gigabotx-2"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "re3D",
+  "model": "re3D GigabotX 2 XLT",
+  "stock_firmware": "An XLT variant of the GigabotX 2 (Klipper).",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://facfox.com/news/re3d-launches-gigabot-4-terabot-4-gigabotx-2-and-terabotx-2-3d-printer-hardware/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "re3D",
+  "model": "re3D Terabot 4",
+  "stock_firmware": "Part of the same Klipper/ArchiMajor generation.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://facfox.com/news/re3d-launches-gigabot-4-terabot-4-gigabotx-2-and-terabotx-2-3d-printer-hardware/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ },
+ {
+  "vendor": "re3D",
+  "model": "re3D TerabotX 2",
+  "stock_firmware": "Part of the same Klipper/ArchiMajor generation.",
+  "moonraker": "stock",
+  "mod_project": "",
+  "sources": [
+   "https://facfox.com/news/re3d-launches-gigabot-4-terabot-4-gigabotx-2-and-terabotx-2-3d-printer-hardware/"
+  ],
+  "confidence": "medium",
+  "verdict": "STOCK_KLIPPER_MOONRAKER",
+  "kept": true
+ }
+]

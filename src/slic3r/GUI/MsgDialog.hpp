@@ -15,8 +15,8 @@
 #include "Widgets/CheckBox.hpp"
 #include "Widgets/TextInput.hpp"
 #include "Widgets/HyperLink.hpp"
+#include "Widgets/Label.hpp"
 #include "BBLStatusBar.hpp"
-#include "BBLStatusBarSend.hpp"
 #include "libslic3r/Semver.hpp"
 
 class wxBoxSizer;
@@ -36,6 +36,11 @@ enum ButtonSizeType{
 
 
 namespace Slic3r {
+
+namespace GUI {
+// Posted by MsgDialog when its "don't show again" box is toggled; GetInt() carries the new state.
+wxDECLARE_EVENT(EVT_CHECKBOX_CHANGE, wxCommandEvent);
+}
 namespace GUI {
 
 struct ButtonData

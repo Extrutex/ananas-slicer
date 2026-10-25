@@ -165,13 +165,13 @@ NotificationManager::PopNotification::PopNotification(const NotificationData &n,
 {
     m_ErrorColor  = ImGuiWrapper::to_ImVec4(decode_color_to_float_array("#E14747")); // ORCA
     m_WarnColor   = ImGuiWrapper::to_ImVec4(decode_color_to_float_array("#F59B16")); // ORCA
-    m_NormalColor = ImVec4(0, 0.588, 0.533, 1);
+    m_NormalColor = ImGuiWrapper::accent();
 
 	m_CurrentColor = m_NormalColor;   //Default
 
 	m_WindowBkgColor = ImVec4(1, 1, 1, 1);
     m_TextColor      = ImVec4(.2f, .2f, .2f, 1.0f);
-    m_HyperTextColor = ImVec4(0, 0.588, 0.533, 1);
+    m_HyperTextColor = ImGuiWrapper::accent();
 }
 
 // We cannot call plater()->get_current_canvas3D() from constructor, so we do it here
@@ -237,12 +237,12 @@ void NotificationManager::PopNotification::use_bbl_theme()
  //   OldStyle.Colors[ImGuiCol_WindowBg] = m_WindowBkgColor;
  //   OldStyle.Colors[ImGuiCol_Text]     = m_TextColor;
 
-	m_WindowBkgColor = m_is_dark ? ImVec4(45 / 255.f, 45 / 255.f, 49 / 255.f, 1.f) : ImVec4(1, 1, 1, 1);
-	m_TextColor = m_is_dark ? ImVec4(224 / 255.f, 224 / 255.f, 224 / 255.f, 1.f) : ImVec4(.2f, .2f, .2f, 1.0f);
-	m_HyperTextColor = m_is_dark ? ImVec4(0, 0.588, 0.533, 1) : ImVec4(0, 0.588, 0.533, 1);
-	m_HyperTextColorHover = m_is_dark ? ImVec4(38.f / 255.f, 166.f / 255.f, 154.f / 255.f, 1) : ImVec4(0.f, 129.f / 255.f, 114.f / 255.f, 1); //#26A69A / #008172;
+	m_WindowBkgColor = m_is_dark ? ImGuiWrapper::COL_WINDOW_BG_DARK : ImVec4(1, 1, 1, 1);
+	m_TextColor = m_is_dark ? ImVec4(0xD8 / 255.f, 0xE0 / 255.f, 0xE6 / 255.f, 1.f) : ImVec4(.2f, .2f, .2f, 1.0f); // alu-100
+	m_HyperTextColor = ImGuiWrapper::accent();
+	m_HyperTextColorHover = ImGuiWrapper::accent_hover();
 
-	m_is_dark ? push_style_color(ImGuiCol_Border, {62 / 255.f, 62 / 255.f, 69 / 255.f, 1.f}, true, m_current_fade_opacity) : push_style_color(ImGuiCol_Border, m_CurrentColor, true, m_current_fade_opacity);
+	m_is_dark ? push_style_color(ImGuiCol_Border, {0x26 / 255.f, 0x2F / 255.f, 0x37 / 255.f, 1.f}, true, m_current_fade_opacity) : push_style_color(ImGuiCol_Border, m_CurrentColor, true, m_current_fade_opacity);
     push_style_color(ImGuiCol_WindowBg, m_WindowBkgColor, true, m_current_fade_opacity);
     push_style_color(ImGuiCol_Text, m_TextColor, true, m_current_fade_opacity);
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, m_WindowRadius / 4);
@@ -3446,36 +3446,6 @@ void NotificationManager::bbl_close_seqprintinfo_notification()
 {
     for (std::unique_ptr<PopNotification> &notification : m_pop_notifications)
         if (notification->get_type() == NotificationType::BBLSeqPrintInfo) { notification->close(); }
-}
-
-void NotificationManager::bbl_show_plugin_install_notification(const std::string &text)
-{
-    std::string hyper_text;
-    auto callback = [](wxEvtHandler *) {
-        wxCommandEvent *evt = new wxCommandEvent(EVT_INSTALL_PLUGIN_NETWORKING);
-        wxQueueEvent(wxGetApp().plater(), evt);
-        return false;
-    };
-    hyper_text =  _u8L(" Click here to install it.");
-    NotificationData data{NotificationType::BBLPluginInstallHint, NotificationLevel::WarningNotificationLevel, 0, text, hyper_text, callback};
-
-    for (std::unique_ptr<PopNotification> &notification : m_pop_notifications) {
-        if (notification->get_type() == NotificationType::BBLPluginInstallHint) {
-            notification->reinit();
-            notification->update(data);
-            return;
-        }
-    }
-
-    auto notification = std::make_unique<NotificationManager::PopNotification>(data, m_id_provider, m_evt_handler);
-    notification->set_Multiline(true);
-    push_notification_data(std::move(notification), 0);
-}
-
-void NotificationManager::bbl_close_plugin_install_notification()
-{
-    for (std::unique_ptr<PopNotification> &notification : m_pop_notifications)
-        if (notification->get_type() == NotificationType::BBLPluginInstallHint) { notification->close(); }
 }
 
 void NotificationManager::bbl_show_slice_emptylayer_notification(const std::string &text, bool bOverride)

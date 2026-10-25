@@ -8,7 +8,7 @@
 	"compatible_printers": [
 		"Thinker X400 0.4 nozzle"
 	],
-	"accel_to_decel_enable": "1",
+	"accel_to_decel_enable": "0",
 	"accel_to_decel_factor": "50%",
 	"bottom_shell_layers": "3",
 	"bottom_shell_thickness": "0",

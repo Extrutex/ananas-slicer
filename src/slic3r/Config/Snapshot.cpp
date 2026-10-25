@@ -1,4 +1,5 @@
 #include "Snapshot.hpp"
+#include "libslic3r_version.h"
 
 #include <time.h>
 
@@ -374,7 +375,7 @@ static void copy_config_dir_single_level(const boost::filesystem::path &path_src
 #if 0
     if (! boost::filesystem::is_directory(path_dst) &&
         ! boost::filesystem::create_directory(path_dst))
-        throw Slic3r::RuntimeError(std::string("OrcaSlicer was unable to create a directory at ") + path_dst.string());
+        throw Slic3r::RuntimeError(std::string(SLIC3R_APP_NAME " was unable to create a directory at ") + path_dst.string());
 
     for (auto &dir_entry : boost::filesystem::directory_iterator(path_src))
         if (Slic3r::is_ini_file(dir_entry))
@@ -588,8 +589,8 @@ bool take_config_snapshot_cancel_on_error(const AppConfig &app_config, Snapshot:
         return true;
     } catch (std::exception &err) {
         RichMessageDialog dlg(static_cast<wxWindow*>(wxGetApp().mainframe),
-            _L("OrcaSlicer has encountered an error while taking a configuration snapshot.") + "\n\n" + from_u8(err.what()) + "\n\n" + from_u8(message),
-            _L("OrcaSlicer error"),
+            _L("ANANAS SLICER has encountered an error while taking a configuration snapshot.") + "\n\n" + from_u8(err.what()) + "\n\n" + from_u8(message),
+            _L("ANANAS SLICER error"),
             wxYES_NO);
         dlg.SetYesNoLabels(_L("Continue"), _L("Abort"));
         return dlg.ShowModal() == wxID_YES;

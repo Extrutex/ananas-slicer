@@ -104,7 +104,7 @@
 	"prime_tower_width": "60",
 	"xy_hole_compensation": "0",
 	"xy_contour_compensation": "0",
-	"default_jerk": "7",
+	"default_jerk": "0",
 	"outer_wall_jerk": "7",
 	"inner_wall_jerk": "7",
 	"infill_jerk": "7",

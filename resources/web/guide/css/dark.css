@@ -1,26 +1,26 @@
 *
 {
-	color: #efeff0;
-	border-color: #B9B9BC;
+	color: #D8E0E6;
+	border-color: #B4C0C9;
 }
 
 body
 {
-	background-color:#2D2D31; /* ORCA match background color */
-	color: #efeff0;
+	background-color:#0F1317; /* ORCA match background color */
+	color: #D8E0E6;
 }
 
 .ZScrol::-webkit-scrollbar-thumb {/*滚动条里面小方块*/
-    background-color: #939594;
+    background-color: #8B99A4;
 }
 
 .ZScrol::-webkit-scrollbar-track {/*滚动条里面轨道*/
-        background: #161817;
+        background: #07090B;
 }
 
 #Title div
 {
-	color: #009688;
+	color: #EEF3F6;
 }
 
 /*-------Text------*/
@@ -32,30 +32,30 @@ body
 
 .TextS2
 {
-	color:#B9B9BC;
+	color:#B4C0C9;
 }
 
 /*---Policy---*/
 .TextArea1
 {
-	background-color: #4A4A51;
-	color: #BEBEC0;
+	background-color: #5C6B77;
+	color: #B4C0C9;
 }
 
 /*----Region---*/
 .RegionItem:hover
 {
-	background-color:#4C4C55;
+	background-color:#262F37;
 }
 
 .RegionSelected:hover
 {
-	background-color:#009688;
+	background-color:#222A31;
 	color: #fff;	
 }
 
 /*----Menu----*/
 #Title div.TitleUnselected
 {
-	color: #BEBEC0;
+	color: #B4C0C9;
 }

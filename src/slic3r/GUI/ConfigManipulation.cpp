@@ -2,7 +2,6 @@
 #include "ConfigManipulation.hpp"
 #include "I18N.hpp"
 #include "GUI_App.hpp"
-#include "DeviceCore/DevConfigUtil.h"
 #include "format.hpp"
 #include "libslic3r/Config.hpp"
 #include "libslic3r/Model.hpp"
@@ -212,6 +211,30 @@ void ConfigManipulation::check_filament_max_volumetric_speed(DynamicPrintConfig 
 
 }
 
+void ConfigManipulation::check_filament_ironing_spacing(DynamicPrintConfig *config)
+{
+    const auto *opt = config->option<ConfigOptionFloatsNullable>("filament_ironing_spacing");
+    if (opt == nullptr)
+        return;
+    std::vector<double> values = opt->values;
+    bool                reset  = false;
+    for (size_t i = 0; i < values.size(); ++i)
+        if (!opt->is_nil(i) && values[i] < IRONING_SPACING_MIN) {
+            values[i] = 0.1;
+            reset     = true;
+        }
+    if (!reset)
+        return;
+    const wxString     msg_text = _(L("Ironing spacing too small\nIt has been reset to 0.1"));
+    MessageDialog      dialog(nullptr, msg_text, "", wxICON_WARNING | wxOK);
+    DynamicPrintConfig new_conf = *config;
+    is_msg_dlg_already_exist    = true;
+    dialog.ShowModal();
+    new_conf.set_key_value("filament_ironing_spacing", new ConfigOptionFloatsNullable(values));
+    apply(config, &new_conf);
+    is_msg_dlg_already_exist = false;
+}
+
 void ConfigManipulation::check_chamber_temperature(DynamicPrintConfig* config)
 {
    bool support_chamber_temp_control=GUI::wxGetApp().preset_bundle->printers.get_selected_preset().config.opt_bool("support_chamber_temp_control");
@@ -334,7 +357,7 @@ void ConfigManipulation::update_print_fff_config(DynamicPrintConfig* config, con
     }
 
     //BBS: ironing_spacing shouldn't be too small or equal to zero
-    if (config->opt_float("ironing_spacing") < 0.05)
+    if (config->opt_float("ironing_spacing") < IRONING_SPACING_MIN)
     {
         const wxString msg_text = _(L("Ironing spacing too small\nIt has been reset to 0.1"));
         MessageDialog dialog(nullptr, msg_text, "", wxICON_WARNING | wxOK);
@@ -345,7 +368,7 @@ void ConfigManipulation::update_print_fff_config(DynamicPrintConfig* config, con
         apply(config, &new_conf);
         is_msg_dlg_already_exist = false;
     }
-    if (config->opt_float("support_ironing_spacing") < 0.05)
+    if (config->opt_float("support_ironing_spacing") < IRONING_SPACING_MIN)
     {
         const wxString msg_text = _(L("Ironing spacing too small\nIt has been reset to 0.1"));
         MessageDialog dialog(nullptr, msg_text, "", wxICON_WARNING | wxOK);
@@ -406,12 +429,9 @@ void ConfigManipulation::update_print_fff_config(DynamicPrintConfig* config, con
     }
 
     if (config->option<ConfigOptionBool>("enable_wrapping_detection")->value) {
-        std::string printer_type = wxGetApp().preset_bundle->printers.get_edited_preset().get_printer_type(wxGetApp().preset_bundle);
-        if (!DevPrinterConfigUtil::support_wrapping_detection(printer_type)) {
-            DynamicPrintConfig new_conf = *config;
-            new_conf.set_key_value("enable_wrapping_detection", new ConfigOptionBool(false));
-            apply(config, &new_conf);
-        }
+        DynamicPrintConfig new_conf = *config;
+        new_conf.set_key_value("enable_wrapping_detection", new ConfigOptionBool(false));
+        apply(config, &new_conf);
     }
 
     double sparse_infill_density = config->option<ConfigOptionPercent>("sparse_infill_density")->value;
@@ -538,16 +558,6 @@ void ConfigManipulation::update_print_fff_config(DynamicPrintConfig* config, con
         }
     }
 #endif
-
-    // BBL printers do not support cone wipe tower
-    if (config->opt_bool("enable_prime_tower") && is_BBL_Printer) {
-        auto wipe_tower_wall_type = config->opt_enum<WipeTowerWallType>("wipe_tower_wall_type");
-        if (wipe_tower_wall_type == WipeTowerWallType::wtwCone) {
-            DynamicPrintConfig new_conf = *config;
-            new_conf.set_key_value("wipe_tower_wall_type", new ConfigOptionEnum<WipeTowerWallType>(WipeTowerWallType::wtwRectangle));
-            apply(config, &new_conf);
-        }
-    }
 
     // Check "enable_support" and "overhangs" relations only on global settings level
     if (is_global_config && config->opt_bool("enable_support")) {
@@ -1020,10 +1030,10 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
     //     toggle_field(el, have_sequential_printing);
     toggle_field("print_order", !have_sequential_printing);
 
-    toggle_field("single_extruder_multi_material", !is_BBL_Printer);
+    toggle_field("single_extruder_multi_material", true);
 
     auto bSEMM = preset_bundle->printers.get_edited_preset().config.opt_bool("single_extruder_multi_material");
-    const bool supports_wipe_tower_2 = !is_BBL_Printer && preset_bundle->printers.get_edited_preset().config.opt_enum<WipeTowerType>("wipe_tower_type") == WipeTowerType::Type2;
+    const bool supports_wipe_tower_2 = preset_bundle->printers.get_edited_preset().config.opt_enum<WipeTowerType>("wipe_tower_type") == WipeTowerType::Type2;
 
     toggle_field("ooze_prevention", !bSEMM);
     bool have_ooze_prevention = config->opt_bool("ooze_prevention");
@@ -1109,6 +1119,10 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
         "min_bead_width", "wall_distribution_count", "initial_layer_min_bead_width", "wall_maximum_resolution", "wall_maximum_deviation"})
         toggle_line(el, have_arachne);
     toggle_field("detect_thin_wall", !have_arachne);
+    // The method only matters where the precise outer wall acts: Arachne walls printed inner wall first.
+    toggle_line("precise_outer_wall_method", have_arachne);
+    toggle_field("precise_outer_wall_method",
+                 config->opt_bool("precise_outer_wall") && config->opt_enum<WallSequence>("wall_sequence") == WallSequence::InnerOuter);
 
     // Orca
     auto is_role_based_wipe_speed = config->opt_bool("role_based_wipe_speed");
@@ -1148,7 +1162,7 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
         apply(config, &new_conf);
     }
     toggle_line("overhang_reverse_threshold", has_detect_overhang_wall && allow_overhang_reverse && has_overhang_reverse && !has_overhang_reverse_internal_only);
-    toggle_line("timelapse_type", is_BBL_Printer);
+    toggle_line("timelapse_type", false);
 
 
     bool have_small_area_infill_flow_compensation = config->opt_bool("small_area_infill_flow_compensation");
@@ -1195,8 +1209,7 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig *config, in
     
     toggle_line("infill_overhang_angle", config->opt_enum<InfillPattern>("sparse_infill_pattern") == InfillPattern::ipLateralHoneycomb);
 
-    std::string printer_type = wxGetApp().preset_bundle->printers.get_edited_preset().get_printer_type(wxGetApp().preset_bundle);
-    toggle_line("enable_wrapping_detection", DevPrinterConfigUtil::support_wrapping_detection(printer_type));
+    toggle_line("enable_wrapping_detection", false);
 }
 
 void ConfigManipulation::update_print_sla_config(DynamicPrintConfig* config, const bool is_global_config/* = false*/)

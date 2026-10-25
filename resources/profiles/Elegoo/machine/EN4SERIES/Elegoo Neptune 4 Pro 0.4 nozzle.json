@@ -6,7 +6,7 @@
 	"from": "system",
 	"setting_id": "H1wMUu4EMaiQzxeD",
 	"instantiation": "true",
-	"host_type": "elegoolink",
+	"host_type": "moonraker",
 	"printer_model": "Elegoo Neptune 4 Pro",
 	"default_print_profile": "0.20mm Standard @Elegoo N4Pro 0.4 nozzle",
 	"gcode_flavor": "klipper",

@@ -1358,8 +1358,9 @@ struct SlicesMarginCache
 };
 
 // BBS
-static const double length_thresh_well_supported = scale_(6);  // min: 6mm
-static const double area_thresh_well_supported = SQ(length_thresh_well_supported);  // min: 6x6=36mm^2
+// Scaled on use: SCALING_FACTOR is set per bed size at run time, after static initialization.
+static inline double length_thresh_well_supported() { return scale_(6); }                         // min: 6mm
+static inline double area_thresh_well_supported()   { return SQ(length_thresh_well_supported()); } // min: 6x6=36mm^2
 static const double sharp_tail_xy_gap = 0.2f;
 static const double no_overlap_xy_gap = 0.2f;
 static const double sharp_tail_max_support_height = 16.f;
@@ -1403,7 +1404,7 @@ static inline ExPolygons detect_overhangs(
         for (auto& slice : layer.lslices) {
             auto bbox_size = get_extents(slice).size();
             if (g_config_support_sharp_tails &&
-                !(bbox_size.x() > length_thresh_well_supported && bbox_size.y() > length_thresh_well_supported))
+                !(bbox_size.x() > length_thresh_well_supported() && bbox_size.y() > length_thresh_well_supported()))
             {
                 layer.sharp_tails.push_back(slice);
                 layer.sharp_tails_height.push_back(layer.height);
@@ -1480,7 +1481,7 @@ static inline ExPolygons detect_overhangs(
                         // Check whether this is a sharp tail region.
                         // Should use lower_layer_expolys without any offset. Otherwise, it may missing sharp tails near the main body.
                         if (!overlaps(offset_ex(expoly, 0.5 * fw), lower_layer_expolys)) {
-                            is_sharp_tail = expoly.area() < area_thresh_well_supported && !offset_ex(expoly, -0.1 * fw).empty();
+                            is_sharp_tail = expoly.area() < area_thresh_well_supported() && !offset_ex(expoly, -0.1 * fw).empty();
                         }
 
                         if (is_sharp_tail) {
@@ -2182,13 +2183,13 @@ SupportGeneratorLayersPtr PrintObjectSupportMaterial::top_contact_layers(
 #if 0
                     // judge by area isn't reliable, failure cases include 45 degree rotated cube
                     float       supported_area = area(supported_by_lower);
-                    if (supported_area > area_thresh_well_supported) {
+                    if (supported_area > area_thresh_well_supported()) {
                         is_sharp_tail = false;
                         break;
                     }
 #endif
                     BoundingBox bbox = get_extents(supported_by_lower);
-                    if (bbox.size().x() > length_thresh_well_supported && bbox.size().y() > length_thresh_well_supported) {
+                    if (bbox.size().x() > length_thresh_well_supported() && bbox.size().y() > length_thresh_well_supported()) {
                         is_sharp_tail = false;
                         break;
                     }

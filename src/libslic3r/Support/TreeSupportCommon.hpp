@@ -46,13 +46,6 @@ struct TreeSupportMeshGroupSettings {
         //assert(config.support_material);
         //assert(config.support_material_style == smsTree || config.support_material_style == smsOrganic);
 
-        // Calculate maximum external perimeter width over all printing regions, taking into account the default layer height.
-        coordf_t external_perimeter_width = 0.;
-        for (size_t region_id = 0; region_id < print_object.num_printing_regions(); ++ region_id) {
-            const PrintRegion &region = print_object.printing_region(region_id);
-            external_perimeter_width = std::max<coordf_t>(external_perimeter_width, region.flow(print_object, frExternalPerimeter, config.layer_height).width());
-        }
-
         this->layer_height              = scaled<coord_t>(config.layer_height.value);
         this->resolution                = scaled<coord_t>(print_config.resolution.value);
         // Arache feature
@@ -69,8 +62,10 @@ struct TreeSupportMeshGroupSettings {
         this->support_material_buildplate_only = config.support_on_build_plate_only;
         this->support_xy_distance       = scaled<coord_t>(config.support_object_xy_distance.value);
         this->support_xy_distance_1st_layer = scaled<coord_t>(config.support_object_first_layer_gap.value);
-        // Separation of interfaces, it is likely smaller than support_xy_distance.
-        this->support_xy_distance_overhang = std::min(this->support_xy_distance, scaled<coord_t>(0.5 * external_perimeter_width));
+        // The separation next to an overhang is the configured XY distance. The PrusaSlicer port capped
+        // it at half the outer wall width, which is PrusaSlicer's default XY spacing but has no setting
+        // here, so every branch near an overhang silently ignored support_object_xy_distance.
+        this->support_xy_distance_overhang = this->support_xy_distance;
         this->support_top_distance      = scaled<coord_t>(slicing_params.gap_support_object);
         this->support_bottom_distance   = scaled<coord_t>(slicing_params.gap_object_support);
         this->support_roof_enable       = config.support_interface_top_layers.value > 0;

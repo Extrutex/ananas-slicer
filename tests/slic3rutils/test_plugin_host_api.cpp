@@ -128,7 +128,7 @@ TEST_CASE("Plugin host API reports unavailable GUI objects before Orca app initi
             FAIL("host accessor unexpectedly succeeded without a wx application");
         } catch (const py::error_already_set& error) {
             CHECK(error.matches(PyExc_RuntimeError));
-            CHECK(std::string(error.what()).find("OrcaSlicer application is not initialized") != std::string::npos);
+            CHECK(std::string(error.what()).find(SLIC3R_APP_NAME " application is not initialized") != std::string::npos);
         }
     }
 }
@@ -157,7 +157,7 @@ TEST_CASE("Plugin host API exposes the UI module and guards it before Orca app i
         FAIL("orca.host.ui.message unexpectedly succeeded without a wx application");
     } catch (const py::error_already_set& error) {
         CHECK(error.matches(PyExc_RuntimeError));
-        CHECK(std::string(error.what()).find("OrcaSlicer application is not initialized") != std::string::npos);
+        CHECK(std::string(error.what()).find(SLIC3R_APP_NAME " application is not initialized") != std::string::npos);
     }
 
     try {
@@ -165,7 +165,7 @@ TEST_CASE("Plugin host API exposes the UI module and guards it before Orca app i
         FAIL("orca.host.ui.create_dock_panel unexpectedly succeeded without a wx application");
     } catch (const py::error_already_set& error) {
         CHECK(error.matches(PyExc_RuntimeError));
-        CHECK(std::string(error.what()).find("OrcaSlicer application is not initialized") != std::string::npos);
+        CHECK(std::string(error.what()).find(SLIC3R_APP_NAME " application is not initialized") != std::string::npos);
     }
 
     // Positional arguments follow create_window(): width and height come straight after the title.

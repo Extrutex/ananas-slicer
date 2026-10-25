@@ -13,7 +13,7 @@
 	"brim_type": "no_brim",
 	"brim_width": "10",
 	"default_acceleration": "2500",
-	"default_jerk": "5",
+	"default_jerk": "0",
 	"elefant_foot_compensation": "0",
 	"exclude_object": "1",
 	"extra_perimeters_on_overhangs": "0",

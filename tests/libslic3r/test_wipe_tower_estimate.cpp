@@ -301,13 +301,13 @@ TEST_CASE("The first-layer outline bulges only for a Type2 cone wall", "[WipeTow
     CHECK(from_static.points == cone.points);
 }
 
-TEST_CASE("A Bambu Lab printer always gets the Type1 planner", "[WipeTowerEstimate]") {
+TEST_CASE("The planner follows wipe_tower_type regardless of the printer model", "[WipeTowerEstimate]") {
     DynamicPrintConfig config = make_config();
     config.set_deserialize_strict("wipe_tower_type", "type2");
-    config.set_key_value("printer_model", new ConfigOptionString("Bambu Lab X1 Carbon"));
-    CHECK(resolve_wipe_tower_type(config) == WipeTowerType::Type1);
     config.set_key_value("printer_model", new ConfigOptionString("Voron 2.4"));
     CHECK(resolve_wipe_tower_type(config) == WipeTowerType::Type2);
+    config.set_deserialize_strict("wipe_tower_type", "type1");
+    CHECK(resolve_wipe_tower_type(config) == WipeTowerType::Type1);
     config.erase("wipe_tower_type");
     CHECK(resolve_wipe_tower_type(config) == WipeTowerType::Type2);
 }

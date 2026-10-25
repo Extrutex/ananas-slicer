@@ -713,9 +713,9 @@ public:
         m_enable_arc_fitting(enable_arc_fitting),
         m_filpar(filament_parameters)
         {
-            // ORCA: This class is only used by BBL printers, so set the parameter appropriately.
-            // This fixes an issue where the wipe tower was using BBL tags resulting in statistics for purging in the purge tower not being displayed.
-            GCodeProcessor::s_IsBBLPrinter = true;
+            // A previously imported Bambu G-code may have switched the tag dialect; the tower's own
+            // tags must match what the processor reads back for a sliced print.
+            GCodeProcessor::s_IsBBLPrinter = false;
             // adds tag for analyzer:
             std::ostringstream str;
             str << ";" << GCodeProcessor::reserved_tag(GCodeProcessor::ETags::Height) << std::to_string(m_layer_height) << "\n"; // don't rely on GCodeAnalyzer knowing the layer height - it knows nothing at priming
@@ -1500,7 +1500,7 @@ private:
             gcode << "M204 P" << acceleration;
         }
         else if (m_gcode_flavor == gcfKlipper && m_accel_to_decel_enable) {
-            gcode << "SET_VELOCITY_LIMIT ACCEL_TO_DECEL=" << acceleration * m_accel_to_decel_factor / 100;
+            gcode << "SET_VELOCITY_LIMIT MINIMUM_CRUISE_RATIO=" << (1.0 - m_accel_to_decel_factor / 100.0);
             gcode << "\nM204 S" << acceleration;
         }
         else {

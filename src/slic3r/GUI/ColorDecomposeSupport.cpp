@@ -1,5 +1,4 @@
 #include "ColorDecomposeSupport.hpp"
-#include "slic3r/Utils/NetworkAgent.hpp"
 #include "MixedFilamentDialog.hpp"
 #include "GUI_App.hpp"
 #include "MsgDialog.hpp"
@@ -65,14 +64,11 @@ std::string decompose_basic_type_from_source(size_t source_config_idx,
         if (source_config_idx < filament_id_opt->values.size()) {
             // Dead in practice: "filament_id" is not in PresetBundle's s_project_options, so this
             // option() lookup (create=false) always returns null and the block never runs. Kept as
-            // found, with the translation the values would need: they would be our OF ids, and the
-            // two constants are the printer's own ids.
-            auto* agent = wxGetApp().getAgent();
-            const std::string& orca_filament_id = filament_id_opt->values[source_config_idx];
-            const std::string  printer_filament_id = agent ? agent->from_orca_filament_id(orca_filament_id) : orca_filament_id;
-            if (printer_filament_id == kDecomposePetgFilamentId)
+            // found.
+            const std::string& filament_id = filament_id_opt->values[source_config_idx];
+            if (filament_id == kDecomposePetgFilamentId)
                 return kDecomposePetgBasicType;
-            if (printer_filament_id == kDecomposePlaFilamentId)
+            if (filament_id == kDecomposePlaFilamentId)
                 return kDecomposePlaBasicType;
         }
     }
@@ -89,14 +85,7 @@ std::string decompose_basic_type_from_source(size_t source_config_idx,
 
 std::string decompose_basic_filament_id(const std::string& basic_type)
 {
-    // The result becomes DecomposeOfficialComponent::filament_id, which the rest of this file
-    // reads as one of our OF ids (translating back before it compares against the printer's
-    // ids), so translate on the way out; kDecompose*FilamentId itself stays the printer-side
-    // literal. The only place that would carry it further, project_config's "filament_id", is
-    // dead code: that key is not in PresetBundle's s_project_options.
-    const std::string printer_filament_id = basic_type == kDecomposePetgBasicType ? kDecomposePetgFilamentId : kDecomposePlaFilamentId;
-    auto* agent = wxGetApp().getAgent();
-    return agent ? agent->to_orca_filament_id(printer_filament_id) : printer_filament_id;
+    return basic_type == kDecomposePetgBasicType ? kDecomposePetgFilamentId : kDecomposePlaFilamentId;
 }
 
 void set_created_standard_component_metadata(size_t config_idx, const DecomposeOfficialComponent& component)
@@ -110,11 +99,8 @@ void set_created_standard_component_metadata(size_t config_idx, const DecomposeO
         }
     }
 
-    // component.filament_id is our OF id; the two constants are the printer's own ids.
-    auto* agent = wxGetApp().getAgent();
-    const std::string printer_filament_id = agent ? agent->from_orca_filament_id(component.filament_id) : component.filament_id;
-    const std::string type = printer_filament_id == kDecomposePetgFilamentId ? kDecomposePetgShortType :
-                             printer_filament_id == kDecomposePlaFilamentId ? kDecomposePlaShortType : "";
+    const std::string type = component.filament_id == kDecomposePetgFilamentId ? kDecomposePetgShortType :
+                             component.filament_id == kDecomposePlaFilamentId ? kDecomposePlaShortType : "";
     if (!type.empty()) {
         if (auto* type_opt = project_config.option<ConfigOptionStrings>("filament_type")) {
             while (type_opt->values.size() <= config_idx)
@@ -166,12 +152,7 @@ DecomposeOfficialComponent lookup_decompose_official_component(
                 continue;
             if (item.contains("fila_color") && item["fila_color"].is_array() && !item["fila_color"].empty())
                 result.color_hex = decompose_normalize_color_hex(item["fila_color"][0].get<std::string>());
-            // fila_id from this shipped, Bambu-keyed color table is a printer-side id; translate it so
-            // result.filament_id stays an OF id like the rest of this struct (the fallback default,
-            // result.filament_id, is already OF and passes through unchanged).
-            const std::string fila_id = item.value("fila_id", result.filament_id);
-            auto* agent = wxGetApp().getAgent();
-            result.filament_id = agent ? agent->to_orca_filament_id(fila_id) : fila_id;
+            result.filament_id = item.value("fila_id", result.filament_id);
             return result;
         }
     }
@@ -231,11 +212,8 @@ int find_existing_decompose_component(
     auto* type_opt = project_config.option<ConfigOptionStrings>("filament_type");
     const PresetBundle& preset_bundle = *wxGetApp().preset_bundle;
     const size_t num_physical = physical_colors.size();
-    // component.filament_id is our OF id; the two constants are the printer's own ids.
-    auto* agent = wxGetApp().getAgent();
-    const std::string printer_filament_id = agent ? agent->from_orca_filament_id(component.filament_id) : component.filament_id;
-    const std::string expected_basic_type = printer_filament_id == kDecomposePetgFilamentId ? kDecomposePetgBasicType :
-                                            printer_filament_id == kDecomposePlaFilamentId ? kDecomposePlaBasicType : "";
+    const std::string expected_basic_type = component.filament_id == kDecomposePetgFilamentId ? kDecomposePetgBasicType :
+                                            component.filament_id == kDecomposePlaFilamentId ? kDecomposePlaBasicType : "";
     const std::string expected_short_type = expected_basic_type == kDecomposePetgBasicType ? kDecomposePetgShortType :
                                             expected_basic_type == kDecomposePlaBasicType ? kDecomposePlaShortType : "";
     const std::string expected_preset_part = expected_basic_type.empty() ? "" : std::string(kDecomposeBambuPresetPrefix) + expected_basic_type;

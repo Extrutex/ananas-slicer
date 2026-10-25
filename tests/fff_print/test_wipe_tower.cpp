@@ -142,9 +142,11 @@ static std::string wipe_tower_regions(const std::string &gcode)
 // A per-layer toolchange between the wall and infill filaments, same shape as
 // test_multifilament.cpp's "Each feature prints with its assigned filament", so the wipe tower
 // runs its toolchange path (and so `flush_planner_queue()`) on every layer.
-static DynamicPrintConfig wipe_tower_toolchange_config(const std::string &gcode_flavor)
+// The flavor is set as an enum, not a string: handle_legacy() rewrites every flavor string other
+// than "klipper" to "klipper" on load, while the engine still carries the other flavors' paths.
+static DynamicPrintConfig wipe_tower_toolchange_config(GCodeFlavor gcode_flavor)
 {
-    return multifilament_config(2, {
+    DynamicPrintConfig config = multifilament_config(2, {
         { "sparse_infill_filament_id",  1 },
         { "internal_solid_filament_id", 1 },
         { "top_surface_filament_id",    1 },
@@ -155,8 +157,9 @@ static DynamicPrintConfig wipe_tower_toolchange_config(const std::string &gcode_
         { "wipe_tower_x",               50 }, // inside the 200x200 test bed
         { "wipe_tower_y",               50 }, // (the default y, 220, is not)
         { "layer_height",               0.3 },
-        { "gcode_flavor",               gcode_flavor },
     });
+    config.set_key_value("gcode_flavor", new ConfigOptionEnum<GCodeFlavor>(gcode_flavor));
+    return config;
 }
 
 // Slices a 10mm cube under `config`. Not plain Test::slice: a brand-new Print's first `apply()`
@@ -174,10 +177,10 @@ static std::string slice_with_prime_tower(const DynamicPrintConfig &config)
 
 TEST_CASE("The wipe tower's toolchange planner flush follows the gcode flavor", "[WipeTower]")
 {
-    auto [flavor, expected, unexpected] = GENERATE(table<std::string, std::string, std::string>({
-        { "klipper", "M400",  "G4 S0" },
-        { "marlin",  "G4 S0", "M400"  } }));
-    DYNAMIC_SECTION(flavor) {
+    auto [name, flavor, expected, unexpected] = GENERATE(table<std::string, GCodeFlavor, std::string, std::string>({
+        { "klipper", gcfKlipper,      "M400",  "G4 S0" },
+        { "marlin",  gcfMarlinLegacy, "G4 S0", "M400"  } }));
+    DYNAMIC_SECTION(name) {
         const std::string tower = wipe_tower_regions(slice_with_prime_tower(wipe_tower_toolchange_config(flavor)));
         REQUIRE_FALSE(tower.empty());
         CHECK_THAT(tower, Catch::Matchers::ContainsSubstring(expected));
@@ -254,7 +257,7 @@ TEST_CASE("Generating the tower keeps its reported width current", "[WipeTower]"
 {
     // width is handed out after the slice, so leaving it at the estimate reports a zero-width
     // tower to every post-generation consumer.
-    const DynamicPrintConfig config = wipe_tower_toolchange_config("marlin");
+    const DynamicPrintConfig config = wipe_tower_toolchange_config(gcfMarlinLegacy);
     Print print;
     Model model;
     init_print({ cube(10) }, print, model, config);

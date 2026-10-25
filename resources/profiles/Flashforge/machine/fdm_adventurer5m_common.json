@@ -101,7 +101,6 @@
 	"machine_end_gcode": "G1 E-3 F3600\nG0 X50 Y50 F30000\nM104 S0 ; turn off temperature",
 	"before_layer_change_gcode": ";BEFORE_LAYER_CHANGE\n;[layer_z]",
 	"layer_change_gcode": ";AFTER_LAYER_CHANGE\n;[layer_z]",
-	"scan_first_layer": "0",
 	"thumbnails": [
 		"140x110"
 	],

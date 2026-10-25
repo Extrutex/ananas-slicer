@@ -62,11 +62,9 @@ filament_id policy (see docs/HLSD/filament_id.md):
   * EVERY filament profile carries a minted id, with no exceptions and no
     spellings held back for anyone. Ids that other systems compose for their own
     purposes are simply not mints, so no system profile can carry one and there
-    is nothing to reserve: Bambu's GF* catalog ids (the generated
-    resources/printers/bambu_filament_ids.json records the correspondence, which
-    the app applies at the printer boundary), the QD_* ids a Qidi box composes at
-    runtime, and the P+7-hex ids CreatePresetsDialog.cpp gives user-created
-    filaments all fail the format rule like any other stray value.
+    is nothing to reserve: the QD_* ids a Qidi box composes at runtime and the
+    P+7-hex ids CreatePresetsDialog.cpp gives user-created filaments both fail
+    the format rule like any other stray value.
 
 setting_id policy (see AGENTS.md "Critical Constraints"):
   * setting_id is a PRESET id, a pure function of the preset's identity:
@@ -115,11 +113,6 @@ FILAMENT_ID_LENGTH = 6  # base62 digits after the "OF" prefix -> 8 chars total
 
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROFILES_DIR = os.path.normpath(os.path.join(SCRIPTS_DIR, "..", "resources", "profiles"))
-# The single source of truth for the map path; update_bambu_filament_ids.py
-# imports this rather than recomputing it.
-BAMBU_MAP_PATH = os.path.normpath(
-    os.path.join(SCRIPTS_DIR, "..", "resources", "printers", "bambu_filament_ids.json"))
-
 OFL = "OrcaFilamentLibrary"
 # The validator's data dir, created under resources/profiles by a local run;
 # not a vendor bundle, so an unscoped pass leaves it alone.
@@ -152,6 +145,7 @@ NON_PROFILE_FILES = {
 # checks parity. Used by normalize and check. Active options and
 # legacy aliases that the loader migrates do not belong here.
 OBSOLETE_KEYS = {
+    "scan_first_layer", "bbl_calib_mark_logo", "flashforge_serial_number", "bbl_use_printhost",
     "acceleration", "scale", "rotate", "duplicate", "duplicate_grid",
     "bed_size", "print_center", "g0", "wipe_tower_per_color_wipe",
     "support_sharp_tails", "support_remove_small_overhangs", "support_with_sheath",
@@ -283,7 +277,6 @@ _JSON_STR = r'"(?:[^"\\]|\\.)*"'
 
 GENERATE_CMD = "python scripts/orca_profile_tool.py generate-id"
 SETTING_ID_CMD = '"python scripts/orca_profile_tool.py generate-id --setting-id"'
-BAMBU_MAP_HINT = 'regenerate the map with "python scripts/update_bambu_filament_ids.py" and commit the diff for maintainer review'
 NORMALIZE_HINT = 'try "python scripts/orca_profile_tool.py normalize" to fix common issues automatically'
 
 # What to do about a defect check found, keyed by defect. check prints each of these
@@ -663,7 +656,7 @@ def analyze_tree(profiles_dir):
 # filament_id validation
 # ---------------------------------------------------------------------------
 
-def check_filament_ids(profiles_dir=PROFILES_DIR, map_path=BAMBU_MAP_PATH):
+def check_filament_ids(profiles_dir=PROFILES_DIR):
     """Validate filament_id state across every vendor. Returns the error count.
 
     1. Format: every id occurring in the tree (declared or effective) must
@@ -680,10 +673,6 @@ def check_filament_ids(profiles_dir=PROFILES_DIR, map_path=BAMBU_MAP_PATH):
        and filament_type; (b) declarers of one (bundle, filament) resolve
        identical triples; cross-bundle divergence on the same filament name is a
        warning only.
-    4. Bambu catalog map: resources/printers/bambu_filament_ids.json must parse,
-       carry source/bambustudio_commit/generated, key only OF-format ids, map
-       each Bambu id at most once, and for every row whose key the tree claims,
-       the tree's triple for that id must equal the row's (vendor, type, name).
     """
     _utf8_console()
     errors = 0
@@ -786,58 +775,6 @@ def check_filament_ids(profiles_dir=PROFILES_DIR, map_path=BAMBU_MAP_PATH):
             f'filament name "{filament_name}" resolves different triples across bundles '
             f"({detail}); bundles of one product converge on one id only once "
             f"their triples agree")
-
-    # -- 4. Bambu catalog map --------------------------------------------------
-    try:
-        bambu_map = load_json(map_path)
-        if not isinstance(bambu_map, dict):
-            raise ValueError("top level is not a JSON object")
-    except (OSError, ValueError) as e:
-        print_error(f"Bambu catalog map {map_path} does not parse ({e}); {BAMBU_MAP_HINT}")
-        errors += 1
-    else:
-        for key in ("source", "bambustudio_commit", "generated"):
-            if not bambu_map.get(key):
-                print_error(f'Bambu catalog map {map_path} is missing "{key}"; {BAMBU_MAP_HINT}')
-                errors += 1
-        rows = bambu_map.get("filaments")
-        # An empty or absent section is not a well-formed map: it makes every runtime
-        # translation silently degrade to identity (BBLPrinterAgent logs nothing for it),
-        # and it is what a regeneration against the wrong --bambustudio-dir writes.
-        if not isinstance(rows, dict) or not rows:
-            print_error(f'Bambu catalog map {map_path} declares no "filaments" rows; '
-                        f"{BAMBU_MAP_HINT}")
-            errors += 1
-            rows = {}
-        bambu_id_owners = {}
-        for fid, row in sorted(rows.items()):
-            if not OF_ID_RE.match(fid):
-                print_error(f'Bambu catalog map key "{fid}" is not a minted "OF" id; '
-                           f"{BAMBU_MAP_HINT}")
-                errors += 1
-            bambu_id = row.get("bambu_id")
-            if not bambu_id:
-                # An empty id would map the empty string to a real filament at runtime.
-                print_error(f'Bambu catalog map row "{fid}" declares no "bambu_id"; '
-                            f"{BAMBU_MAP_HINT}")
-                errors += 1
-            elif bambu_id in bambu_id_owners:
-                print_error(
-                    f'Bambu catalog map: Bambu id "{bambu_id}" is mapped by both '
-                    f'"{bambu_id_owners[bambu_id]}" and "{fid}"; {BAMBU_MAP_HINT}')
-                errors += 1
-            else:
-                bambu_id_owners[bambu_id] = fid
-            claimed = analysis["triples"].get(fid)
-            if not claimed:
-                continue  # a product BambuStudio ships that the tree does not (yet)
-            row_triple = [row.get("vendor", ""), row.get("type", ""), row.get("name", "")]
-            if row_triple not in claimed:
-                print_error(
-                    f'Bambu catalog map row "{fid}" claims triple "{"/".join(row_triple)}" '
-                    f'but the tree declares "{"; ".join("/".join(t) for t in claimed)}" for '
-                    f"that id; {BAMBU_MAP_HINT}")
-                errors += 1
 
     return errors
 
@@ -2191,8 +2128,7 @@ def generate_filament_ids(profiles_dir=PROFILES_DIR, vendors=None, dry_run=False
 
     One rule, applied to declarations and to id-less filaments alike:
       * a declared id that is not the one its own triple mints — a wrong OF id,
-        or a foreign one such as a Bambu catalog id arriving with an upstream
-        sync — is replaced in place;
+        or a foreign one arriving with an upstream sync — is replaced in place;
       * an instantiated filament that resolves no id at all gets one inserted
         into its root(s): the id-less presets of the SAME filament its members
         inherit, or the member itself (a parent of another filament cannot carry
