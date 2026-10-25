@@ -23,10 +23,11 @@ endif ()
 
 set(_wx_patch_command "")
 if (APPLE)
+    # The fork's v3.3.2 tag was moved on 2026-10-23 to a commit that already carries this
+    # change. Apply the patch only where it is still missing, so either state of the tag builds.
+    set(_wx_patch_file "${CMAKE_CURRENT_LIST_DIR}/0001-macos-use-srgb-colour-components.patch")
     set(_wx_patch_command
-        ${GIT_EXECUTABLE} checkout -f -- src/osx/cocoa/colour.mm
-        COMMAND ${GIT_EXECUTABLE} apply --verbose
-                ${CMAKE_CURRENT_LIST_DIR}/0001-macos-use-srgb-colour-components.patch
+        sh -c "${GIT_EXECUTABLE} checkout -f -- src/osx/cocoa/colour.mm && (${GIT_EXECUTABLE} apply --reverse --check '${_wx_patch_file}' >/dev/null 2>&1 || ${GIT_EXECUTABLE} apply --verbose '${_wx_patch_file}')"
     )
 endif ()
 
