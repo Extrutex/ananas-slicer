@@ -1,0 +1,22 @@
+# Categories for the release notes GitHub generates from merged pull requests.
+# ANANAS SLICER writes its release notes from CHANGELOG.md; this file only sorts
+# the "What's changed" list that GitHub appends.
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: Klipper and G-code
+      labels: [klipper, gcode]
+    - title: Moonraker and device
+      labels: [moonraker]
+    - title: Slicing
+      labels: [slicing]
+    - title: Printer profiles
+      labels: [printer-profile]
+    - title: Fixes
+      labels: [bug, crash]
+    - title: Cockpit and engine (developer preview)
+      labels: [cockpit, engine]
+    - title: Other changes
+      labels: ["*"]

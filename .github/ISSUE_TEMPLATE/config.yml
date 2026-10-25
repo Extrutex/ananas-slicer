@@ -1,1 +1,11 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Questions, prints, ideas
+    url: https://github.com/Extrutex/ananas-slicer/discussions
+    about: Ask how something works, show a print or discuss an idea. Bugs go into an issue form.
+  - name: Documentation (English and German)
+    url: https://extrutex.github.io/ananas-slicer-wiki/
+    about: Installation, first print, printer sync, calibration, troubleshooting.
+  - name: Security problem
+    url: https://github.com/Extrutex/ananas-slicer/security/advisories/new
+    about: Report it privately. Please do not open a public issue for a vulnerability.

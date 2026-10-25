@@ -1,145 +1,121 @@
-name: 🐞 Bug Report
-description: Something behaves incorrectly while Orca Slicer keeps running
+name: Bug report
+description: Something behaves wrongly while ANANAS SLICER keeps running
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        **Thank you for using Orca Slicer and wanting to report a bug.**
-        
-        Please note that this is not the place to make feature requests or ask for help.
-        For this, please use the [Feature request](https://github.com/OrcaSlicer/OrcaSlicer/issues/new?assignees=&labels=&projects=&template=feature_request.yml) issue type or you can discuss your idea on our [Discord server](https://discord.gg/P4VE9UY9gJ) with others.
-        
-        If Orca Slicer closes on its own, freezes or stops responding, please use the [Crash report](https://github.com/OrcaSlicer/OrcaSlicer/issues/new?assignees=&labels=&projects=&template=crash_report.yml) form instead. It asks for the logs a crash needs.
-        
-        Before filing, please check if the issue already exists (either open or closed) by using the search bar on the issues page. If it does, comment there. Even if it's closed, we can reopen it based on your comment.
+        Thank you for reporting. Three things first:
+
+        - If ANANAS SLICER closes on its own, freezes or stops responding, use the **Crash report** form instead; it asks for the files a crash needs.
+        - Questions and ideas belong in [Discussions](https://github.com/Extrutex/ananas-slicer/discussions).
+        - Please search the open and closed issues before you file. If the problem is already there, comment on it; closed issues are reopened when a comment shows the problem is back.
+
+        ANANAS SLICER is alpha software with a single maintainer. Reports with a project file and a log are answered first.
   - type: checkboxes
     attributes:
-      label: Is this issue reproducible in the latest nightly build?
-      description: >
-        Please verify this issue still happens in the latest nightly build first. It may already be fixed there:
-        [Nightly builds](https://github.com/OrcaSlicer/OrcaSlicer/releases/tag/nightly-builds).
-      options:
-        - label: I have checked the latest nightly build and the issue is still reproducible
-          required: true
-  - type: checkboxes
-    attributes:
-      label: Is there an existing issue for this problem?
-      description: Please search to see if an issue already exists for the bug you encountered.
+      label: Checks
       options:
         - label: I have searched the existing issues
+          required: true
+        - label: I am on the latest release (`Help` → `About ANANAS SLICER`, compare with the releases page)
           required: true
   - type: input
     id: version
     attributes:
-      label: OrcaSlicer Version
-      description: Which version of Orca Slicer are you running? You can see the full version in `Help` -> `About Orca Slicer`.
-      placeholder: e.g. 2.5.0
+      label: ANANAS SLICER version
+      description: From `Help` → `About ANANAS SLICER`.
+      placeholder: e.g. 0.1.0-alpha.1
     validations:
       required: true
   - type: input
-    id: working_version
+    id: regression
     attributes:
-      label: Regression compared to a previous version
-      description: Did it work in a previous version?
-      placeholder: e.g. 2.3.2
+      label: Did it work in an earlier version?
+      description: Name the version if you know one, or write KLIPSLICE or OrcaSlicer if the same project worked there.
+      placeholder: e.g. KLIPSLICE 2026-10-01 build
     validations:
       required: false
   - type: dropdown
-    id: os_type
+    id: os
     attributes:
-      label: "Operating System (OS)"
-      description: "What OSes are you experiencing issues on?"
+      label: Operating system
       multiple: true
       options:
-        - Linux
-        - macOS
         - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Windows installer (.exe)
+        - Windows portable (.zip)
+        - macOS disk image (.dmg)
+        - Linux AppImage
+        - Flatpak
+        - Built from source
     validations:
       required: true
   - type: input
     id: os_version
     attributes:
-      label: "OS Version"
-      description: "What OS version does this relate to?"
-      placeholder: "i.e. OS: Windows 7/8/10/11 ..., Ubuntu 22.04/Fedora 36 ..., macOS 10.15/11.1/12.3 ..."
-    validations:
-      required: true
-  - type: textarea
-    id: system_info
-    attributes:
-      label: Additional system information
-      description: For the performance issue, please also show the CPU, Memory information; For the 3D Rendering issue, please also show the Display Card information.
-      placeholder: |
-        CPU: 11th gen Intel r core tm i7-1185g7/AMD Ryzen 7 6800h/...
-        Memory: 32/16 GB...
-        Display Card: NVIDIA Quadro P400/...
+      label: Operating system version
+      placeholder: e.g. Windows 11 24H2, macOS 15.6, Ubuntu 24.04
     validations:
       required: false
   - type: input
     id: printer
     attributes:
-      label: Printer
-      description: Which printer was selected
-      placeholder: Voron 2.4/VzBot/Prusa MK4/Bambu Lab X1 series/Bambu Lab P1P/...
+      label: Printer and kinematics
+      description: The machine profile you selected, and the real machine if it differs.
+      placeholder: e.g. Voron 2.4 350 (corexy), profile "Voron 2.4 350 0.4 nozzle"
+    validations:
+      required: true
+  - type: input
+    id: klipper
+    attributes:
+      label: Klipper and Moonraker versions
+      description: Shown in Mainsail or Fluidd under Machine / Settings, or by `~/klipper/scripts/../klippy/klippy.py --version`. Write "not connected" if the problem happens without a printer.
+      placeholder: e.g. Klipper v0.13.0-123-gabcdef, Moonraker v0.9.3-45
     validations:
       required: true
   - type: textarea
-    id: reproduce_steps
+    id: what
     attributes:
-      label: How to reproduce
-      description: Please describe the detailed steps to reproduce this issue
+      label: What happened, and what did you expect?
+      description: Step by step, so that someone else can do the same and see the same.
       placeholder: |
-        1. Go to '...'
-        2. Click on '...'
-        3. Scroll down to '...'
-        4. See error
+        1. Open the attached project
+        2. Slice plate
+        3. Export G-code
+        What happens: …
+        What I expected: …
     validations:
       required: true
   - type: textarea
-    id: actual_results
+    id: files
     attributes:
-      label: Actual results
-      description: What happens after the above steps? Please, enclose a screenshot whenever possible (even when you think the description is clear). 
-    validations:
-      required: true
-  - type: textarea
-    id: expected_results
-    attributes:
-      label: Expected results
-      description: What should happen after the above steps?
-    validations:
-      required: true
-  - type: textarea
-    id: file_uploads
-    attributes:
-      label: Project file & Debug log uploads
+      label: Project file, G-code and printer.cfg
       description: |
-        Attach the files with the **Paste, drop, or click to add files** control directly underneath this box. Zip anything that is not a `.log`, `.txt` or image, since GitHub rejects other file types, and keep each file under 25 MB.
-
-        * The **project file** used when the problem happened, zipped. Export it just before or after the problem occurs. Even if you did nothing and there is no object on the plate, export it, since we need the configuration it carries. `File` -> `Save project as...`
-        * The **log folder**, zipped. `Help` -> `Show Configuration Folder` opens it, or find it at:
-          * Windows: `%APPDATA%\OrcaSlicer\log`, usually `C:\Users\<you>\AppData\Roaming\OrcaSlicer\log`
-          * macOS: `$HOME/Library/Application Support/OrcaSlicer/log`
-          * Linux: `$HOME/.config/OrcaSlicer/log`
-          * Flatpak: `$HOME/.var/app/com.orcaslicer.OrcaSlicer/config/OrcaSlicer/log`
-          * If the zip comes out over 25 MB, attach the newest logs from that folder on their own instead.
-      placeholder: |
-        Zipped project file
-        Zipped log folder
+        Drag the files here. The `.3mf` project (`File` → `Save project`) reproduces slicing problems; the exported `.gcode` shows what the printer received; the relevant sections of `printer.cfg` matter for anything about limits, pressure advance or macros. Zip files GitHub refuses.
     validations:
-      required: true
-  - type: checkboxes
-    id: file_checklist
-    attributes:
-      label: Checklist of files to include
-      options:
-        - label: Log file
-        - label: Project file
+      required: false
   - type: textarea
+    id: logs
     attributes:
-      label: Anything else?
+      label: Log
       description: |
-        Screenshots? References? Anything that will give us more context about the issue you are encountering!
+        Drag the log of the session here. Logs live in the `log` folder of the settings directory:
+        `%APPDATA%\AnanasSlicer\log` (Windows), `~/Library/Application Support/AnanasSlicer/log` (macOS), `~/.config/AnanasSlicer/log` (Linux).
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
     validations:
       required: false

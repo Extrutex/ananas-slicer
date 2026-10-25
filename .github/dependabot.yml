@@ -15,4 +15,19 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+  # Cockpit UI (developer preview): npm and cargo, security and major updates only.
+  - package-ecosystem: "npm"
+    directory: "/ui"
+    schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
+  - package-ecosystem: "cargo"
+    directory: "/ui/src-tauri"
+    schedule:
+      interval: "monthly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
   # no support for c/cpp
