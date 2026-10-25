@@ -38,9 +38,9 @@ carries these packages and a `SHA256SUMS.txt`:
 
 | Platform | Package | First start |
 |---|---|---|
-| Windows 10 and 11, x64 and arm64 | `AnanasSlicer_Windows_Installer_V<version>_x64.exe`, or `AnanasSlicer_Windows_V<version>_x64_portable.zip` to run without installing | SmartScreen warns about an unsigned program: **More info → Run anyway**. |
+| Windows 10 and 11, x64 and arm64 | `AnanasSlicer_Windows_V<version>_x64.exe` (or `_arm64.exe`), or `AnanasSlicer_Windows_V<version>_x64_portable.zip` to run without installing | SmartScreen warns about an unsigned program: **More info → Run anyway**. |
 | macOS 12 or newer, Apple silicon and Intel | `AnanasSlicer_Mac_universal_V<version>.dmg` | The app is not notarized. macOS 15: open it once, then **System Settings → Privacy & Security → Open Anyway**. Or in a terminal: `xattr -dr com.apple.quarantine /Applications/AnanasSlicer.app` |
-| Linux x86_64 | `AnanasSlicer_Linux_AppImage_…_V<version>.AppImage` | `chmod +x` and run. Needs FUSE 2 (`libfuse2`). |
+| Linux x86_64 | `AnanasSlicer_Linux_ubuntu_2404_V<version>.AppImage` | `chmod +x` and run. Needs FUSE 2 (`libfuse2`). |
 
 The packages are unsigned because signing certificates cost money that the
 project does not have yet; the first [Ko-fi](https://ko-fi.com/3dw_sebastianwindt)
