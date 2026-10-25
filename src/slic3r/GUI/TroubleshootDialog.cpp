@@ -135,15 +135,17 @@ TroubleshootDialog::TroubleshootDialog()
     m_header_logo     = new wxStaticBitmap(this, wxID_ANY, m_logo.bmp());
     auto logo_line    = new wxPanel(this, wxID_ANY, wxDefaultPosition, wxSize(-1, FromDIP(2)));
     logo_line->SetBackgroundColour(StateColor::darkModeColorFor(wxColour("#3D4953")));
-    auto version      = new Label(this, wxString(SoftFever_VERSION), wxALIGN_CENTRE_HORIZONTAL);
+    auto version      = new Label(this, wxString(ANANAS_VERSION), wxALIGN_CENTRE_HORIZONTAL);
     wxFont version_font = GetFont();
     version_font = version_font.Scaled(1.65f); // SetPointSize(18) not works on macOS because it uses a 72 PPI reference
     version->SetFont(version_font);
     version->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#363636")));
+    auto based_on = new Label(this, wxString(ANANAS_BASED_ON_DISPLAY), wxALIGN_CENTRE_HORIZONTAL);
+    based_on->SetForegroundColour(StateColor::darkModeColorFor(wxColour("#363636")));
 
     auto build = new Button(this, wxString(build_commit_label));
     build->SetStyle(ButtonStyle::Regular, ButtonType::Window);
-    auto hash_url = "https://github.com/OrcaSlicer/OrcaSlicer/commit/" + wxString(build_commit_hash);
+    auto hash_url = ANANAS_PROJECT_URL "/commit/" + wxString(build_commit_hash);
     build->SetToolTip(hash_url);
     build->Bind(wxEVT_BUTTON, [hash_url](wxCommandEvent &e) {
          wxLaunchDefaultBrowser(hash_url);
@@ -190,7 +192,7 @@ TroubleshootDialog::TroubleshootDialog()
         Fit();
     });
 
-    auto link_wiki = new HyperLink(this, _L("Wiki Guide"), "https://www.orcaslicer.com/wiki/troubleshoot_center");
+    auto link_wiki = new HyperLink(this, _L("Wiki Guide"), ANANAS_WIKI_URL "troubleshooting/");
 
     // RIGHT SIZER //////////////////////
 
@@ -252,11 +254,11 @@ TroubleshootDialog::TroubleshootDialog()
             return out;
         };
 
-        wxString url = "https://github.com/OrcaSlicer/OrcaSlicer/issues/new?template=bug_report.yml";
+        wxString url = ANANAS_PROJECT_URL "/issues/new?template=bug_report.yml";
         wxString os = GetOStype();
         if(!os.IsEmpty())
-            url += "&os_type=%22" + os +"%22";
-        url += "&version="     + encodeStr(wxString(SoftFever_VERSION));
+            url += "&os=" + os;
+        url += "&version="     + encodeStr(wxString(ANANAS_VERSION_DISPLAY));
         url += "&os_version="  + encodeStr(GetOSinfo());
         wxLaunchDefaultBrowser(url);
     });
@@ -324,6 +326,7 @@ TroubleshootDialog::TroubleshootDialog()
     left_sizer->Add(m_header_logo     , 0, wxEXPAND | wxALIGN_CENTER);
     left_sizer->Add(logo_line         , 0, wxEXPAND       | wxTOP, FromDIP(12));
     left_sizer->Add(version           , 0, wxEXPAND       | wxTOP, FromDIP(6));
+    left_sizer->Add(based_on          , 0, wxEXPAND       | wxTOP, FromDIP(2));
     left_sizer->Add(build             , 0, wxALIGN_CENTER | wxTOP, FromDIP(4));
     left_sizer->Add(sys_panel         , 0, wxEXPAND       | wxTOP, FromDIP(15));
     left_sizer->AddStretchSpacer();
@@ -374,7 +377,7 @@ wxString TroubleshootDialog::GetTimestamp()
 wxString TroubleshootDialog::GetSysInfoAll()
 {
     wxString info;
-    info += "Version   :  " + wxString(SoftFever_VERSION) + "\n"
+    info += "Version   :  " + wxString(ANANAS_VERSION_DISPLAY) + "\n"
           + "Build     :  " + wxString(build_commit_label) + "\n"
           + "Package   :  " + GetPackageType() + "\n"
           + "Platform  :  " + GetOSinfo()      + "\n"

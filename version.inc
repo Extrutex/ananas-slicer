@@ -18,6 +18,23 @@ set(ORCA_VERSION_PATCH ${CMAKE_MATCH_3})
 
 set(SLIC3R_VERSION "02.08.01.55")
 
+# ANANAS SLICER's own version. Shown to the user (About dialog, Troubleshoot Center, network test)
+# and used in the installer, DMG and AppImage names. SoftFever_VERSION above stays the OrcaSlicer
+# release this fork is based on: the G-code header, the 3MF version checks and the profile format
+# compare against it.
+set(ANANAS_VERSION "0.1.0-alpha.1")
+string(REGEX MATCH "^([0-9]+)\\.([0-9]+)\\.([0-9]+)"
+       ANANAS_VERSION_MATCH ${ANANAS_VERSION})
+set(ANANAS_VERSION_MAJOR ${CMAKE_MATCH_1})
+set(ANANAS_VERSION_MINOR ${CMAKE_MATCH_2})
+set(ANANAS_VERSION_PATCH ${CMAKE_MATCH_3})
+
+# Project links shown in the app (About dialog, "Wiki Guide" links, issue reports) and written into
+# the packages. The wiki is English by default; the German pages live under de/.
+set(ANANAS_PROJECT_URL "https://github.com/Extrutex/ananas-slicer")
+set(ANANAS_WIKI_URL "https://extrutex.github.io/ananas-slicer-wiki/")
+set(ANANAS_DONATE_URL "https://ko-fi.com/3dw_sebastianwindt")
+
 if (NOT DEFINED ORCA_UPDATER_SIG_KEY)
     set(ORCA_UPDATER_SIG_KEY "" CACHE STRING "Base64url encoded updater signature key")
 endif()

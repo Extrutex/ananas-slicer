@@ -488,10 +488,6 @@ void AppConfig::set_defaults()
         set_bool("show_daily_tips", true);
     }
 
-    if (get("show_shared_profiles_notification").empty()) {
-        set_bool("show_shared_profiles_notification", true);
-    }
-
     if (get("auto_calculate_flush").empty()){
         set("auto_calculate_flush","all");
     }

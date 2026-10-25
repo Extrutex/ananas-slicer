@@ -11,7 +11,7 @@
 	<key>CFBundleIconFile</key>
 	<string>${MACOSX_BUNDLE_ICON_FILE}</string>
 	<key>CFBundleIdentifier</key>
-	<string>de.3dwindt.AnanasSlicer</string>
+	<string>io.github.extrutex.AnanasSlicer</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleLongVersionString</key>

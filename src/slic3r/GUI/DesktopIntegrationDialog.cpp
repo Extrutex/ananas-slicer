@@ -209,7 +209,7 @@ bool DesktopIntegrationDialog::is_integrated()
     if (path.empty())
         return false;
 
-    // confirmation that de._3dwindt.AnanasSlicer.desktop exists
+    // confirmation that io.github.extrutex.AnanasSlicer.desktop exists
     struct stat buffer;   
     return (stat (path.c_str(), &buffer) == 0);
 }
@@ -344,13 +344,13 @@ void DesktopIntegrationDialog::perform_desktop_integration()
                 "StartupNotify=false\n"
                 "StartupWMClass=ananas-slicer\n", name_suffix, version_suffix, excutable_path);
 
-            std::string path = GUI::format("%1%/applications/de._3dwindt.AnanasSlicer%2%.desktop", target_dir_desktop, version_suffix);
+            std::string path = GUI::format("%1%/applications/io.github.extrutex.AnanasSlicer%2%.desktop", target_dir_desktop, version_suffix);
             if (create_desktop_file(path, desktop_file)){
-                BOOST_LOG_TRIVIAL(debug) << "de._3dwindt.AnanasSlicer.desktop file installation success.";
+                BOOST_LOG_TRIVIAL(debug) << "io.github.extrutex.AnanasSlicer.desktop file installation success.";
                 break;
             } else {
             	// write failed - try another path
-                BOOST_LOG_TRIVIAL(debug) << "Attempt to de._3dwindt.AnanasSlicer.desktop file installation failed. failed path: " << target_candidates[i];
+                BOOST_LOG_TRIVIAL(debug) << "Attempt to io.github.extrutex.AnanasSlicer.desktop file installation failed. failed path: " << target_candidates[i];
                 target_dir_desktop.clear(); 
             }
             // if all failed - try creating default home folder
@@ -359,7 +359,7 @@ void DesktopIntegrationDialog::perform_desktop_integration()
                 create_path(into_u8(wxFileName::GetHomeDir()), ".local/share/applications");
                 // create desktop file
                 target_dir_desktop = GUI::format("%1%/.local/share",wxFileName::GetHomeDir());
-                std::string path = GUI::format("%1%/applications/de._3dwindt.AnanasSlicer%2%.desktop", target_dir_desktop, version_suffix);
+                std::string path = GUI::format("%1%/applications/io.github.extrutex.AnanasSlicer%2%.desktop", target_dir_desktop, version_suffix);
                 if (contains_path_dir(target_dir_desktop, "applications")) {
                     if (!create_desktop_file(path, desktop_file)) {    
                         // Desktop file not written - end desktop integration
@@ -381,7 +381,7 @@ void DesktopIntegrationDialog::perform_desktop_integration()
         return;
     }
     // save path to desktop file
-    app_config->set("desktop_integration_app_path", GUI::format("%1%/applications/de._3dwindt.AnanasSlicer%2%.desktop", target_dir_desktop, version_suffix));
+    app_config->set("desktop_integration_app_path", GUI::format("%1%/applications/io.github.extrutex.AnanasSlicer%2%.desktop", target_dir_desktop, version_suffix));
 
     // Repeat for Gcode viewer - use same paths as for slicer files
     // Do NOT add gcode viewer desktop file on ChromeOS

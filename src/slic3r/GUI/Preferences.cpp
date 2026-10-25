@@ -264,7 +264,7 @@ wxBoxSizer *PreferencesDialog::create_item_label(wxString label, wxString toolti
 
     wxString url;
     if(!wiki_url.IsEmpty())
-        url = "https://www.orcaslicer.com/wiki/" + wiki_url;
+        url = ANANAS_WIKI_URL "settings/#" + wiki_url;
 
     auto label_ctrl = new WikiLabel(m_parent, label, url, wxDefaultPosition, DESIGN_TITLE_SIZE);
 
@@ -1494,9 +1494,6 @@ void PreferencesDialog::create_items()
     auto item_filament_area_height = create_item_spinctrl(_L("Optimize filaments area height for..."), "", _L("filaments"), _L("Optimizes filament area maximum height by chosen filament count."),
         "filaments_area_preferred_count", 8, 99, [this](int value) {m_filament_height_timer.StartOnce(500);});
     g_sizer->Add(item_filament_area_height); 
-
-    auto item_shared_profiles  = create_item_checkbox(_L("Show shared profiles notification"), _L("Show a notification with a link to browse shared profiles when the selected printer is changed."), "show_shared_profiles_notification");
-    g_sizer->Add(item_shared_profiles);
 
     //// GENERAL > Features
     g_sizer->Add(create_item_title(_L("Features")), 1, wxEXPAND);

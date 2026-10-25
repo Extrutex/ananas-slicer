@@ -1600,7 +1600,7 @@ int CLI::run(int argc, char **argv)
     }
 
     global_begin_time = (long long)Slic3r::Utils::get_current_time_utc();
-    BOOST_LOG_TRIVIAL(warning) << boost::format("cli mode, Current OrcaSlicer Version %1%")%SoftFever_VERSION;
+    BOOST_LOG_TRIVIAL(warning) << boost::format("cli mode, %1%") % ANANAS_VERSION_DISPLAY;
 
     //BBS: add plate data related logic
     PlateDataPtrs plate_data_src;

@@ -1173,26 +1173,25 @@ PresetUpdater::~PresetUpdater()
 
 //BBS: change directories by design
 //BBS: refine the preset updater logic
-void PresetUpdater::sync(std::string http_url, std::string language, PresetBundle * /*preset_bundle*/)
+void PresetUpdater::sync(PresetBundle * /*preset_bundle*/)
 {
 	//p->set_download_prefs(GUI::wxGetApp().app_config);
 	if (!p->enabled_version_check && !p->enabled_config_update) { return; }
 
-	p->thread = std::thread([this, http_url, language]() {
+	p->thread = std::thread([this]() {
 		try {
 			this->p->sync_version();
 			if (p->cancel)
 				return;
 			// Vendor profile updates are triggered by check_vendor_update()
-			// after the startup printer preset has been restored.
-            this->p->sync_printer_config(http_url);
+			// after the startup printer preset has been restored. The upstream printer
+			// config OTA (Bambu printer profiles from api.bambulab.com) is not fetched:
+			// ANANAS SLICER ships no such printers and does not contact that service.
             // Orca (PR #130): the filament library is always installed, so refresh it
             // from the updater on every startup sync rather than deferring to check_vendor_update().
             this->p->sync_vendor_config(PresetBundle::ORCA_FILAMENT_LIBRARY);
 			//if (p->cancel)
 			//	return;
-			//remove the tooltip currently
-			//this->p->sync_tooltip(http_url, language);
 		} catch (const std::exception &e) {
 			BOOST_LOG_TRIVIAL(error) << "[Orca Updater] background sync failed: " << e.what();
 		} catch (...) {

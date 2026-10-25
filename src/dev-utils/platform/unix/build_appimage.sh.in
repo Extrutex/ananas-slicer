@@ -4,7 +4,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../../.." && pwd)"
 
 
-APP_IMAGE="@SLIC3R_APP_KEY@_Linux_V@SoftFever_VERSION@.AppImage"
+APP_IMAGE="@SLIC3R_APP_KEY@_Linux_V@ANANAS_VERSION@.AppImage"
 
 wget ${APPIMAGETOOLURL} -O ../appimagetool.AppImage
 chmod +x ../appimagetool.AppImage
@@ -19,7 +19,7 @@ chmod +x AppRun
 cp resources/images/AnanasSlicer_192px.png @SLIC3R_APP_KEY@.png
 mkdir -p usr/share/icons/hicolor/192x192/apps
 cp resources/images/AnanasSlicer_192px.png usr/share/icons/hicolor/192x192/apps/@SLIC3R_APP_KEY@.png
-cat <<EOF > de._3dwindt.AnanasSlicer.desktop
+cat <<EOF > io.github.extrutex.AnanasSlicer.desktop
 [Desktop Entry]
 Name=@SLIC3R_APP_KEY@
 Exec=AppRun %F
@@ -32,13 +32,13 @@ MimeType=model/stl;application/vnd.ms-3mfdocument;application/prs.wavefront-obj;
 EOF
 
 mkdir -p usr/share/applications
-cp de._3dwindt.AnanasSlicer.desktop usr/share/applications/
+cp io.github.extrutex.AnanasSlicer.desktop usr/share/applications/
 
 mkdir -p usr/share/metainfo
-cp "${REPO_ROOT}/scripts/flatpak/de._3dwindt.AnanasSlicer.metainfo.xml" \
-  "usr/share/metainfo/de._3dwindt.AnanasSlicer.metainfo.xml"
-cp "${REPO_ROOT}/scripts/flatpak/de._3dwindt.AnanasSlicer.metainfo.xml" \
-  "usr/share/metainfo/de._3dwindt.AnanasSlicer.appdata.xml"
+cp "${REPO_ROOT}/scripts/flatpak/io.github.extrutex.AnanasSlicer.metainfo.xml" \
+  "usr/share/metainfo/io.github.extrutex.AnanasSlicer.metainfo.xml"
+cp "${REPO_ROOT}/scripts/flatpak/io.github.extrutex.AnanasSlicer.metainfo.xml" \
+  "usr/share/metainfo/io.github.extrutex.AnanasSlicer.appdata.xml"
 
 
 export ARCH=$(uname -m)

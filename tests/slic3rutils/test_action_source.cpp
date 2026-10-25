@@ -222,7 +222,7 @@ TEST_CASE("Native command icons resolve to shipped SVGs", "[ActionSource][SpeedD
     }
 }
 
-// The Help-menu commands, wiki/YouTube links and the developer-mode toggle are part of the palette.
+// The Help-menu commands, the wiki link and the developer-mode toggle are part of the palette.
 // Guard their presence and that they stay grouped with their peers, so a catalog edit cannot drop
 // or scatter them. Groups are compared to the peer's own group to stay independent of translation.
 TEST_CASE("Native command catalog includes the Help and developer-mode commands", "[ActionSource][SpeedDial]")
@@ -238,7 +238,7 @@ TEST_CASE("Native command catalog includes the Help and developer-mode commands"
     const Slic3r::GUI::NativeCommand* first = find("help_keyboard_shortcuts");
     REQUIRE(first != nullptr);
     for (const char* key : {"help_setup_wizard", "help_open_config_folder", "help_troubleshoot", "help_network_test",
-                            "help_tip_of_the_day", "help_check_updates", "help_about", "open_wiki", "open_youtube"}) {
+                            "help_tip_of_the_day", "help_check_updates", "help_about", "open_wiki"}) {
         const Slic3r::GUI::NativeCommand* c = find(key);
         REQUIRE(c != nullptr);
         CHECK(c->group == first->group);

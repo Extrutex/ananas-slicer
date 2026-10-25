@@ -264,7 +264,7 @@ jobs:
     - uses: actions/checkout@v7
     - name: Get the version and date
       run: |
-        ver_pure=$(grep 'set(SoftFever_VERSION' version.inc | cut -d '"' -f2)
+        ver_pure=$(grep 'set(ANANAS_VERSION' version.inc | cut -d '"' -f2)
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
           ver="PR-${{ github.event.number }}"
           git_commit_hash="${{ github.event.pull_request.head.sha }}"
@@ -279,7 +279,7 @@ jobs:
       shell: bash
     - name: Compute the flatpak-builder cache key
       id: fp_cache_key
-      run: echo "key=flatpak-builder-${{ matrix.variant.arch }}-${{ hashFiles('deps/**', 'scripts/flatpak/de._3dwindt.AnanasSlicer.yml', 'scripts/flatpak/make_deps_tar.sh') }}" >> "$GITHUB_OUTPUT"
+      run: echo "key=flatpak-builder-${{ matrix.variant.arch }}-${{ hashFiles('deps/**', 'scripts/flatpak/io.github.extrutex.AnanasSlicer.yml', 'scripts/flatpak/make_deps_tar.sh') }}" >> "$GITHUB_OUTPUT"
       shell: bash
     # Manage flatpak-builder cache externally so PRs restore but never upload.
     # The compiler cache under it is keyed per run below, so it is left out.
@@ -320,7 +320,7 @@ jobs:
     - name: Disable debug info for faster CI builds
       run: |
         sed -i '/^build-options:/a\  no-debuginfo: true\n  strip: true' \
-          scripts/flatpak/de._3dwindt.AnanasSlicer.yml
+          scripts/flatpak/io.github.extrutex.AnanasSlicer.yml
       shell: bash
     # flatpak-builder reuses a module from its cache when the definition and
     # sources are unchanged, so a re-run of the same commit would skip the
@@ -333,7 +333,7 @@ jobs:
         flatpak_builder_cache_buster: ${{ github.run_id }}-${{ github.run_attempt }}
       run: |
         sed -i "/name: OrcaSlicer/{n;s|buildsystem: simple|buildsystem: simple\n    run-tests: true\n    build-options:\n      env:\n        flatpak_builder_cache_buster: \"$flatpak_builder_cache_buster\"\n        git_commit_hash: \"$git_commit_hash\"|}" \
-          scripts/flatpak/de._3dwindt.AnanasSlicer.yml
+          scripts/flatpak/io.github.extrutex.AnanasSlicer.yml
       shell: bash
     # flatpak-builder's --ccache only wraps cc and gcc, and the manifest builds
     # with clang, so CMake's launcher runs ccache instead; --ccache is still what
@@ -345,8 +345,8 @@ jobs:
           'CMAKE_C_COMPILER_LAUNCHER: ccache' \
           'CMAKE_CXX_COMPILER_LAUNCHER: ccache' > "$RUNNER_TEMP/ccache-env.yml"
         sed -i "/^        git_commit_hash: /r $RUNNER_TEMP/ccache-env.yml" \
-          scripts/flatpak/de._3dwindt.AnanasSlicer.yml
-        grep -q '^        CMAKE_CXX_COMPILER_LAUNCHER: ccache$' scripts/flatpak/de._3dwindt.AnanasSlicer.yml
+          scripts/flatpak/io.github.extrutex.AnanasSlicer.yml
+        grep -q '^        CMAKE_CXX_COMPILER_LAUNCHER: ccache$' scripts/flatpak/io.github.extrutex.AnanasSlicer.yml
         mkdir -p .flatpak-builder/ccache
         export CCACHE_DIR=$PWD/.flatpak-builder/ccache
         ccache --set-config=max_size=3G
@@ -371,7 +371,7 @@ jobs:
     - uses: flatpak/flatpak-github-actions/flatpak-builder@master
       with:
         bundle: AnanasSlicer-Linux-flatpak_${{ env.ver }}_${{ matrix.variant.arch }}.flatpak
-        manifest-path: scripts/flatpak/de._3dwindt.AnanasSlicer.yml
+        manifest-path: scripts/flatpak/io.github.extrutex.AnanasSlicer.yml
         # cache only turns on flatpak-builder --ccache; the caching itself is above.
         cache: true
         restore-cache: false

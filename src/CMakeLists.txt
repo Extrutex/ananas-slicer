@@ -117,9 +117,9 @@ if(ORCA_TOOLS)
             MACOSX_BUNDLE_BUNDLE_NAME "OrcaSlicer Profile Validator"
             MACOSX_BUNDLE_BUNDLE_VERSION "${SLIC3R_VERSION}"
             MACOSX_BUNDLE_SHORT_VERSION_STRING "${SLIC3R_VERSION}"
-            MACOSX_BUNDLE_IDENTIFIER "de.3dwindt.AnanasSlicer.profile-validator"
+            MACOSX_BUNDLE_IDENTIFIER "io.github.extrutex.AnanasSlicer.profile-validator"
             MACOSX_BUNDLE_COPYRIGHT "© 2026 OrcaSlicer Pte Ltd All Rights Reserved"
-            MACOSX_BUNDLE_GUI_IDENTIFIER "de.3dwindt.AnanasSlicer.profile-validator"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.extrutex.AnanasSlicer.profile-validator"
         )
     else()
         add_executable(OrcaSlicer_profile_validator dev-utils/OrcaSlicer_profile_validator.cpp)
@@ -335,7 +335,7 @@ else ()
         endif()
         set(MACOSX_BUNDLE_ICON_FILE AnanasSlicer.icns)
         set(MACOSX_BUNDLE_BUNDLE_NAME "ANANAS SLICER")
-        set(MACOSX_BUNDLE_SHORT_VERSION_STRING ${SoftFever_VERSION})
+        set(MACOSX_BUNDLE_SHORT_VERSION_STRING ${ANANAS_VERSION})
         set(MACOSX_BUNDLE_COPYRIGHT "Copyright(C) 2022-2024 Li Jiang All Rights Reserved")
         if (XCODE)
             # Xcode's CodeSign phase fails on the bundled Python runtime's dotted

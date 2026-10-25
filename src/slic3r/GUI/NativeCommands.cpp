@@ -599,11 +599,7 @@ std::vector<NativeCommand> build_command_catalog()
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });
     add_with_icon("open_wiki", _u8L("Open Wiki"), _u8L("Help"), "link_wiki_img", [](const std::string&) {
-        wxLaunchDefaultBrowser("https://www.orcaslicer.com/wiki/", wxBROWSER_NEW_WINDOW);
-        return AppActionRunResult{AppActionRunResult::Level::Success};
-    });
-    add("open_youtube", _u8L("Open YouTube Channel"), _u8L("Help"), [](const std::string&) {
-        wxLaunchDefaultBrowser("https://www.youtube.com/@OfficialOrcaSlicer/videos", wxBROWSER_NEW_WINDOW);
+        wxLaunchDefaultBrowser(ANANAS_WIKI_URL, wxBROWSER_NEW_WINDOW);
         return AppActionRunResult{AppActionRunResult::Level::Success};
     });
 

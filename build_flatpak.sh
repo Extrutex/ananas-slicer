@@ -221,7 +221,7 @@ fi
 # Get version information
 echo -e "${YELLOW}Getting version information...${NC}"
 if [[ -f "version.inc" ]]; then
-    VER_PURE=$(grep 'set(SoftFever_VERSION' version.inc | cut -d '"' -f2)
+    VER_PURE=$(grep 'set(ANANAS_VERSION' version.inc | cut -d '"' -f2)
     VER="V$VER_PURE"
     DATE=$(date +'%Y%m%d')
     echo -e "Version: ${GREEN}$VER${NC}"
@@ -255,8 +255,8 @@ mkdir -p "$BUILD_DIR"
 rm -rf "$BUILD_DIR/build-dir"
 
 # Check if flatpak manifest exists
-if [[ ! -f "./scripts/flatpak/de._3dwindt.AnanasSlicer.yml" ]]; then
-    echo -e "${RED}Error: Flatpak manifest not found at scripts/flatpak/de._3dwindt.AnanasSlicer.yml${NC}"
+if [[ ! -f "./scripts/flatpak/io.github.extrutex.AnanasSlicer.yml" ]]; then
+    echo -e "${RED}Error: Flatpak manifest not found at scripts/flatpak/io.github.extrutex.AnanasSlicer.yml${NC}"
     exit 1
 fi
 
@@ -319,11 +319,11 @@ if [[ "$DISABLE_ROFILES_FUSE" == true ]]; then
 fi
 
 # Use a temp manifest with no-debuginfo if requested
-MANIFEST="scripts/flatpak/de._3dwindt.AnanasSlicer.yml"
+MANIFEST="scripts/flatpak/io.github.extrutex.AnanasSlicer.yml"
 if [[ "$NO_DEBUGINFO" == true ]]; then
-    MANIFEST="scripts/flatpak/de._3dwindt.AnanasSlicer.no-debug.yml"
+    MANIFEST="scripts/flatpak/io.github.extrutex.AnanasSlicer.no-debug.yml"
     sed '/^build-options:/a\  no-debuginfo: true\n  strip: true' \
-        scripts/flatpak/de._3dwindt.AnanasSlicer.yml > "$MANIFEST"
+        scripts/flatpak/io.github.extrutex.AnanasSlicer.yml > "$MANIFEST"
     echo -e "${YELLOW}Debug info disabled (using temp manifest)${NC}"
 fi
 
@@ -333,19 +333,19 @@ if ! flatpak-builder \
     "$MANIFEST"; then
     echo -e "${RED}Error: flatpak-builder failed${NC}"
     echo -e "${YELLOW}Check the build log above for details${NC}"
-    rm -f "scripts/flatpak/de._3dwindt.AnanasSlicer.no-debug.yml"
+    rm -f "scripts/flatpak/io.github.extrutex.AnanasSlicer.no-debug.yml"
     exit 1
 fi
 
 # Clean up temp manifest
-rm -f "scripts/flatpak/de._3dwindt.AnanasSlicer.no-debug.yml"
+rm -f "scripts/flatpak/io.github.extrutex.AnanasSlicer.no-debug.yml"
 
 # Create bundle
 echo -e "${YELLOW}Creating Flatpak bundle...${NC}"
 if ! flatpak build-bundle \
     "$BUILD_DIR/repo" \
     "$BUNDLE_NAME" \
-    de._3dwindt.AnanasSlicer \
+    io.github.extrutex.AnanasSlicer \
     --arch="$ARCH"; then
     echo -e "${RED}Error: Failed to create Flatpak bundle${NC}"
     exit 1
@@ -363,11 +363,11 @@ echo ""
 echo -e "${BLUE}To install the Flatpak:${NC}"
 echo -e "flatpak install --user $BUNDLE_NAME"
 echo ""
-echo -e "${BLUE}To run OrcaSlicer:${NC}"
-echo -e "flatpak run de._3dwindt.AnanasSlicer"
+echo -e "${BLUE}To run ANANAS SLICER:${NC}"
+echo -e "flatpak run io.github.extrutex.AnanasSlicer"
 echo ""
 echo -e "${BLUE}To uninstall:${NC}"
-echo -e "flatpak uninstall --user de._3dwindt.AnanasSlicer"
+echo -e "flatpak uninstall --user io.github.extrutex.AnanasSlicer"
 echo ""
 if [[ "$FORCE_CLEAN" != true ]]; then
     echo -e "${BLUE}Cache Management:${NC}"

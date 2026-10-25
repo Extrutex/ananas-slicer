@@ -2295,113 +2295,6 @@ void NotificationManager::push_import_finished_notification(const std::string& p
     set_slicing_progress_hidden();
 }
 
-// SharedProfilesNotification implementation
-
-void NotificationManager::SharedProfilesNotification::init()
-{
-	PopNotification::init();
-
-    // PopNotification::count_lines() may append a duplicate "hypertext doesn't fit inline" placeholder endline (same value as the previous entry)
-    // for the generic renderer's benefit. This class always renders its hyperlink on its own dedicated line regardless, 
-    // so that placeholder is meaningless here and would otherwise be drawn as a spurious blank text row.
-    if (!m_hypertext.empty() && m_endlines.size() >= 2 && m_endlines.back() == m_endlines[m_endlines.size() - 2]) {
-        m_endlines.pop_back();
-        m_lines_count--;
-    }
-
-    // Reserve rows for: "Browse shared profiles" hyperlink, spacing, "Don't show again"
-    m_lines_count += 3; 
-}
-
-void NotificationManager::SharedProfilesNotification::render_text(ImGuiWrapper& imgui,
-	const float win_size_x, const float win_size_y,
-	const float win_pos_x, const float win_pos_y)
-{
-	float x_offset = m_left_indentation;
-	float shift_y = m_line_height;
-	float starting_y = m_line_height / 2;
-
-	// Render main text line(s)
-	int last_end = 0;
-	std::string line;
-	for (size_t i = 0; i < m_endlines.size(); i++) {
-		if (m_text1.size() >= m_endlines[i]) {
-			line = m_text1.substr(last_end, m_endlines[i] - last_end);
-			last_end = m_endlines[i];
-			if (m_text1.size() > m_endlines[i])
-				last_end += (m_text1[m_endlines[i]] == '\n' || m_text1[m_endlines[i]] == ' ' ? 1 : 0);
-			ImGui::SetCursorPosX(x_offset);
-			ImGui::SetCursorPosY(starting_y + i * shift_y);
-			imgui.text(line.c_str());
-		}
-	}
-
-	{
-        float hyper_y     = starting_y + m_endlines.size() * shift_y + m_line_height * .5f;
-		float dont_show_y = hyper_y    + ImGui::CalcTextSize((m_hypertext + "  ").c_str()).y + m_line_height * .5f;
-		std::string dont_show_text = _u8L("Don't show again");
-		ImVec2 part_size = ImGui::CalcTextSize(dont_show_text.c_str());
-
-        if (!m_multiline && m_lines_count > 2) {
-		    render_hypertext(imgui, x_offset + (m_endlines.size() == 1 ? 0 : ImGui::CalcTextSize((line + " ").c_str()).x) , starting_y + shift_y, _u8L("More"), true);
-	    } 
-        else {
-	    // Render "Browse shared profiles" hyperlink on the next line	
-	    render_hypertext(imgui, x_offset, hyper_y, m_hypertext);
-
-		// Invisible button
-		ImGui::SetCursorPosX(x_offset); // ORCA render on new line to prevent long translations from being cut off
-		ImGui::SetCursorPosY(dont_show_y);
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(.0f, .0f, .0f, .0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.0f, .0f, .0f, .0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.0f, .0f, .0f, .0f));
-        // Render "Don't show again" hyperlink after the browse link
-		if (imgui.button("##dont_show_btn", part_size.x + 6, part_size.y + 10)) {
-			wxGetApp().app_config->set_bool("show_shared_profiles_notification", false);
-			wxGetApp().app_config->save();
-			close();
-		}
-		ImGui::PopStyleColor(3);
-
-		// Hover color
-		ImVec4 color = m_HyperTextColor;
-		if (ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
-			color = m_HyperTextColorHover;
-
-		// Text
-		push_style_color(ImGuiCol_Text, color, m_state == EState::FadingOut, m_current_fade_opacity);
-		ImGui::SetCursorPosX(x_offset);
-		ImGui::SetCursorPosY(dont_show_y);
-		imgui.text(dont_show_text.c_str());
-		ImGui::PopStyleColor();
-
-		// Underline
-		ImVec2 lineEnd = ImGui::GetItemRectMax();
-		lineEnd.y -= 2;
-		ImVec2 lineStart = lineEnd;
-		lineStart.x = ImGui::GetItemRectMin().x;
-		ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd,
-			IM_COL32((int)(color.x * 255), (int)(color.y * 255), (int)(color.z * 255),
-				(int)(color.w * 255.f * (m_state == EState::FadingOut ? m_current_fade_opacity : 1.f))));
-        }
-	}
-}
-
-bool NotificationManager::SharedProfilesNotification::on_text_click()
-{
-	wxLaunchDefaultBrowser(m_explore_url);
-	return false;
-}
-
-void NotificationManager::SharedProfilesNotification::render_hypertext(ImGuiWrapper& imgui,
-	const float text_x, const float text_y, const std::string text, bool more)
-{
-    if (more)
-        PopNotification::render_hypertext(imgui, text_x, text_y, text, true);
-    else
-	    render_hyperlink_action(imgui, text_x, text_y, text, "##browse_btn", [this] { if (on_text_click()) close(); });
-}
-
 void NotificationManager::OrcaSyncConflictNotification::init()
 {
 	PopNotification::init();
@@ -2441,15 +2334,6 @@ void NotificationManager::OrcaSyncConflictNotification::render_text(ImGuiWrapper
 		render_hyperlink_action(imgui, force_x, action_y, force_push_text, "##orca_sync_force_push",
 			[this] { if (m_force_push_callback && m_force_push_callback(m_evt_handler)) close(); });
 	}
-}
-
-void NotificationManager::push_shared_profiles_notification(const std::string& explore_url)
-{
-	close_notification_of_type(NotificationType::OrcaSharedProfilesAvailable);
-	NotificationData data{ NotificationType::OrcaSharedProfilesAvailable, NotificationLevel::RegularNotificationLevel, 0,
-		_u8L("Shared profiles may be available for this printer."),
-		_u8L("Browse shared profiles") };
-	push_notification_data(std::make_unique<NotificationManager::SharedProfilesNotification>(data, m_id_provider, m_evt_handler, explore_url), 0);
 }
 
 void NotificationManager::push_orca_sync_conflict_notification(const std::string& text,

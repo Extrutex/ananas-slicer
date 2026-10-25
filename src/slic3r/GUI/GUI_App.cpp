@@ -944,40 +944,11 @@ void GUI_App::post_init()
             bool cw_showed = this->config_wizard_startup();
 
             if (!app_config->get_stealth_mode()) {
-                std::string http_url = get_http_url(app_config->get_country_code());
-                std::string language = GUI::into_u8(current_language_code());
                 bool        sys_preset  = app_config->get("sync_system_preset") == "true";
-                this->preset_updater->sync(http_url, language, sys_preset ? preset_bundle : nullptr);
+                this->preset_updater->sync(sys_preset ? preset_bundle : nullptr);
             }
 
             this->check_new_version_sf();
-        });
-    }
-
-    // Orca: notify users upgrading from a pre-2.4.0 version that profile syncing
-    // moved from Bambu Cloud to Orca Cloud.
-    if (is_editor() && m_last_config_version && m_last_config_version->valid()
-        && *m_last_config_version < Semver(2, 4, 0)) {
-        CallAfter([] {
-            const wxString wiki_url = "https://www.orcaslicer.com/wiki/user_profiles/user_profiles.html#profiles-missing-after-updating-from-bambu-cloud";
-            MessageDialog dlg(nullptr,
-                _L("Since version 2.4.0, ANANAS SLICER syncs user profiles through the cloud instead of Bambu Cloud.\n\n"
-                   "To migrate your existing profiles, log in to the cloud and they will be transferred automatically. "
-                   "To learn more about how ANANAS SLICER stores and syncs your profiles, or to migrate your presets manually, check out our wiki.\n\n"
-                   "If you did not use Bambu Cloud to sync profiles, this change does not affect you and you can safely ignore this message."),
-                _L("Profile syncing change"),
-                wxOK,
-                "",
-                _L("Learn more"),
-                [wiki_url](const wxString &) { wxLaunchDefaultBrowser(wiki_url); });
-            // Hack: the "Learn more" link renders the message in a wxHtmlWindow whose
-            // height is underestimated for multi-paragraph text, leaving a scrollbar.
-            // The html sits in a proportion-1 sizer chain, so grow the dialog (never
-            // shrink it below its content width) to give the text enough room.
-            const wxSize sz = dlg.GetSize();
-            dlg.SetSize(std::max(sz.x, dlg.FromDIP(280)), std::max(sz.y, dlg.FromDIP(200)));
-            dlg.CenterOnParent();
-            dlg.ShowModal();
         });
     }
 
@@ -1381,7 +1352,7 @@ void GUI_App::init_app_config()
     set_log_path_and_level(log_filename, 3);
 #endif
 
-    BOOST_LOG_TRIVIAL(info) << boost::format("gui mode, Current OrcaSlicer Version %1% build %2%") % SoftFever_VERSION % build_commit_label;
+    BOOST_LOG_TRIVIAL(info) << boost::format("gui mode, %1% build %2%") % ANANAS_VERSION_DISPLAY % build_commit_label;
 
     //BBS: remove GCodeViewer as seperate APP logic
 	if (!app_config)
@@ -2664,43 +2635,6 @@ bool GUI_App::get_side_menu_popup_status()
 void GUI_App::set_side_menu_popup_status(bool status)
 {
     m_side_popup_status = status;
-}
-
-std::string GUI_App::link_to_network_check()
-{
-    std::string url;
-    std::string country_code = app_config->get_country_code();
-
-
-    if (country_code == "US") {
-        url = "https://status.bambulab.com";
-    }
-    else if (country_code == "CN") {
-        url = "https://status.bambulab.cn";
-    }
-    else {
-        url = "https://status.bambulab.com";
-    }
-    //wxLaunchDefaultBrowser(url);
-    return url; // ORCA
-}
-
-std::string GUI_App::link_to_lan_only_wiki()
-{
-    std::string url;
-    std::string country_code = app_config->get_country_code();
-
-    if (country_code == "US") {
-        url = "https://wiki.bambulab.com/en/knowledge-sharing/enable-lan-mode";
-    }
-    else if (country_code == "CN") {
-        url = "https://wiki.bambulab.com/zh/knowledge-sharing/enable-lan-mode";
-    }
-    else {
-        url = "https://wiki.bambulab.com/en/knowledge-sharing/enable-lan-mode";
-    }
-    //wxLaunchDefaultBrowser(url);
-    return url; // ORCA
 }
 
 bool GUI_App::tabs_as_menu() const
@@ -4382,7 +4316,7 @@ std::string GUI_App::format_display_version()
 {
     if (!version_display.empty()) return version_display;
 
-    version_display = SoftFever_VERSION;
+    version_display = ANANAS_VERSION_DISPLAY;
     return version_display;
 }
 

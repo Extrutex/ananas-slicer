@@ -5,6 +5,16 @@
 #define SLIC3R_APP_KEY "@SLIC3R_APP_KEY@"
 #define SLIC3R_VERSION "@SLIC3R_VERSION@"
 #define SoftFever_VERSION "@SoftFever_VERSION@"
+// ANANAS SLICER's own version (version.inc). SoftFever_VERSION stays the OrcaSlicer release this
+// fork is based on; the G-code header and the 3MF version checks keep using it.
+#define ANANAS_VERSION "@ANANAS_VERSION@"
+// What the user sees wherever the version is shown: the own number, then the base release.
+#define ANANAS_BASED_ON_DISPLAY "based on OrcaSlicer " SoftFever_VERSION
+#define ANANAS_VERSION_DISPLAY SLIC3R_APP_NAME " " ANANAS_VERSION " (" ANANAS_BASED_ON_DISPLAY ")"
+// Project links (version.inc): repository, wiki (English; German under de/) and donations.
+#define ANANAS_PROJECT_URL "@ANANAS_PROJECT_URL@"
+#define ANANAS_WIKI_URL "@ANANAS_WIKI_URL@"
+#define ANANAS_DONATE_URL "@ANANAS_DONATE_URL@"
 #define SLIC3R_BUILD_ID "@SLIC3R_BUILD_ID@"
 //#define SLIC3R_RC_VERSION "@SLIC3R_VERSION@"
 #define BBL_INTERNAL_TESTING @BBL_INTERNAL_TESTING@

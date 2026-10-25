@@ -173,7 +173,6 @@ enum class NotificationType
 	BBLNozzleFilamentIncompatible,
     // A mixed-color filament is printed on a single-nozzle printer (frequent changes and purging).
     BBLSingleExtruderMixedFilamentRisk,
-    OrcaSharedProfilesAvailable,
 	OrcaCloudAPIError,
     OrcaSyncConflict,
     // Active preset requires plugin capabilities that are not installed/loadable. Persistent,
@@ -296,8 +295,6 @@ public:
 	void push_exporting_finished_notification(const std::string& path, const std::string& dir_path, bool on_removable);
 	void push_import_finished_notification(const std::string& path, const std::string& dir_path, bool on_removable);
 
-	// Shared profiles available for selected printer
-	void push_shared_profiles_notification(const std::string& explore_url);
 	void push_orca_sync_conflict_notification(const std::string& text,
 		int conflict_code,
 		std::function<bool(wxEvtHandler*)> pull_callback,
@@ -901,30 +898,6 @@ private:
 	};
 
 	// in SlicingProgressNotification.hpp
-
-	class SharedProfilesNotification : public PopNotification
-	{
-	public:
-		SharedProfilesNotification(const NotificationData& n, NotificationIDProvider& id_provider, wxEvtHandler* evt_handler,
-			const std::string& explore_url)
-			: PopNotification(n, id_provider, evt_handler)
-			, m_explore_url(explore_url)
-		{
-			m_multiline = true;
-		}
-	protected:
-		void init() override;
-		void render_text(ImGuiWrapper& imgui,
-			const float win_size_x, const float win_size_y,
-			const float win_pos_x, const float win_pos_y) override;
-		bool on_text_click() override;
-		void render_hypertext(ImGuiWrapper& imgui,
-			const float text_x, const float text_y,
-			const std::string text, bool more = false) override;
-
-		std::string m_explore_url;
-		bool m_dont_show_clicked{ false };
-	};
 
 	class OrcaSyncConflictNotification : public PopNotification
 	{

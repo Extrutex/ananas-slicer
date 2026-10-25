@@ -1346,22 +1346,15 @@ void ExtruderOptionsGroup::on_change_OG(const t_config_option_key& opt_id, const
     OptionsGroup::on_change_OG(opt_id, value);
 }
 
-wxString OptionsGroup::get_url(const std::string& path_end)
+wxString OptionsGroup::get_url(const std::string& opt_key)
 {
-    // BBS
-    wxString str = from_u8(path_end);
-    auto pos     = str.find(L'#');
-    if (pos != size_t(-1)) {
-        pos++;
-        wxString anchor = str.Mid(pos).Lower();
-        anchor.Replace(L" ", "-");
-        str = str.Left(pos) + anchor;
-    }
-    // Orca: point to sf wiki for seam parameters
-    return wxString::Format(L"https://www.orcaslicer.com/wiki/%s", from_u8(path_end));
+    // The settings page of the ANANAS SLICER wiki, anchored by option key; a vector index
+    // ("retraction_length#0") is dropped.
+    const std::string key = opt_key.substr(0, opt_key.find('#'));
+    return from_u8(ANANAS_WIKI_URL "settings/#" + key);
 }
 
-bool OptionsGroup::launch_browser(const std::string& path_end) { return wxLaunchDefaultBrowser(OptionsGroup::get_url(path_end)); }
+bool OptionsGroup::launch_browser(const std::string& opt_key) { return wxLaunchDefaultBrowser(OptionsGroup::get_url(opt_key)); }
 
 //-------------------------------------------------------------------------------------------
 // ogStaticText
