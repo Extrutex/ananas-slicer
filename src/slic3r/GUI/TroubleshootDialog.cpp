@@ -257,7 +257,7 @@ TroubleshootDialog::TroubleshootDialog()
         wxString url = ANANAS_PROJECT_URL "/issues/new?template=bug_report.yml";
         wxString os = GetOStype();
         if(!os.IsEmpty())
-            url += "&os_type=%22" + os +"%22";
+            url += "&os=" + os;
         url += "&version="     + encodeStr(wxString(ANANAS_VERSION_DISPLAY));
         url += "&os_version="  + encodeStr(GetOSinfo());
         wxLaunchDefaultBrowser(url);

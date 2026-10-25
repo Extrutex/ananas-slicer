@@ -5,6 +5,7 @@
 #include "slic3r/Utils/NetworkAgent.hpp"
 #include "I18N.hpp"
 #include "OrcaCloudServiceAgent.hpp"
+#include "libslic3r_version.h"
 #include "slic3r/plugin/PluginConfig.hpp"
 #include "slic3r/plugin/PluginFsUtils.hpp"
 #include "slic3r/plugin/PluginManager.hpp"
@@ -458,20 +459,9 @@ void refresh_plugin_metadata_blocking(bool fetch_cloud)
 
 void open_plugin_hub()
 {
-    // Only the configured cloud agent knows the plugin hub; without one there is nothing to open.
-    std::string cloud_base_url;
-    if (wxGetApp().getAgent()) {
-        auto orca_agent = std::dynamic_pointer_cast<OrcaCloudServiceAgent>(wxGetApp().getAgent()->get_cloud_agent());
-        if (orca_agent)
-            cloud_base_url = orca_agent->get_cloud_base_url();
-    }
-
-    while (!cloud_base_url.empty() && cloud_base_url.back() == '/')
-        cloud_base_url.pop_back();
-    if (cloud_base_url.empty())
-        return;
-
-    wxLaunchDefaultBrowser(wxString::FromUTF8(cloud_base_url + "/app/plugins/plugin-hub"));
+    // ANANAS SLICER has no plugin hub. The cloud agent's default address would lead to the
+    // OrcaSlicer hub, so the button opens the project's discussions instead.
+    wxLaunchDefaultBrowser(ANANAS_PROJECT_URL "/discussions");
 }
 
 bool install_local_plugin_package(const boost::filesystem::path& package_file, wxWindow* parent, wxString& message)

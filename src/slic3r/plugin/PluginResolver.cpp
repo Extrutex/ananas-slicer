@@ -2,6 +2,7 @@
 
 #include "PluginManager.hpp"
 #include "../Utils/Http.hpp"
+#include "libslic3r_version.h"
 #include "../Utils/OrcaCloudServiceAgent.hpp"
 #include "../Utils/NetworkAgent.hpp"
 #include "../GUI/GUI.hpp"
@@ -181,24 +182,16 @@ std::vector<PluginCapabilityId> capabilities_in_use(Preset::Type type, const Pre
     return result;
 }
 
-static std::string resolve_cloud_base_url()
-{
-    // Only the configured cloud agent knows the plugin hub; without one there is no address.
-    if (auto agent = GUI::wxGetApp().getAgent()) {
-        if (auto orca_agent = std::dynamic_pointer_cast<OrcaCloudServiceAgent>(agent->get_cloud_agent()))
-            return orca_agent->get_cloud_base_url();
-    }
-    return {};
-}
+// ANANAS SLICER has no plugin hub; the cloud agent's default address would lead to the
+// OrcaSlicer hub. Recovery links point to the project's discussions instead.
+static std::string plugin_hub_url() { return std::string(ANANAS_PROJECT_URL) + "/discussions"; }
 
 std::string create_full_ref(const PluginCapabilityRef& ref) { return ref.name + ';' + ref.uuid + ';' + ref.capability_name; }
 
 std::string resolve_recovery_url(const PluginCapabilityRef& ref)
 {
-    const std::string base = resolve_cloud_base_url();
-    if (base.empty())
-        return {};
-    return base + "/app/plugins/plugin-hub?search=" + Http::url_encode(ref.name);
+    (void)ref;
+    return plugin_hub_url();
 }
 
 // {present, enabled}; {false, false} when the plugin is not loaded or does not provide the capability.
@@ -472,7 +465,7 @@ void open_missing_plugins_on_cloud(const std::vector<std::string>& local_refs)
             return;
         }
     }
-    wxLaunchDefaultBrowser(GUI::from_u8(resolve_cloud_base_url() + "/app/plugins/plugin-hub"), wxBROWSER_NEW_WINDOW);
+    wxLaunchDefaultBrowser(GUI::from_u8(plugin_hub_url()), wxBROWSER_NEW_WINDOW);
 }
 
 } // namespace Slic3r
